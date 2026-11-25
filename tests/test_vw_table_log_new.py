@@ -133,6 +133,54 @@ class TableLogNewTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("which is not Table Log", out)
 
+    # Task 20: the vitals header is the vault's system's columns (the ontology's
+    # game_systems run_sheet.vitals), Who first. D&D's, and a vault with no
+    # system's, is the three-column header the tests above pin.
+    def vitals_head(self, system):
+        if system is not None:
+            (self.vault / "_meta").mkdir(exist_ok=True)
+            self.write("_meta/vault-config.yaml",
+                       f"version: 1\nvault:\n  system: {system}\n")
+        code, out = self.new("--write")
+        self.assertEqual(code, 0, out)
+        body = self.read(LOG_NOTE).split("## Vitals at the end\n", 1)[1]
+        return body.split("\n## ", 1)[0].strip()
+
+    def test_vitals_head_on_a_coc_vault(self):
+        self.assertEqual(
+            self.vitals_head("coc-7e"),
+            "| Who | HP | MP | SAN | Luck | Conditions |\n"
+            "| --- | --- | --- | --- | --- | --- |")
+
+    def test_vitals_head_on_a_regency_vault_is_cocs_not_dnds(self):
+        # Regency PCs carry SAN; Reputation is never a column (Ant, 2026-11-22)
+        self.assertEqual(
+            self.vitals_head("regency-cthulhu"),
+            "| Who | HP | MP | SAN | Luck | Conditions |\n"
+            "| --- | --- | --- | --- | --- | --- |")
+
+    def test_vitals_head_on_a_gurps_vault(self):
+        self.assertEqual(
+            self.vitals_head("gurps"),
+            "| Who | HP | FP | Conditions |\n| --- | --- | --- | --- |")
+
+    def test_vitals_head_on_a_vault_with_no_system_is_dnds(self):
+        self.assertEqual(self.vitals_head(None),
+                         vw.TABLE_LOG_VITALS_HEAD.strip())
+
+    def test_vitals_head_function_per_system(self):
+        self.assertEqual(vw.table_log_vitals_head("dnd-5e-2024"),
+                         vw.TABLE_LOG_VITALS_HEAD)
+        # a system with no run_sheet columns (PF2e, FitD) or none known: D&D's
+        for system in (None, "pf2e", "fitd", "no-such-game"):
+            self.assertEqual(vw.table_log_vitals_head(system),
+                             vw.TABLE_LOG_VITALS_HEAD, system)
+
+    def test_play_notes_have_no_vitals_table(self):
+        text = vw.record_text("play_notes", SESSION, 13, None, None, None,
+                              system="coc-7e")
+        self.assertNotIn("| Who |", text)
+
     def test_batch_block(self):
         code, out = batch(self.vault,
                           f'=== table-log-new --session "{SESSION}"\n',

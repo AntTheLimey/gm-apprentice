@@ -113,6 +113,16 @@ describe('the players\' view', () => {
     assert.deepEqual(ally.statuses, ['Bloodied']);
   });
 
+  it('an ally of a system with no Bloodied word shows none (CoC, GURPS): the same fight, the word given up', () => {
+    let s = benFight();
+    const venn = rowOf(s, VENN);
+    s = F(s, { type: 'hp', row: venn.id, entry: `-${Math.ceil(venn.max / 2) + 1}` });
+    assert.deepEqual(orderRow(view(s), 'Brother Venn').statuses, ['Bloodied']);
+    const other = clone(model);
+    other.rules.words.bloodied = '';
+    assert.deepEqual(orderRow(view(s, other), 'Brother Venn').statuses, []);
+  });
+
   it('the Lair row shows at 20', () => {
     const lair = view(benFight()).panels[0].order.rows.find((r) => r.lair);
     assert.deepEqual(lair, { name: 'Lair', ini: 20, current: false, out: false, lair: true });

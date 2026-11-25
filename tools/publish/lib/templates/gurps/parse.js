@@ -230,7 +230,8 @@ function parseDefenses(model, sections) {
       if (!row[0]) continue;
       const lower = row[0].toLowerCase();
       const { value } = splitMarkers(row[1] || '');
-      if (lower.includes('parry')) model.defenses.parry.push({ label: row[0], value });
+      // the row's next cell (a Source or weapon column) names a Parry whose label does not (`| Parry | 10 | Broadsword |`)
+      if (lower.includes('parry')) model.defenses.parry.push({ label: row[0], value, ...(row[2] ? { source: row[2] } : {}) });
       else if (lower.includes('block')) model.defenses.block.push({ label: row[0], value });
       else if (lower.includes('dodge')) model.defenses.dodge = value;
     }

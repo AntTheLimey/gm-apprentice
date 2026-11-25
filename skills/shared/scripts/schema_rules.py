@@ -19,7 +19,7 @@ import re
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Re-exported for scripts/validate_schema.py, vault_check.py,
@@ -60,6 +60,21 @@ SYSTEM_ALIASES: dict[str, str] = {
 # variant of another system (Regency is coc-7e's `regency` variant).
 SYSTEM_RULES: dict[str, str] = {
     s["id"]: s.get("rules", s["id"]) for s in _ontology()["game_systems"]}
+
+# The Table Log's vitals columns per system, after Who (the run sheet's
+# `run_sheet.vitals`): each a {column, field, shape, pcs_only?}. A system
+# with none of its own (PF2e, FitD, an unknown one, none) takes D&D's.
+VITALS_DEFAULT_SYSTEM = "dnd-5e-2024"
+SYSTEM_VITALS: dict[str, list[dict[str, Any]]] = {
+    s["id"]: s["run_sheet"]["vitals"] for s in _ontology()["game_systems"]
+    if "run_sheet" in s}
+
+
+def vitals_columns(system: str | None) -> list[dict[str, Any]]:
+    """The vitals columns of `system` (an id or an alias), D&D's when it
+    has none of its own."""
+    return SYSTEM_VITALS.get(system_id(system) or "",
+                             SYSTEM_VITALS[VITALS_DEFAULT_SYSTEM])
 
 
 def system_id(raw: object) -> str | None:

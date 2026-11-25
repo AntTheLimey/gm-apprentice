@@ -233,6 +233,15 @@ describe('buildTohitData: techniques', () => {
     ]);
     assert.deepStrictEqual(r.targeted.map(x => x.loc), ['arm', 'leg', 'extremity', 'extremity']);
   });
+  it('Task 25: a Targeted Attack at an extended place, by its two words or its other name', () => {
+    const r = t([
+      { name: 'Targeted Attack (Knife Thrust/Neck Vein)', def: 'Knife-8', level: '12' },
+      { name: 'Targeted Attack (Knife Swing/Knee)', def: 'Knife-5', level: '12' },
+      { name: 'Targeted Attack (Knife Swing/Wrist)', def: 'Knife-7', level: '12' },
+      { name: 'Targeted Attack (Knife Swing/Jaw)', def: 'Knife-6', level: '12' },
+    ]);
+    assert.deepStrictEqual(r.targeted.map(x => x.loc), ['neck vein', 'leg joint', 'extremity joint', 'jaw']);
+  });
   it('leaves out a Targeted Attack with an unknown location, no slash, or a skill not on the sheet', () => {
     const r = t([
       { name: 'Targeted Attack (Knife Thrust/Tail)', def: 'Knife-4', level: '12' },
@@ -276,12 +285,16 @@ describe('buildTohitData: base, free fall, locations, bands', () => {
     assert.strictEqual(withFF.freeFall, 12);
     assert.strictEqual(buildTohitData(model({ ranged: [rangedRow()] }), META).freeFall, null);
   });
-  it('locations carry stable keys with numeric penalties, from the shipped reference rows', () => {
+  // step 6b Task 25 changed this on purpose: the places come from the one hit-location table, Martial Arts's too
+  it('locations carry stable keys with numeric penalties, from the hit-location table', () => {
     const d = buildTohitData(model({ ranged: [rangedRow()] }), META);
     assert.deepStrictEqual(d.locations.map(l => l[0]),
-      ['torso', 'vitals', 'arm', 'leg', 'extremity', 'groin', 'face', 'neck', 'skull', 'eye']);
+      // Task 34 on purpose: the run sheet's order, mildest penalty first (LOCATION_ORDER)
+      ['torso', 'arm', 'leg', 'groin', 'vitals', 'extremity', 'face', 'neck', 'arm vein', 'leg vein', 'arm joint', 'leg joint',
+        'jaw', 'skull', 'ear', 'nose', 'extremity joint', 'spine', 'neck vein', 'eye']);
     const pen = Object.fromEntries(d.locations.map(([k, , p]) => [k, p]));
-    assert.deepStrictEqual(pen, { torso: 0, vitals: -3, arm: -2, leg: -2, extremity: -4, groin: -3, face: -5, neck: -5, skull: -7, eye: -9 });
+    assert.deepStrictEqual(pen, { torso: 0, vitals: -3, arm: -2, leg: -2, extremity: -4, groin: -3, face: -5, neck: -5, skull: -7, eye: -9,
+      'arm vein': -5, 'leg vein': -5, 'arm joint': -5, 'leg joint': -5, jaw: -6, ear: -7, nose: -7, 'extremity joint': -7, spine: -8, 'neck vein': -8 });
   });
   it('bands are the yard values of the Speed/Range rows, ascending', () => {
     const { bands } = buildTohitData(model({ ranged: [rangedRow()] }), META);

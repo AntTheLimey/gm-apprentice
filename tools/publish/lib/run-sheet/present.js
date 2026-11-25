@@ -94,6 +94,10 @@ function present(model, { index }) {
   if (typeof m.threads === 'string') m.threadsHtml = toHtml(m.threads, index);
   for (const h of m.handouts || []) addHtml(h, ['name', 'text'], index, true);
   for (const c of m.cast || []) if (c.foe) addFoeHtml(c.foe, index);
+  // a caster PC's spells, rendered as a foe's stat block is, for the fight panel's fold
+  for (const p of m.pcs || []) addHtml(p, ['spells'], index, false);
+  // the PCs table's words (Task 34): a Thread or a Moment's `**bold**` and `[[link]]` shown as such, not as markup
+  for (const p of m.pcs || []) addHtml(p, ['moment', 'touch', 'arc', 'thread'], index, true);
   for (const p of m.people || []) addHtml(p, ['playAs', 'wants', 'now', 'where'], index, true);
   return m;
 }

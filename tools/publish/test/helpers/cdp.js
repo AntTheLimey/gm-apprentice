@@ -187,7 +187,7 @@ async function stopShared() {
 // returns; the context (its storage and every tab it opened) is thrown away after.
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
 // newTab(url) -> page, resize(width, height); real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
-// wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), colorScheme('light'|'dark').
+// wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), choose(sel, text) (a native select), colorScheme('light'|'dark').
 async function withPage({ width = 1449, height = 762, chrome = findChrome(), stepMs = STEP_MS } = {}, fn) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
@@ -221,11 +221,16 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             if (Date.now() - t0 > ms) {
               let got = null;
               try { got = await evaluate('window.__inputLog ? window.__inputLog.slice(-15) : null'); } catch { /* the page is gone */ }
-              throw new Error(`timed out after ${ms} ms waiting for: ${expression}\n  the helper's last moves (ms since the page opened): ${JSON.stringify(moves)}\n  what the page received (ms since it loaded): ${JSON.stringify(got)}`);
+              // what the page shows now: the Saved indicator, the probe as it stands, and any error its probe threw
+              let live = null;
+              try { live = await evaluate(`({ saved: (document.getElementById('saved') || {}).textContent, probe: (document.body.dataset.probe || '').slice(0, 1500), probeError: document.body.dataset.probeError || null, focus: (() => { const a = document.activeElement; return a ? { tag: a.tagName, id: a.id || undefined, value: a.value, selection: [a.selectionStart, a.selectionEnd], invalid: a.getAttribute('aria-invalid'), committed: a.dataset ? a.dataset.committed : undefined } : null; })(), secondLines: Array.from(document.querySelectorAll('li[data-row2]'), (e) => e.dataset.row2 + ': ' + e.textContent).slice(0, 12) })`); } catch { /* the page is gone */ }
+              throw new Error(`timed out after ${ms} ms waiting for: ${expression}\n  the page now (#saved text, body.dataset.probe, body.dataset.probeError, the focused box, the rows' second lines): ${JSON.stringify(live)}\n  the helper's last moves (ms since the page opened): ${JSON.stringify(moves)}\n  what the page received (ms since it loaded): ${JSON.stringify(got)}`);
             }
             await sleep(50);
           }
         };
+        let lastChosen = 0; // when `choose` last typed
+        let lastClick = 0; // when a click last released
         const page = {
           async goto(url) {
             const r = await s('Page.navigate', { url });
@@ -247,17 +252,80 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             const r = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: full });
             fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
           },
-          // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, or one character.
+          // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, Backspace, ArrowDown, ArrowUp, Home, or one character.
           // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
           async key(name, { shift = false } = {}) {
             moved({ act: 'key', name });
-            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''] };
+            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''], ArrowDown: [40, ''], ArrowUp: [38, ''], Home: [36, ''] };
             const one = String(name).length === 1;
             if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
             const [vk, text] = named[name] || [String(name).toUpperCase().charCodeAt(0), name];
             const ev = { key: name, code: one ? `Key${String(name).toUpperCase()}` : name, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: shift ? 8 : 0 };
             await s('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', ...ev, ...(text ? { text, unmodifiedText: text } : {}) });
             await s('Input.dispatchKeyEvent', { type: 'keyUp', ...ev });
+          },
+          // Chooses the option of a native <select> whose text starts with `text`, by real input only. A held click
+          // focuses the select; `text` is typed as real key events, quickly (the browser's type-to-select match resets
+          // after a pause), and the select's value is read. Linux's Chrome opens the list on the click, and letters only
+          // move its highlight: Enter takes it, and the value is read again. If it still did not change to the wanted
+          // option, ArrowDown (which changes a closed select on Windows and Linux) steps on, reading again, until the
+          // option is chosen or the list ends. Letters pick the first option that starts with them, so type far enough to be unique ("All"
+          // for All-Out Attack (Determined), "(Do" for All-Out Attack (Double)). Fails naming the system when
+          // neither route moved it. Returns the chosen option's text.
+          async choose(selector, text) {
+            const sel = JSON.stringify(selector);
+            const want = JSON.stringify(String(text).toLowerCase());
+            const read = () => evaluate(`(() => { const e = document.querySelector(${sel}); if (!e) return null;
+              const o = e.options[e.selectedIndex]; return { value: e.value, text: o ? o.textContent.trim() : '', at: e.selectedIndex,
+              wanted: o ? o.textContent.trim().toLowerCase().startsWith(${want}) : false,
+              exists: Array.from(e.options).some((x) => x.textContent.trim().toLowerCase().startsWith(${want})) }; })()`);
+            const first = await read();
+            if (!first) throw new Error(`choose: nothing matches ${selector}`);
+            if (!first.exists) throw new Error(`choose: ${selector} has no option starting "${text}"`);
+            await page.click(selector);
+            moved({ act: 'choose', selector, text: String(text) });
+            // the browser keeps what was typed for a second: letters from an earlier choose would join these
+            await sleep(Math.max(0, lastChosen + 1100 - Date.now()));
+            for (const ch of String(text)) {
+              const code = ch === ' ' ? 'Space' : (/[a-z]/i.test(ch) ? `Key${ch.toUpperCase()}` : (/\d/.test(ch) ? `Digit${ch}` : ''));
+              const vk = ch === ' ' ? 32 : ch.toUpperCase().charCodeAt(0);
+              const ev = { key: ch, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: 0 };
+              await s('Input.dispatchKeyEvent', { type: 'keyDown', ...ev, text: ch, unmodifiedText: ch });
+              await s('Input.dispatchKeyEvent', { type: 'keyUp', ...ev });
+            }
+            lastChosen = Date.now();
+            await sleep(150);
+            let now = await read();
+            let route = 'letters';
+            // an open list (Linux): the letters moved its highlight; Enter takes it and closes the list
+            if (!now.wanted) {
+              await page.key('Enter');
+              await sleep(150);
+              now = await read();
+              route = 'letters and Enter';
+            }
+            if (!now.wanted) {
+              route = 'arrow';
+              const count = await evaluate(`document.querySelector(${sel}).options.length`);
+              for (let i = 0; i < count && !now.wanted; i++) {
+                await page.key('ArrowDown');
+                await sleep(100);
+                const next = await read();
+                if (next.at === now.at && next.at !== 0) break;
+                now = next;
+              }
+            }
+            if (!now.wanted) throw new Error(`could not choose "${text}" on ${selector} on ${process.platform}: the letters and ArrowDown both left it on "${now.text}"`);
+            // an open list takes the choice on Enter; a closed select has nothing to take, and Enter does no harm on the
+            // Mac. Not after the Enter above, nor after arrows: on Linux an Enter on the closed select opens its list
+            // again, and the next Escape then shuts the list, not the dialog it sits in
+            if (route === 'letters') {
+              await page.key('Enter');
+              await sleep(100);
+            }
+            const done = await read();
+            if (!done.wanted) throw new Error(`could not choose "${text}" on ${selector} on ${process.platform}: Enter left it on "${done.text}" (route ${route})`);
+            return done.text;
           },
           // Real pointer input (Input.dispatchMouseEvent), the way a hand moves it. `type` is mouseMoved,
           // mousePressed, mouseReleased or mouseWheel; `buttons` is the bit mask held down (1 = left).
@@ -287,6 +355,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             await page.mouse('mousePressed', x, y, { buttons: 1 });
             await sleep(holdMs);
             await page.mouse('mouseReleased', x, y);
+            lastClick = Date.now();
           },
           // A real click on an element: scrolls it into view first (scrollIntoView, as a hand would scroll),
           // then clicks its centre, or `offsetX`/`offsetY` from its top-left corner. Throws if the point is
@@ -333,7 +402,24 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             }
           },
           // Text into whatever has focus (Input.insertText: one insert, as a paste or an input method gives).
-          type: (text) => s('Input.insertText', { text }),
+          // A number box selects its text in a timer after the click's mouseup, so text typed straight after a click
+          // would land before it: when a click released a moment ago on a box that holds text, it waits for that timer
+          // (and up to 400 ms more; a box that does not select on a click just goes on) until the selection covers
+          // the whole value.
+          async type(text) {
+            moved({ act: 'type', text: String(text).slice(0, 20) });
+            if (Date.now() - lastClick < 1000) {
+              // The box is selected at the release too, then the browser collapses that selection once the click is
+              // done and the page's timer selects it again: a full selection seen before that timer has run proves
+              // nothing. A timer of the page's own, queued after it, runs after it.
+              try { await evaluate('new Promise((r) => setTimeout(r, 30))'); } catch { /* the page is loading */ }
+              try {
+                await waitFor(`(() => { const a = document.activeElement; if (!a || typeof a.value !== 'string' || typeof a.selectionStart !== 'number' || !a.value) return true;
+                  return a.selectionStart === 0 && a.selectionEnd === a.value.length; })()`, 400);
+              } catch { /* this box keeps its caret on a click */ }
+            }
+            return s('Input.insertText', { text });
+          },
           // Another window in the same browser context, opened on `url` (its own event streams, its own page, the
           // same storage). A window, as Chrome sizes only a new window: a second tab in the context refuses width.
           // A tab that never answers its setup (as a fresh launch can, #852) is closed and made once more.

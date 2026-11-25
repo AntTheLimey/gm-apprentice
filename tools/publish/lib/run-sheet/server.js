@@ -28,7 +28,7 @@ const http = require('node:http');
 const path = require('node:path');
 const serve = require('../serve');
 const { readRunSheet } = require('./read');
-const { buildIndex, stemOf } = require('./notes');
+const { buildIndex, stemName } = require('./notes');
 const { tableLogOf, stateIdOf } = require('./sessions');
 const { createStore, stampOf } = require('./store');
 const { present, toHtml } = require('./present');
@@ -41,8 +41,14 @@ const { applyChanges } = require('../settings/write');
 const { siteFileNamedBy, siteToolOlderThan } = require('../settings/site-tool');
 const { SIDES, HEX, PRESETS, SITE_TOOL_FROM, readSideColours } = require('./side-colours');
 const { readSettings } = require('../settings/read');
+const { systemFor } = require('./systems');
+const { pcTohit, typedTohit, servedCss } = require('./tohit');
+const { slugify, pcLiveKey } = require('../scanner');
 
 const WEB_DIR = path.join(__dirname, 'web');
+// the player site's to-hit calculator, served to the GM page as the site ships it (Task 24)
+const TOHIT_JS = path.join(__dirname, '..', '..', 'js', 'gurps-tohit.js');
+const TOHIT_CSS = path.join(__dirname, '..', '..', 'css', 'tohit.css');
 const PLAYERS_DIR = path.join(WEB_DIR, 'players');
 const PICTURE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.avif': 'image/avif' };
 // What every players' route answers on any error: never the error's own words.
@@ -73,6 +79,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
   const vaultRoot = path.resolve(vaultPath);
   const reduce = deps.reduce || RS.reduce;
   const buildPlayers = deps.forPlayers || forPlayers;
+  // the dice's random source: crypto's, or a fixed one a test hands in (lib/dice takes it for tests only)
+  const diceOpts = typeof deps.randomInt === 'function' ? { randomInt: deps.randomInt } : undefined;
 
   const clients = new Set();
   // The players' half: its own stream clients, the last good view, and the picture ids of the current
@@ -337,6 +345,17 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
     res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': Buffer.byteLength(text), ...extra });
     res.end(text);
   };
+  const sendFile = (res, text, type) => {
+    res.writeHead(200, { 'Content-Type': type, 'Content-Length': Buffer.byteLength(text), 'Cache-Control': 'no-store' });
+    res.end(text);
+  };
+  // The model, for a to-hit route: null (and a 404 sent) on a vault that is not GURPS.
+  function tohitModel(res) {
+    const m = lastModel || loadModel().model;
+    if (systemFor(m.system).id === 'gurps-4e') return m;
+    json(res, 404, { error: 'the to-hit calculator is for GURPS' });
+    return null;
+  }
   const webFiles = serve.handler(WEB_DIR, { notFound: NO_PAGE });
   const playersFiles = serve.handler(PLAYERS_DIR, { notFound: NO_PAGE });
 
@@ -393,6 +412,41 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
   const ROUTES = [
     { method: 'GET', path: '/', handle: (req, res) => webFiles({ method: 'GET', url: '/gm.html' }, res) },
     { method: 'GET', prefix: '/web/', handle: (req, res, u) => webFiles({ method: 'GET', url: u.raw.slice('/web'.length) }, res) },
+    // The GURPS to-hit calculator (Task 24, D7): the site's own script as it is, its styles with the narrow copy, and
+    // the data blocks, a PC's from the sheet or a typed skill's. GURPS vaults only; never sent to the players' screen.
+    { method: 'GET', path: '/tohit/gurps-tohit.js', handle: (req, res) => sendFile(res, nodeFs.readFileSync(TOHIT_JS, 'utf8'), 'text/javascript; charset=utf-8') },
+    { method: 'GET', path: '/tohit/tohit.css', handle: (req, res) => sendFile(res, servedCss(nodeFs.readFileSync(TOHIT_CSS, 'utf8')), 'text/css; charset=utf-8') },
+    {
+      method: 'GET',
+      path: '/api/tohit',
+      handle: (req, res, u) => {
+        const m = tohitModel(res);
+        if (!m) return;
+        const idx = index(vaultPath, { deps: vaultDeps });
+        const pc = u.query.get('pc');
+        // one PC's block, by its note: only a PC of tonight's party
+        if (pc !== null) {
+          const p = (m.pcs || []).find((x) => x.note === pc);
+          const data = p ? pcTohit(idx, p.note, { campaignId: slugify(m.campaign || 'campaign'), pcSlug: pcLiveKey(idx.read(p.note).fm, p.name) }) : null;
+          if (!data) { json(res, 404, { error: 'no attack on that sheet' }); return; }
+          json(res, 200, { data });
+          return;
+        }
+        json(res, 200, { pcs: (m.pcs || []).filter((p) => pcTohit(idx, p.note)).map((p) => ({ note: p.note, name: p.name })) });
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/tohit/typed',
+      handle: (req, res) => {
+        if (!tohitModel(res)) { req.resume(); return; }
+        withJson(req, res, (msg) => {
+          let data;
+          try { data = typedTohit(msg || {}); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
+          json(res, 200, { data });
+        });
+      },
+    },
     { method: 'GET', path: '/api/hello', handle: (req, res) => json(res, 200, { app: 'run-sheet', session: label, serverId, pid: process.pid }) },
     {
       method: 'GET',
@@ -416,7 +470,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
         const idx = indexNow();
         if (!p || !idx.has(p)) { json(res, 404, { error: 'no such note' }); return; }
         const { fm, body } = idx.read(p);
-        const name = typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemOf(p);
+        const name = typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemName(p);
         json(res, 200, { path: p, name, type: String(fm.type || ''), portrait: idx.portrait(p), withheld: isWithheld(fm), html: toHtml(body, idx) });
       },
     },
@@ -489,9 +543,9 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
       path: '/api/roll',
       handle: (req, res) => {
         withJson(req, res, (msg) => {
-          if (!msg || !Array.isArray(msg.rolls) || msg.rolls.length > MAX_ROLLS) { json(res, 400, { error: `the body needs { rolls: [{ sides, mod }] }, at most ${MAX_ROLLS}` }); return; }
+          if (!msg || !Array.isArray(msg.rolls) || msg.rolls.length > MAX_ROLLS) { json(res, 400, { error: `the body needs { rolls: [...] }, each { sides, mod }, { against: N }, { d100: { target } } or { damage: "2d+1" }, at most ${MAX_ROLLS}` }); return; }
           let results;
-          try { results = dice.rollMany(msg.rolls); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
+          try { results = dice.rollSpecs(msg.rolls, diceOpts); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
           json(res, 200, { results });
         });
       },

@@ -9,6 +9,34 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.149] — 2026-11-25
+
+### Added
+
+- Call of Cthulhu and GURPS games get the run sheet's Fight button (#556 step 6b), each with its own rows, words and order (DEX; Basic Speed, fixed after Start). Foes are never put Out at 0: a card raises what a hit owes (wounds, death checks, knockdown, SAN) and the GM taps the outcome.
+- Damage does the sums: a GURPS hit typed as damage, type and place takes off DR, multiplies and shows its working; a Call of Cthulhu hit takes dice, damage bonus and armour.
+- Call of Cthulhu melee and firearms on the target's row: Dodge or Fight Back with the outnumbered die, and chips for range, aim, point blank, several shots and Regency flintlocks.
+- GURPS rows show this turn's Dodge, Parry and Block (a tap rolls one), a manoeuvre chip, and spells paid from FP or the Energy Reserve; a PC's weapon or a typed skill opens the to-hit calculator.
+- Physical dice count: a small box beside every Roll takes the number rolled at the table, judged like a server roll and logged as typed.
+- People a fight beat names without a stat block get a blank row to type into, in every system. Publish tool 1.70.66.
+
+### Changed
+
+- Hit location is one list, Torso first, with Martial Arts's extra places, on the run sheet, the player site and the skill's combat reference (there, each place's penalty and page).
+- The Table Log keeps each system's vitals (Call of Cthulhu HP, MP, SAN and Luck; GURPS HP and FP) and wrap-up writes them to the sheets, with the Energy Reserve held through the night; a Call of Cthulhu or GURPS run sheet uses its own words throughout.
+- Nothing in a fight waits on anything else: any card line can be skipped, any manoeuvre or chip set by hand, and a fight left at any point.
+- Tab and typing hold the rows still, Same for all says how many rows it filled, and a D&D initiative with decimals is refused rather than cut.
+- Call of Cthulhu rows fit one line, so the run list stays open at 1449 wide: SAN only on PCs and allies, MP only for characters with spells (both in the panel), one dice button, the attacker's typed roll on its own row, long names cut with "…". D&D's and GURPS's rows are unchanged but for a lair row's title.
+- A foe made up at the table asks for its quick figures first (GURPS: Speed, Skill, defences, HP; Call of Cthulhu: DEX, Fighting, Dodge, HP).
+
+### Fixed
+
+- Call of Cthulhu NPC figures are read from more block shapes (Skills and Weapons sections, tables, bold pairs), a Regency gun with no malfunction figure uses the book's 95, and a row added mid-fight takes its place by DEX.
+- The combat reference corrects GURPS wounding, stun and knockdown, and Call of Cthulhu's Dying, several shots and Prone (#874, #875).
+- Smaller fixes: Table Log figures select on click, Luck above 99 is refused, a Plan's roster reads more `Sheet:` shapes, cards, focus and the pane split hold still, and PCs' Parry lines, Threads and note names show as they should.
+- A GURPS roll of 17 fails at any target; a foe's pool written `4/12` starts at 4; a CoC weapon row whose Skill says Firearms is a gun, and two guns sharing a skill are both kept; a dead foe with a stat block gets no row.
+- Same for all keeps a spent pool spent and works Tired out again; No DB never waits on an unreadable DB; a blanked End of the night figure stays cleared; To-hit's level box no longer steps to 1 on a click; wrap-up never clears a CoC status the log does not name.
+
 ## [1.12.148] — 2026-11-25
 
 ### Fixed

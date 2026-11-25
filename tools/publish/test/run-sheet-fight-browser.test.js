@@ -177,15 +177,16 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
       assert.strictEqual(await focused(page), ada, 'Shift+Tab goes back');
       now = await until(page, `p.fight.rows.find((r) => r.id === ${q(nextBox)}).ini === 25`);
       assert.deepStrictEqual(now.fight.rows.map((r) => r.id), order, 'nothing re-sorts until Sort or Start');
-      // past the last box, and before the first, Tab leaves the boxes for the page's other controls
+      // step 6b Task 23 changed this on purpose (D2): past the last box, and before the first, Tab goes to Start
+      // before the fight starts (never Next, never a seen button)
       const last = boxes.at(-1);
       await fill(page, `[data-fini="${last}"]`, '4');
       await page.key('Tab');
-      assert.ok(!boxes.includes(await focused(page)), 'Tab past the last box leaves the boxes');
+      assert.strictEqual(await page.evaluate('document.activeElement.id'), 'fNext', 'Tab past the last box goes to Start');
       await until(page, `p.fight.rows.find((r) => r.id === ${q(last)}).ini === 4`);
-      await page.evaluate(`document.querySelector('[data-fini="${boxes[0]}"]').focus()`);
+      assert.ok((await page.click(`[data-fini="${boxes[0]}"]`)).hit, 'a real click on the first box');
       await page.key('Tab', { shift: true });
-      assert.ok(!boxes.includes(await focused(page)), 'Shift+Tab before the first leaves them too');
+      assert.strictEqual(await page.evaluate('document.activeElement.id'), 'fNext', 'Shift+Tab before the first goes to Start too');
       await click(page, '#fSort');
       now = await until(page, `p.fight.rows[0].id === ${q(nextBox)}`);
       assert.deepStrictEqual(now.errors, []);
@@ -490,12 +491,13 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
     });
   });
 
+  // Changed on purpose in step 6b Task 7: this used CoC, which now fights; PF2e has no fight rows yet.
   it('a system with no fight rows yet has no Fight button; no script errors', async () => {
     const run = await start({ edit: (v) => {
       const f = path.join(v, '_meta', 'vault-config.yaml');
-      fs.writeFileSync(f, lf(fs.readFileSync(f, 'utf8')).replace('system: dnd-5e-2024', 'system: coc-7e'));
+      fs.writeFileSync(f, lf(fs.readFileSync(f, 'utf8')).replace('system: dnd-5e-2024', 'system: pf2e'));
     } });
-    assert.strictEqual(run.model.system, 'coc-7e');
+    assert.strictEqual(run.model.system, 'pf2e');
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await page.goto(`${run.base}/?probe=1`);
       await settled(page);
@@ -771,6 +773,10 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       assert.strictEqual(await title(foe.id), `${foe.name} (neutral: you set it). Show this one's panel`);
       assert.strictEqual(await title(rowOf(p, ADA).id), `${rowOf(p, ADA).name} (PC). Show this one's panel`);
       assert.match(await title(rowOf(p, VENN).id), /\(ally(: .+)?\)\. Show this one's panel$/);
+      // a lair row's title names it too, so a cut name is always whole somewhere (Task 38 fix round, M5: a named D&D change)
+      const lair = p.fight.rows.find((r) => r.kind === 'lair');
+      assert.ok(lair, 'a lair row');
+      assert.strictEqual(await title(lair.id), `${lair.name}. Show this one's panel`);
     });
   });
 
@@ -1004,4 +1010,39 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       assert.strictEqual(await page.evaluate(`document.querySelector('[data-frow="${foe.id}"] .nm').title`), `${foe.name} (foe). Show this one's panel`);
     });
   });
+});
+
+// Task 37 fix rounds 2 and 3: the box, ½ and Res never overlap, focused or not, and the box's focus ring clears ½.
+// Fix round 3 moved ½ and Res 3px on purpose (a named D&D change): on main the ring reached 2px over ½'s border.
+describe('D&D entry box, ½ and Res never overlap (step 6b Task 37 fix round 2)', { skip: browserSkip() }, () => {
+  const clash = (page) => page.evaluate(`(() => {
+    const out = [];
+    for (const box of document.querySelectorAll('#side ol.to > li[data-frow] input.hpin')) {
+      const cs = getComputedStyle(box);
+      const ring = document.activeElement === box && cs.outlineStyle !== 'none' ? parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset) : 0;
+      const half = box.parentElement.querySelector('[data-fhalf]');
+      const res = box.parentElement.querySelector('[data-fres]');
+      const b = box.getBoundingClientRect();
+      if (half && b.right > half.getBoundingClientRect().left) out.push({ row: box.dataset.fhp, box: b.right, half: half.getBoundingClientRect().left });
+      if (half && res && half.getBoundingClientRect().right > res.getBoundingClientRect().left) out.push({ row: box.dataset.fhp, half: half.getBoundingClientRect().right, res: res.getBoundingClientRect().left });
+      if (ring && half && b.right + ring > half.getBoundingClientRect().left) out.push({ ringOver: b.right + ring - half.getBoundingClientRect().left, row: box.dataset.fhp });
+    }
+    return out;
+  })()`);
+  for (const [w, h] of [[1449, 762], [1280, 762], [1100, 762]]) {
+    it(`${w}: every row's box, ½ and Res side by side, focused and not`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: h }, async (page) => {
+        const { p } = await started(page, run);
+        assert.deepStrictEqual(await clash(page), [], `${w}: nothing focused`);
+        for (const r of p.fight.rows.filter((x) => x.in && x.hp !== null && x.hp !== undefined)) {
+          const sel = `[data-fhp="${r.id}"]`;
+          if (!(await page.evaluate(`Boolean(document.querySelector(${q(sel)}))`))) continue;
+          assert.ok((await page.click(sel)).hit, `the click lands on ${sel}`);
+          await page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 2000);
+          assert.deepStrictEqual(await clash(page), [], `${w}: ${r.name}'s box focused`);
+        }
+      });
+    });
+  }
 });

@@ -70,6 +70,14 @@ describe('run sheet handouts, party and people', () => {
     assert.strictEqual(r.warnings.length, 0);
   });
 
+  // final review M2: a reader's warning about a sheet (CoC's spells check failing) is a build warning line, by the PC
+  it('a reader\'s warning about a sheet is a warning line naming the PC', () => {
+    const { index, body } = setup();
+    const system = { readPc: () => ({ numbers: { hpNow: 1, hpMax: 1 }, warning: 'its spells could not be read (boom): MP shows on its fight row' }) };
+    const r = readPcs(body, index, [ADA], system);
+    assert.deepStrictEqual(r.warnings, [{ kind: 'pc-reader', note: ADA, text: 'Ada Moss: its spells could not be read (boom): MP shows on its fight row' }]);
+  });
+
   it('a typeset minus reads in a signed row', () => {
     const { dir, index: i0, body } = setup();
     const f = path.join(dir, ADA);
@@ -292,5 +300,28 @@ describe('run sheet handouts, party and people', () => {
     const r = readPeople('## NPC Quick Reference\n\n| NPC | Role | Detail | Location |\n|---|---|---|---|\n| [[index]] | a | b | c |\n', index);
     assert.deepStrictEqual(r.warnings.map((w) => w.kind), ['ambiguous-link']);
     assert.match(r.warnings[0].text, /\[\[index\]\] names several notes/);
+  });
+});
+
+describe('readPcs takes a CoC or GURPS PC\'s numbers from its system', () => {
+  const { copyFixture, removeFixture } = require('./helpers/systems-fixture');
+  const { systemFor } = require('../lib/run-sheet/systems');
+  it('CoC PCs carry the CoC fields and a prep note; D&D keys are absent', () => {
+    const dir = copyFixture('run-sheet-coc');
+    try {
+      const r = readPcs('', buildIndex(dir), ['Characters/PCs/Iris Calder.md', 'Characters/PCs/Jonas Finch.md'], systemFor('coc-7e'));
+      const iris = r.pcs.find((p) => p.name === 'Iris Calder');
+      assert.deepStrictEqual([iris.hpNow, iris.hpMax, iris.sanNow, iris.luck, iris.dex], [9, 11, 62, 55, 55]);
+      assert.strictEqual('ac' in iris, false);
+      assert.strictEqual('prepNote' in iris, false);
+      assert.strictEqual(r.pcs.find((p) => p.name === 'Jonas Finch').prepNote, 'numbers from a one-line sheet (current = max)');
+    } finally { removeFixture(dir); }
+  });
+  it('GURPS PCs carry the GURPS fields', () => {
+    const dir = copyFixture('run-sheet-gurps');
+    try {
+      const p = readPcs('', buildIndex(dir), ['Characters/PCs/Corin Ash.md'], systemFor('gurps-4e')).pcs[0];
+      assert.deepStrictEqual([p.hpNow, p.fpMax, p.speed, p.dx, p.ht], [10, 11, 5.25, 10, 11]);
+    } finally { removeFixture(dir); }
   });
 });

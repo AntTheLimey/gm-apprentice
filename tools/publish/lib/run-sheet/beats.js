@@ -60,6 +60,8 @@ const MULTI_NPC = /^\*\*(\[\[[^\]]+\]\](?:(?:\s*,\s*and\s+|\s*,\s*|\s+and\s+|\s*
 // A bold lead that holds a link and other words: `**[[Pip Callow]] the stable boy:** wants` or
 // `**[[Ice Mephit]] ×6:** wants`. Group 1 the lead (a colon may end it), group 2 the words after.
 const WORDY_LEAD = /^\*\*([^*\n]*?\[\[[^*\n]*?)\*\*:?[ \t]*([\s\S]*)$/;
+// The notes that stand for several people at once: a counted link to one is a group entry.
+const GROUP_TYPES = new Set(['faction', 'organization', 'npc_group']);
 const NUMBER_WORDS = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 const NUMBER_WORD_COUNT = new RegExp(`^(${Object.keys(NUMBER_WORDS).join('|')})\\s+(\\S[\\s\\S]*)$`, 'i');
 // The count a person's words carry: a leading digit (`6 ice mephits`), a leading number word
@@ -330,7 +332,10 @@ function readBeats(planBody, index) {
         const lp = raw.startsWith('!') ? null : linkParts(raw.slice(2, -2));
         return { raw, lp, note: lp ? resolve(lp.target) : null };
       });
-      const folks = found.filter((f, i) => f.lp && (f.note ? isFolk(f.note) : i === 0));
+      let folks = found.filter((f, i) => f.lp && (f.note ? isFolk(f.note) : i === 0));
+      // a first link to a group note (a faction, organization or npc group) is one entry when the lead counts it
+      const group = !folks.length && found[0] && found[0].lp && found[0].note && GROUP_TYPES.has(typeOf(found[0].note));
+      if (group) folks = [found[0]];
       if (!folks.length) return [];
       let at = 0;
       let extra = lead.replace(LINK, () => {
@@ -342,6 +347,7 @@ function readBeats(planBody, index) {
         loose = countIn(extra, typeOf(folks[0].note) === 'creature');
         if (loose) extra = loose.rest;
       }
+      if (group && !loose && !withCount(found[0].lp.display, found[0].note, 1).counted) return [];
       const wants = extra && after ? `${extra}: ${after}` : (extra || after);
       return folks.map((f) => {
         const w = withCount(f.lp.display, f.note, 1);
@@ -361,7 +367,13 @@ function readBeats(planBody, index) {
         // the count or alias sits inside the bold (`**Guards (2):**`) or after it (`**Guards** (2):`)
         const p = (q[2] !== undefined ? q[2] : (q[3] === undefined ? '' : q[3])).trim();
         const counted = /^\d+$/.test(p);
-        return { target: '', name, knownAs: p && !counted ? p : name, count: counted ? Number(p) : 1, counted, wants: q[4].replace(/\s+/g, ' ').trim() };
+        const wants = q[4].replace(/\s+/g, ' ').trim();
+        if (counted) return { target: '', name, knownAs: name, count: Number(p), counted, wants };
+        // a count in the name itself (`Tarred dockhands ×4`, `4 guards`, `four guards`): the name keeps the rest.
+        // A number word counts only before lower-case words, so `Three Fingers` stays a name.
+        const c = countIn(name, /^\S+\s+[a-z]/.test(name));
+        if (c && c.rest) return { target: '', name: c.rest, knownAs: p || c.rest, count: c.count, counted: true, wants };
+        return { target: '', name, knownAs: p || name, count: 1, counted: false, wants };
       }
       const l = linkParts(m[1]);
       const paren = (m[2] !== undefined ? m[2] : m[3]);

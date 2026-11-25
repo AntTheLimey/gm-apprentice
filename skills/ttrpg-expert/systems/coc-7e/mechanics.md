@@ -81,8 +81,18 @@ Based on STR + SIZ (add the percentile values together):
 | 205-284 | +2D6 | +3 |
 | Each +80 | +1D6 | +1 |
 
-Damage bonus applies to melee and thrown weapon attacks.
-Firearms never apply the damage bonus.
+The damage bonus by attack (Keeper Rulebook p.408):
+
+<!-- The table between the markers is written by
+`node tools/publish/scripts/gen-combat-reference.js --write`
+from the run sheet's damage code; edit that, not this. -->
+<!-- generated: damage-bonus -->
+| Attack | Damage bonus |
+|---|---|
+| Melee | full DB |
+| Thrown weapon, or a bow drawn by the wielder | half DB |
+| Firearm | no DB |
+<!-- /generated -->
 
 Build determines grappling contests: the difference in Build
 between opponents affects their opposed Fighting (Brawl) rolls
@@ -204,11 +214,14 @@ combat-reference.md).
 
 ### Damage and Injury
 
-- Damage reduces HP. At 0 HP, the investigator is dying.
-- **Major Wound**: Damage in a single hit >= half max HP.
-  The investigator must make a CON roll or fall unconscious.
-  Major wounds need First Aid within one round and extended
-  medical treatment.
+- Damage reduces HP. At 0 HP alone the investigator is
+  Unconscious; Dying needs a Major Wound as well (Keeper
+  Rulebook p.120).
+- **Major Wound**: Damage in a single hit of at least half max
+  HP (p.119). The investigator falls prone and makes a CON roll
+  or falls unconscious (p.120). First Aid must come within one
+  hour to help; only First Aid stabilises a dying character
+  (p.120).
 - **Armour**: Subtracts from incoming damage.
 
 ### Firearms
@@ -240,10 +253,11 @@ means lose nothing on success, 1D6 on failure.
 
 ### Bouts of Madness
 
-- **Temporary**: Losing 5+ SAN from one event triggers
-  temporary madness (1D10 hours or until treated).
-- **Indefinite**: Losing 20%+ of current SAN in one session
-  triggers indefinite insanity (requires extended treatment).
+- **Temporary**: Losing 5 or more SAN from one roll calls for
+  an INT roll; a success means temporary insanity (1D10 hours)
+  (Keeper Rulebook p.155).
+- **Indefinite**: Losing a fifth or more of current SAN in one
+  game day triggers indefinite insanity (p.155).
 - **Permanent**: Reaching 0 SAN. The investigator is retired.
 
 ### The Mythos Doom Spiral

@@ -208,8 +208,11 @@ is discussed.
 - Active defenses — `mechanics.md`, `combat.md`,
   `character-sheet.md`: B373; quick reference B556.
 - Combat maneuvers — `combat.md`, `session-procedures.md`: B363.
-- Hit locations, with penalty and DR modifier — `combat.md`: B552,
-  discussed at B399.
+- Sideslip and Slip — `combat.md`: *GURPS Martial Arts* MA123.
+- Hit locations, one row each, with name, penalty and page only — `combat.md`:
+  B552, discussed at B398-B399, with *GURPS
+  Martial Arts*'s extended locations (MA137); generated from
+  `tools/publish/lib/templates/gurps/hit-locations.js`.
 - Damage types and abbreviations — `combat.md`: B268.
 - Size, speed and range modifiers — `combat.md`: B550.
 - Encumbrance levels and Basic Lift — `equipment-armor.md`,
@@ -241,8 +244,9 @@ skills that encumbrance penalises are copied from `gurps_calc.py`; the
 case inputs and results are our own arithmetic. Names and numbers only.
 
 **`tools/publish/lib/templates/gurps/blocks/reference.js`**
-Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
-Tables reproduced: Humanoid Hit Location (p. B552) and
+Source: *GURPS Basic Set 4th Edition* and *GURPS Martial Arts* (Steve Jackson Games).
+Tables reproduced: Humanoid Hit Location (p. B552, with the extended
+locations' names and penalties from p. MA137) and
 Size & Speed/Range (p. B550).
 License: SJG Online Policy
 (https://www.sjgames.com/general/online_policy.html).
@@ -257,6 +261,52 @@ License: SJG Online Policy
 (https://www.sjgames.com/general/online_policy.html).
 Transformation: modifier names and numbers used in a sum, each
 with its page reference in a code comment. Names and numbers only.
+
+**`tools/publish/lib/templates/gurps/hit-locations.js`** (the one hit-location table: each location's penalty, B552 roll, wounding multipliers by damage type, extra DR, crippling, knockdown modifiers and a short note; Martial Arts's extended locations: ear, nose, jaw, spine, veins and arteries, joints; chinks in armour)
+Source: *GURPS Basic Set 4th Edition* and *GURPS Martial Arts* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: names and numbers used in a sum, with short notes, each
+with its page reference (B398, B400, B420, B552, MA137). The generated
+`combat.md` table keeps one row a location (name, penalty, page); the
+rest stays in code. Names and numbers only.
+
+**`tools/publish/lib/run-sheet/systems/gurps.js`, `tools/publish/lib/run-sheet/web/gurps-math.js`** (the run sheet's fight figures, and the sums the page works from them: turn order, marks, Tired, FP, the wounding table, the consequences of a hit and a turn: shock, major wound, knockdown, death checks; the active defences: Dodge from Basic Speed, posture, stunned, reeling and tired, retreat, repeat parry, one Block a turn, the manoeuvres' limits, the manoeuvre names and the Aim and Evaluate counts)
+Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: names and numbers used in a sum, each with its
+page reference in a code comment. Names and numbers only.
+
+**`tools/publish/lib/run-sheet/systems/coc.js`, `tools/publish/lib/run-sheet/web/coc-math.js`** (the run sheet's fight figures: DEX order, firearm bonus, pool limits; melee: dodge or fight back, comparing levels and their ties, the outnumbered and Prone bonus dice, the dice cap; damage: the damage bonus in full, half or none, armour, the Extreme hit's maximum and impaling roll; a hit's card: the Major Wound, Dying and its CON rolls, death over max HP, Unconscious, stabilising; the SAN loss's INT roll and the bout's rounds; a shot: the range's difficulty, the firearm bonus and penalty dice, aiming, the dive for cover, malfunction, a weapon line's slow reload)
+BRP combat foundation: *Basic Roleplaying: Universal Game Engine*,
+ORC License (see above). CoC 7e adaptation (fight back, comparing
+success levels, bonus and penalty dice, the outnumbered die, the Prone
+die, the damage bonus by weapon kind, the Extreme hit's damage and
+impales, the Major Wound and Dying, the INT roll after a large SAN
+loss and its bout of madness, firearm modifiers, the dive for cover,
+malfunction): our own descriptions of uncopyrightable game mechanics,
+with *Keeper Rulebook* page references in code comments. Not Chaosium
+text. Regency figures from *Regency Cthulhu* (Chaosium, 2022) p187,
+names and numbers only, with the page reference in a code comment:
+the code holds that flintlocks, the blunderbuss and the musket never
+impale, and that a Regency gun with no malfunction number in its
+note has 95 (the double-barreled pistol 90); a number the GM's line
+gives wins. One shot per 4 rounds and the blunderbuss's damage by
+range are read from the GM's own weapon lines. From the *Keeper
+Rulebook*: a malfunction hint at a kept 95 when no number is known.
+
+**`tools/publish/lib/dice/index.js`** (the run sheet's dice: 3d6 and d100 against a target, damage dice)
+GURPS: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: the critical ranges and the damage floor are numbers
+in a sum, each with its page reference in a code comment. Numbers only.
+CoC: BRP foundation, *Basic Roleplaying: Universal Game Engine*, ORC
+License (see above). CoC 7e adaptation (difficulty levels, bonus and
+penalty dice, the fumble range): our own descriptions of
+uncopyrightable game mechanics, with *Keeper Rulebook* page references
+in code comments. Not Chaosium text.
 
 ## D&D Beyond
 

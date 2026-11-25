@@ -23,6 +23,8 @@ const LEFT_OUT = new Set(LEFT_OUT_DIRS.map((d) => d.toLowerCase()));
 const toPosix = (p) => p.split(path.sep).join('/');
 const isLeftOut = (rel) => rel.split('/').slice(0, -1).some((seg) => seg.startsWith('.') || LEFT_OUT.has(seg.toLowerCase()));
 const stemOf = (rel) => path.posix.basename(rel, path.posix.extname(rel));
+// A name shown for a note with none of its own: its stem with underscores as spaces (`Harmonische_Wachter`).
+const stemName = (rel) => stemOf(rel).replace(/_+/g, ' ').replace(/\s+/g, ' ').trim() || stemOf(rel);
 
 function wikiTarget(value) {
   const m = /\[\[([^\]|#]+)/.exec(String(value || ''));
@@ -297,4 +299,4 @@ function buildIndex(vaultPath, { deps } = {}) {
   });
 }
 
-module.exports = { buildIndex, stemOf };
+module.exports = { buildIndex, stemOf, stemName };

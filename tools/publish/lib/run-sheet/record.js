@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const RS = require('./web/state');
 const { fenceMask } = require('./plan-text');
+const { vitalsColumns } = require('../shared-lists');
 
 // The sides the GM set in a fight (plan 6a), one `- [[Note]]: side` per note; the reader carries the latest.
 const SIDES_SET = 'Sides set';
@@ -25,7 +26,16 @@ const TABLE_LOG_SECTIONS = [
 const VITALS = 'Vitals at the end';
 // An Improvised beats line for a place typed tonight (plan 6a Task 7): `- New place: The Docks`.
 const NEW_PLACE = 'New place:';
-const VITALS_HEAD = '| Who | HP | Conditions |\n| --- | --- | --- |';
+// The vitals table's header and separator rows: Who, then the system's columns (model.rules.vitals, the ontology's
+// `run_sheet.vitals`; D&D's `| Who | HP | Conditions |` when none). vault_write.table_log_vitals_head writes the same.
+const vitalsHead = (cols) => {
+  const names = ['Who', ...cols.map((c) => c.column)];
+  return `| ${names.join(' | ')} |\n|${' --- |'.repeat(names.length)}`;
+};
+const columnsOf = (model) => {
+  const cols = RS.vitalColumns(model);
+  return cols.length ? cols : vitalsColumns(model && model.system);
+};
 
 const lf = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n');
 const one = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -103,7 +113,9 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     if (o.kind === 'vitals') {
       const v = o.value;
       const hp = v.hp !== null ? `HP ${one(v.hp)}${v.max !== null ? `/${one(v.max)}` : ''}` : v.max !== null ? `HP max ${one(v.max)}` : '';
-      return `Vitals for ${link(o.note)}${o.copy > 1 ? ` ${o.copy}` : ''}: ${[hp, one(v.conditions)].filter(Boolean).join(', ')}; no longer in the Plan`;
+      // the system's pools the GM set on the end panel (MP, SAN, Luck, FP), by their column words
+      const pools = RS.poolWords(model, v);
+      return `Vitals for ${link(o.note)}${o.copy > 1 ? ` ${o.copy}` : ''}: ${[hp, ...pools, one(v.conditions)].filter(Boolean).join(', ')}; no longer in the Plan`;
     }
     const uses = o.value.map((v) => (v.startsWith('stood: ') ? `${link(v.slice(7))} stood there` : v));
     return `Beat "${text || o.key}": ${uses.join(', ')}; no longer in the Plan`;
@@ -155,17 +167,28 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   sec.Loot = bullets(d.loot.map((l) => `${l.item ? link(l.item) : one(l.text)} to ${who(l.to)}`));
 
   const cell = (s) => one(s).replace(/\|/g, '/');
+  // a figure is written with an ASCII hyphen-minus (`-3/12`), never U+2212: `sheet set` and the reader take `-`
+  const figure = (x) => cell(String(x)).replace(/\u2212/g, '-');
+  const cols = columnsOf(model);
   const rows = d.vitalsRecorded.map((v) => {
     const name = `${link(v.note)}${v.copy > 1 ? ` ${v.copy}` : ''}`;
     // The page sends what was typed: a `|` or a line break in a figure must not break the row.
     const set = (x) => x !== null && x !== undefined && x !== '';
-    let hp = '';
-    if (set(v.hp)) hp = set(v.max) ? `${cell(String(v.hp))}/${cell(String(v.max))}` : cell(String(v.hp));
-    // a figure from a fight says when it was taken; one set on the end panel or by a long rest is bare (decision 17)
-    if (hp && v.source === 'fight' && v.at) hp += ` (after the fight, ${timeOf(v.at)})`;
-    return `| ${name} | ${hp} | ${cell(v.conditions)} |`;
+    const cells = cols.map((c) => {
+      if (c.field === 'conditions') return cell(v.conditions);
+      // Luck (`pcs_only`) is never an ally's
+      if (c.pcs_only && v.ally) return '';
+      const now = v[c.field];
+      if (!set(now)) return '';
+      const max = c.max && v[c.max];
+      let out = c.shape === 'current/max' && set(max) ? `${figure(now)}/${figure(max)}` : figure(now);
+      // a figure from a fight says when it was taken; one set on the end panel or by a long rest is bare (decision 17)
+      if (c.field === 'hp' && v.source === 'fight' && v.at) out += ` (after the fight, ${timeOf(v.at)})`;
+      return out;
+    });
+    return `| ${name} | ${cells.join(' | ')} |`;
   });
-  sec[VITALS] = rows.length ? `${VITALS_HEAD}\n${rows.join('\n')}` : '';
+  sec[VITALS] = rows.length ? `${vitalsHead(cols)}\n${rows.join('\n')}` : '';
 
   // Each non-empty line the GM typed is one bullet, so a typed `## ` never makes a section.
   sec.Advancement = bullets(lf(d.advancement).split('\n').map((l) => l.trim()).filter(Boolean));

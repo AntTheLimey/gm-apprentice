@@ -252,7 +252,10 @@ the narrative. Apply the house rules as you would the book.
    PC, else the Play Notes' or the GM's, go in the Current Status prose and
    in a `=== sheet <PC> hp=41 hit-dice=1/5` block after them, which
    writes the Stat Sheet the party board reads (D&D, CoC, GURPS; a
-   wrong key's refusal lists the keys). A value not given is left alone, never guessed. A field
+   wrong key's refusal lists the keys). In a run-sheet log (`created_by: run-sheet`), a PC
+   row's HP, MP, SAN, Luck, FP go to `hp mp san luck fp`, and each CoC status key
+   Conditions names is yes (`major-wound=yes`); one it does not name is left alone, as
+   the run sheet never read the sheet's statuses. A value not given is left alone, never guessed. A field
    step 1's flush changed is the player's: leave it as flush wrote
    it, and where the notes disagree, 5b's review names both for the
    GM. Where the Table Log's HP differs from what flush wrote, leave

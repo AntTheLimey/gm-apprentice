@@ -23,6 +23,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+/* Tab onto a link or box inside a beat or section lands below the sticky header, never under it (Task 23) */
+html { scroll-padding-top: calc(var(--toph) + 8px); }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); }
 button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 3px 9px; }
 button:disabled { opacity: .45; cursor: default; }
@@ -94,8 +96,11 @@ ul.maps { list-style: none; padding: 0; }
 ul.maps li { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
 .drawer .dbtns { display: flex; gap: 6px; align-items: center; }
 .sheet > * { max-width: 1180px; }
-section.s { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 14px; padding: 12px 16px; scroll-margin-top: calc(var(--toph) + 8px); }
-section.s > h2 { font: 650 1.05rem/1.3 var(--display); margin: 0 0 8px; }
+section.s { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 14px; padding: 12px 16px; }
+section.s > h2, section.s > .sbar > h2 { font: 650 1.05rem/1.3 var(--display); margin: 0 0 8px; }
+/* a section's bar: its title, and the buttons a part puts there (the GURPS to-hit calculator's on the PCs) */
+section.s > .sbar { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+section.s > .sbar > h2 { margin: 0; }
 h3, h4, h5 { margin: 10px 0 4px; font-size: .95rem; }
 h4.lab { font: 600 .72rem var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 12px 0 4px; }
 p { margin: 4px 0; }
@@ -124,7 +129,7 @@ details.fold[open] > summary { color: var(--ink); }
 .nolog { background: var(--ice-soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: .92rem; }
 
 /* a beat */
-.beat { border-top: 1px solid var(--line); padding: 14px 0 12px; scroll-margin-top: calc(var(--toph) + 8px); }
+.beat { border-top: 1px solid var(--line); padding: 14px 0 12px; }
 .beat:first-of-type { border-top: none; }
 .beat.here { box-shadow: inset 4px 0 0 var(--lamp); padding-left: 14px; margin-left: -16px; }
 .bh { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
@@ -188,6 +193,15 @@ button.mini { padding: 0 5px; font-size: .72rem; line-height: 1.4; }
 .vt input { width: 4.5rem; }
 .vt input.c { width: 100%; min-width: 10rem; }
 .vt .rec { font: 600 .7rem var(--mono); color: var(--ok); }
+/* a system with pools (step 6b): two lines a row, the figures and then Conditions, to fit the sheet at 1100 wide */
+.vt.pools input { width: 3rem; }
+.vt.pools .vn td { white-space: nowrap; }
+.vt.pools .vn td:first-child { white-space: normal; }
+.vt.pools .of { margin-left: .25rem; color: var(--muted, inherit); font-size: .8rem; }
+.vt.pools .vc input.c { width: 100%; min-width: 0; box-sizing: border-box; }
+.vt.pools tr.vc td { padding-top: 0; }
+.vt input[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
+.vt .badnum { display: block; color: var(--bad); font: 600 .7rem var(--mono); white-space: normal; }
 .where input { width: 100%; min-width: 14rem; }
 textarea#advance { width: 100%; min-height: 4.5rem; }
 pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 500 .78rem var(--mono); max-height: 460px; overflow: auto; }
@@ -296,9 +310,16 @@ ol.to .ini.fixed { width: 2.6rem; text-align: center; font: 650 .8rem var(--mono
 ol.to .nm { flex: 1 1 4.5rem; min-width: 3.5rem; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 ol.to .tag { font: 500 .68rem var(--mono); color: var(--muted); white-space: nowrap; }
 ol.to input.hpin { width: 4.2rem; text-align: left; }
+/* the focus ring (2px, 2px out) clears what sits beside the box, by the row's 2px gap and this margin: CoC's and
+   GURPS's HP figure (Task 37 fix round), and D&D's ½ and Res, moved 3px for it (fix round 3, a named D&D change) */
+ol.to input.hpin { margin-right: 3px; }
 ol.to .hpv, ol.to .acv { font: 650 .8rem var(--mono); white-space: nowrap; }
 ol.to .hpv input { width: 2.6rem; }
 ol.to .acv input { width: 2.3rem; margin-left: 2px; }
+/* CoC and GURPS rows (step 6b Task 7): FP now/[max], MP · SAN (the entry box takes its placeholder's width) */
+ol.to .fpv input { width: 2.3rem; }
+ol.to .fpv .er { color: var(--muted); }
+ol.to .pools { font: 600 .74rem var(--mono); color: var(--muted); white-space: nowrap; }
 ol.to input[aria-invalid="true"], ol.to input.pending { outline: 2px solid var(--bad); outline-offset: 1px; }
 /* a row's second line (gm-fight.js syncLine2): a box's words and the statuses the row has no room for; it wraps, and
    the order's least width never counts it */
@@ -313,6 +334,7 @@ ol.to button { font-size: .72rem; padding: 0 4px; line-height: 1.5; }
 .tg.on { background: var(--ice); color: var(--panel); border-color: var(--ice); }
 .chip { font: 500 .68rem var(--mono); padding: 0 4px; border: 1px solid var(--bad); color: var(--bad); border-radius: 4px; background: transparent; white-space: nowrap; }
 .chip.auto { border-color: var(--lamp); color: var(--lamp); }
+.chip.auto.mark { border-color: var(--bad); color: var(--bad); font-weight: 650; }
 .cnt { font: 500 .7rem var(--mono); white-space: nowrap; }
 .cnt.spent { opacity: .55; text-decoration: line-through; }
 ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
@@ -323,12 +345,87 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .nums { display: flex; gap: 5px; flex-wrap: wrap; margin: 6px 0; font: 600 .82rem var(--mono); align-items: center; }
 .act .nums > span { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; background: var(--bg); }
 .act .nums .bl { color: var(--lamp); border-color: var(--lamp); }
+.act .nums .mk { color: var(--bad); border-color: var(--bad); }
+/* the panel's boxes (rules.panelBoxes) and GURPS's mark track */
+.act .pboxes { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0; }
+.act .pb { display: inline-flex; align-items: center; gap: 3px; font: 500 .72rem var(--mono); }
+.act .pb .lab { color: var(--muted); }
+.act .pb input { width: 3rem; font: 600 .8rem var(--mono); padding: 1px 3px; text-align: center; }
+.act .pb input[data-fs-db], .act .pb input[data-fs-dr] { width: 4.6rem; }
+.act .pb input[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
+.act .pb .from { color: var(--muted); font-size: .66rem; }
+/* GURPS's hit chips (Task 12): the damage types, then the places; a tapped one is pressed while its word is in the box */
+.act .pboxes .tg.faceopen { white-space: nowrap; }
+.act .hitchips { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 6px; }
+.act .hitchips .hrow { display: flex; flex-wrap: wrap; gap: 3px; }
+.act .hchip { font: 600 .7rem var(--mono); padding: 1px 6px; border-radius: 10px; }
+.act .hchip[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
+.act .hitchips .hloc { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.act .hitchips .hloc .lab { font-size: .7rem; color: var(--muted); white-space: nowrap; }
+.act .hitchips .hloc select { font: 600 .72rem var(--mono); min-width: 0; max-width: 100%; }
+/* GURPS's defences (Task 14): each as it stands this turn, a tap rolls it; moved by a cause it is underlined, its
+   causes in the title; a used Block is struck through, and asks once before a second */
+ol.to .defs { display: inline-flex; gap: 2px; }
+/* a foe's main combat skill (Task 36): a plain figure, read, never tapped */
+ol.to .defs .skill { font: 600 .7rem var(--mono); white-space: nowrap; padding: 0 3px; align-self: center; }
+.def { font: 600 .7rem var(--mono); white-space: nowrap; }
+.def.moved { text-decoration: underline dotted; text-underline-offset: 2px; }
+.def.used { opacity: .6; text-decoration: line-through; }
+.def.ask { opacity: 1; text-decoration: none; border-color: var(--bad); color: var(--bad); }
+.act .pdefs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; font: 500 .72rem var(--mono); }
+.act .pdefs .lab { color: var(--muted); }
+.act .pdefs .def, .act .pdefs .tg.retreat { padding: 1px 6px; }
+.act .pdefs .sheetdef, .act .pdefs .pcdef { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; font-weight: 600; }
+/* the last hit's working on the row's second line: one line, clipped, its full text in the title */
+ol.to .hitline { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 .7rem var(--mono); color: var(--muted); }
+/* a foe's last defence roll (Task 30): on the right of the second line, under its readout; one line, the words saying
+   made or failed and the colour as well */
+ol.to .defres { flex: 0 1 auto; margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 .72rem var(--mono); border-left: 3px solid; padding-left: 5px; }
+ol.to .defres.made { color: var(--ok); }
+ol.to .defres.failed { color: var(--bad); }
+.act .mtrack { list-style: none; display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0 6px; padding: 0; font: 600 .72rem var(--mono); }
+.act .mtrack li { border: 1px dashed var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+.act .mtrack li.lit { border-style: solid; border-color: var(--bad); color: var(--bad); }
+.act .mtrack li.deep { background: var(--bad); color: var(--panel); }
+/* GURPS's cards (Task 13): what a hit and a turn owe, at the top of the panel, each naming its row */
+.chip.auto.owe { border-color: var(--ice); color: var(--ice); }
+.act .fcards { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.act .fcard { border: 1px solid var(--bad); border-left-width: 4px; border-radius: 6px; background: var(--bad-soft); padding: 4px 8px 6px; }
+.act .fcard .fch { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.act .fcard .fch .nm { font: 650 .9rem var(--display); background: none; border: 0; padding: 0; color: inherit; text-decoration: underline dotted; cursor: pointer; }
+.act .fcard .fch .what { font: 500 .7rem var(--mono); color: var(--muted); }
+.act .fcard .fch .sp { flex: 1; }
+.act .fcard .fch button.tg, .act .fcard .fch .x { font-size: .72rem; padding: 0 6px; }
+.act .fcard .cht { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0 0; font: 500 .72rem var(--mono); }
+.act .fcard .cht input { width: 3rem; font: 600 .8rem var(--mono); padding: 1px 3px; text-align: center; }
+.act .fcard .cht .note { color: var(--muted); }
+.act .fcard .clines { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.act .fcard .clines li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: 600 .78rem var(--mono); color: var(--muted); }
+.act .fcard .clines li.next { color: var(--ink); }
+.act .fcard .clines li.next .lt::before { content: '\25B8 '; color: var(--bad); }
+.act .fcard .clines li.rolled { color: inherit; }
+.act .fcard .clines .res { font-weight: 500; }
+.act .fcard .clines .offer { font: 650 .74rem var(--mono); padding: 1px 8px; border-color: var(--bad); color: var(--bad); background: var(--bg); }
+.act .fcard .clines .took { color: var(--bad); }
+.act .fcard .clines .decline { font-size: .7rem; padding: 0 5px; }
+.act .fcard .roll { font-size: .8rem; padding: 2px 14px; }
+/* a waiting card folded to one line (PRENTICE review M1): its name, what is due, ✕ */
+.act .fcard.fold { padding: 2px 8px; }
+.act .fcard.fold .fch { flex-wrap: nowrap; min-width: 0; }
+.act .fcard.fold .due { font: 500 .72rem var(--mono); background: none; border: 0; padding: 0 2px; color: var(--muted); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* CoC (Task 18): a PC's line is the player's roll, Passed or Failed tapped; the bout tables' page; Stabilised standing */
+.act .fcard .taps { display: inline-flex; gap: 6px; }
+.act .fcard .taps button { font-size: .8rem; padding: 2px 12px; }
+.act .fcard .fch .cite { font: 500 .7rem var(--mono); color: var(--muted); font-style: italic; }
+.act .nums .shock.on { color: var(--ice); border-color: var(--ice); background: none; }
+.act .nums .shockset { display: inline-flex; gap: 2px; border: 0; padding: 0; background: none; }
+.act .nums .shockset button { font-size: .72rem; padding: 0 6px; }
 .act .nums .st { color: var(--bad); border: 1px solid var(--bad); border-radius: 5px; padding: 0 6px; background: var(--bg); font: inherit; }
 .act .nums.ctr button { font-size: .75rem; padding: 1px 6px; }
 .act .stats { font-size: .9rem; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
 .act .stats table { font-size: .8rem; }
 /* the beats column in a fight: the beat cut, the paused strip, the after-the-fight box */
-.cut { border: 1px solid var(--bad); border-radius: 10px; background: var(--panel); padding: 10px 16px; margin: 0 0 14px; scroll-margin-top: calc(var(--toph) + 8px); }
+.cut { border: 1px solid var(--bad); border-radius: 10px; background: var(--panel); padding: 10px 16px; margin: 0 0 14px; }
 .cut > h2 { font: 650 1rem var(--display); margin: 0 0 4px; color: var(--bad); }
 .cut > h2 .lk { font: 500 .8rem var(--body); margin-left: 6px; }
 .cut .cwho > div { padding: 2px 0; }
@@ -385,3 +482,87 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .sideSw button[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
 .act .nums > span.sideSw { border: 0; background: none; padding: 0; }
 #coloursBtn .keptmark { color: var(--lamp); font-size: .7rem; }
+/* GURPS's manoeuvre chip (Task 15): a small word on the row, a row of buttons in the panel */
+ol.to .tg.man { padding: 0 5px; white-space: nowrap; }
+ol.to .tg.man:not(.on) { color: var(--muted); }
+.act .pman { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; font: 500 .72rem var(--mono); }
+.act .pman .lab { color: var(--muted); }
+.act .pman .tg { padding: 1px 6px; }
+/* CoC's melee on the target's row (Task 16): Fight Back and Dodge (an NPC's usual one first, its edge solid), the
+   dice on the attack between − and +; the second line holds the exchange, the outnumbered and Prone notes */
+ol.to .melee { display: inline-flex; gap: 2px; align-items: center; }
+ol.to .tg.mel { padding: 0 4px; white-space: nowrap; }
+ol.to .tg.mel:not(.dflt):not(.on) { color: var(--muted); border-style: dashed; }
+ol.to .mdice { display: inline-flex; align-items: center; gap: 1px; }
+ol.to .mdice button { padding: 0 3px; min-width: 1.2rem; }
+ol.to .mdn { font: 650 .72rem var(--mono); min-width: 1.4rem; text-align: center; color: var(--muted); }
+ol.to .mdn.some { color: var(--ink); }
+/* the dice button (Task 38): one fixed width whatever it shows (± or a net such as −2), so the row never moves */
+ol.to .mdopen { width: 1.9rem; padding: 0 3px; font: 650 .72rem var(--mono); color: var(--muted); }
+ol.to .mdopen.some { color: var(--ink); }
+ol.to .mdopen.on { border-color: var(--ice); }
+ol.to > li.row2 .mdice .mnote { margin-right: 3px; }
+ol.to > li.row2 > .mx { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 2px 4px; align-items: center; font: 500 .72rem var(--mono); }
+ol.to > li.row2 .mlv { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+ol.to > li.row2 .mres { font-weight: 650; }
+ol.to > li.row2 .mhint, ol.to > li.row2 .mnote { font: 500 .7rem var(--mono); color: var(--muted); white-space: nowrap; }
+/* CoC's damage box (Task 17): on the hit row's second line, who deals it, the DB setting, and on an Extreme hit the
+   impaling toggle and the maximum's one tap */
+ol.to > li.row2 > .dmgbox { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 2px 4px; align-items: center; font: 500 .72rem var(--mono); }
+ol.to > li.row2 .dmgbox .tg { padding: 0 5px; }
+ol.to > li.row2 .dmgbox .offer { font: 650 .72rem var(--mono); padding: 0 8px; border-color: var(--bad); color: var(--bad); background: var(--bg); }
+ol.to input.hpin.dmg { border-color: var(--bad); }
+/* CoC's Shoot strip (Task 19): on the target's second line, the range and the chips (each a condition's name), the
+   dive, the malfunction number, the difficulty and dice, then Roll or the PC's level; the marks a dive and a slow
+   weapon leave on a row */
+ol.to > li.row2 > .sx { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 2px 4px; align-items: center; font: 500 .72rem var(--mono); }
+ol.to > li.row2 .sx .tg { padding: 0 5px; white-space: nowrap; }
+ol.to > li.row2 .sx .tg:not(.on) { color: var(--muted); }
+ol.to > li.row2 .sx .offer { font: 650 .72rem var(--mono); padding: 0 8px; }
+ol.to > li.row2 .sx .mlab { color: var(--muted); white-space: nowrap; }
+ol.to > li.row2 .sx .sxg { display: inline-flex; flex-wrap: nowrap; gap: 2px; align-items: center; }
+ol.to > li.row2 .sx .sxh { color: var(--muted); }
+ol.to > li.row2 .sx input.malf { width: 3.2ch; font: 500 .72rem var(--mono); padding: 0 2px; }
+ol.to > li.row2 .mnote.lost.now { color: var(--bad); font-weight: 650; }
+/* Same for all with nothing to copy yet: disabled, its reason written beside it (Task 23, D3) */
+.act .nums > span.samebox { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 6px; }
+.act .samewhy { color: var(--muted); font-size: .8rem; }
+/* The GURPS to-hit calculator (Task 24): the player site's own calculator (/tohit/tohit.css, its narrow layout on
+   the th-narrow class) in a dialog at the note drawer's 560 px. Its box reads eight variables the site defines; here
+   they are the page's own tokens, so light and dark follow the page. The dialog gives the card: border, padding and
+   the heading row. */
+.thdlg { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); box-shadow: 0 12px 36px rgba(0, 0, 0, .25); overflow: hidden; }
+.thdlg[open] { display: flex; flex-direction: column; }
+.thdlg::backdrop { background: rgba(0, 0, 0, .35); }
+.thdlg .thd-top { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 10px 14px 8px; border-bottom: 1px solid var(--line); }
+.thdlg .thd-top .sp { flex: 1; }
+.thdlg .thd-top select { min-width: 0; max-width: 100%; }
+.thdlg .thd-lab { font-size: .85rem; color: var(--muted); }
+.thdlg .thd-typed { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 14px 0; }
+.thdlg .thd-typed[hidden] { display: none; }
+.thdlg .thd-typed label { display: inline-flex; gap: 5px; align-items: center; font-size: .85rem; color: var(--muted); }
+.thdlg .thd-typed #thLevel { width: 5ch; }
+.thdlg .thd-typed #thName { width: 12rem; max-width: 100%; }
+.thdlg .thd-err { color: var(--bad); font-size: .85rem; }
+.thdlg .thd-enc { margin: 6px 14px 0; }
+.thdlg .thd-body { overflow: auto; overscroll-behavior: contain; padding: 8px 14px 14px; min-height: 0; flex: 1 1 auto; }
+.thdlg .thd-empty { margin: 8px 0 0; }
+.thdlg .tohit {
+  --accent: var(--ice); --accent-dim: var(--ice-soft); --bg-card: var(--panel); --border: var(--line);
+  --danger: var(--bad); --success: var(--ok); --text: var(--ink); --text-muted: var(--muted);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+}
+.thdlg .tohit:empty { display: none; }
+.thdlg .tohit h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); font: 650 .95rem var(--display); }
+/* the answer line sticks to the top of the dialog's own scroll, not under the site's header */
+.thdlg .tohit.th-narrow .th-stick { top: 0; }
+/* A roll made at the table (Task 37): one small "rolled" box beside each Roll (a card's line, a defence, a melee
+   side, a shot, a dive, the bout's die); Enter takes it */
+input.typed { width: calc(6ch + 8px); font: 500 .72rem var(--mono); padding: 0 2px; text-align: center; }
+input.typed::placeholder { color: var(--muted); }
+input.typed[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
+.act .fcard input.typed { font-size: .78rem; padding: 1px 3px; margin-left: 6px; }
+.act .fcard .clines .decline.skip { opacity: .7; }
+input.typed.sm { width: calc(4ch + 8px); }
+/* a GURPS row's defence box says "rolled", as the panel's does (PRENTICE review I1) */
+ol.to .defs input.typed.sm { width: calc(6ch + 8px); }

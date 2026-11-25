@@ -106,7 +106,7 @@ const clean = (line) => String(line).replace(/^#+\s*/, '').replace(/^[-*]\s+/, '
 // ---- the forbidden list, read from the fixture ----
 // Each entry: { text | re, short, why, control } — `short` matches on word boundaries in the views, events
 // and markup only; `control: false` for a string the GM's answers cannot hold (the temp folder).
-function forbiddenList(vault, model) {
+function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: sessionName = S.SESSION, figures = true } = {}) {
   const out = [];
   const add = (text, why, opts = {}) => {
     const t = String(text || '').trim();
@@ -149,7 +149,9 @@ function forbiddenList(vault, model) {
       const ally = model.beats.some((b) => (b.foes || []).some((f) => f.note === rel && f.ally));
       const hp = new Set([...stats.matchAll(/\b(?:HP|Hit Points)\**\s*(\d+)/g)].map((m) => m[1]));
       for (const m of stats.matchAll(/\d{4,}/g)) add(m[0], 'a foe number (sentinel)', ally && hp.has(m[0]) ? { with: fm.name } : {});
-      if (sessionFoes.has(rel)) {
+      // `figures: false` (the CoC and GURPS blocks): a foe's small numbers are the test's own named sentinels there,
+      // since a fixture's ordinary figures (HP 12) are the PCs' too
+      if (figures && sessionFoes.has(rel)) {
         for (const m of stats.matchAll(/\b(?:AC|HP|Hit Points)\**\s*(\d+)/g)) if (m[1].length < 4) add(m[1], 'a foe number', { short: true });
         for (const m of stats.matchAll(/Initiative\**\s*\+(\d+)/g)) add(`+${m[1]}`, 'a foe\'s initiative modifier', { short: true });
         for (const m of stats.matchAll(/\((\d+)\/Day\)/gi)) add(`${m[1]}/Day`, 'a Legendary Resistance count', { short: true });
@@ -166,9 +168,9 @@ function forbiddenList(vault, model) {
   add('Bloodied', 'a foe\'s Bloodied (no PC or ally is Bloodied in the script)', { short: true });
 
   // the session's Plan: titles, each section's first line, and the beats' own words
-  add(path.posix.basename(model.plan || S.PLAN, '.md'), 'the Plan note');
-  add(S.SESSION, 'the session\'s title');
-  const plan = fs.readFileSync(path.join(vault, S.PLAN), 'utf8').split(/\r?\n/);
+  add(path.posix.basename(model.plan || planPath, '.md'), 'the Plan note');
+  add(sessionName, 'the session\'s title');
+  const plan = fs.readFileSync(path.join(vault, planPath), 'utf8').split(/\r?\n/);
   plan.forEach((l, i) => {
     if (!/^##\s/.test(l)) return;
     const after = plan.slice(i + 1).filter((x) => x.trim() && !/^---/.test(x));
@@ -909,5 +911,695 @@ describe('a negated Plan ally phrase makes no seen ally (final review O1)', () =
       for (const bad of ['Rime Imp', 'Frost Wolf', 'Ice Mephit', '6175', '7341', '7346', '7347']) assert.ok(!t.includes(bad), `"${bad}" reached the players`);
       assert.ok(!/(?<![0-9])21\/21(?![0-9])/.test(t), 'the Imp\'s HP reached the players');
     }
+  });
+});
+
+// ---- Plan 6b Task 26: the players' screen in a CoC and a GURPS fight ----
+//
+// A fight on each system's fixture (a temp copy, its figures changed to sentinels no ordinary row holds), run through
+// the server's own `POST /api/actions` with every kind of action Tasks 10-25 added, while the players' page, view and
+// event stream are read after each step. The players' view of a running fight is a foe's or neutral's name (or the
+// unseen word) and an ally's name and HP: nothing else, whatever the system. Each step checks:
+//
+// - every row's keys, name, HP and statuses are exactly what the state gives the players (a foe row, a PC or an
+//   ally row), and a status is one of the system's own status words;
+// - none of the sentinels armed so far is in the view, the stream, the rendered markup or the players' static files,
+//   and no working line, damage type, hit location, roll, defence, pool, mark or calculator word is either;
+// - positive control: every sentinel is in the GM's own answers (model, state, notes, calculator data) the moment it
+//   is armed, so a sentinel the fixture lost fails here instead of passing for ever.
+describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', () => {
+  const SYS = require('./helpers/systems-fixture');
+  const RS = require('../lib/run-sheet/web/state');
+  const M = require('../lib/run-sheet/web/fight-math');
+  const GM = require('../lib/run-sheet/web/gurps-math');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const { statusesOf } = require('../lib/run-sheet/web/fight');
+  const { rollDamage, rollPercent } = require('../lib/dice');
+
+  const edit = (dir, rel, from, to) => {
+    const f = path.join(dir, rel);
+    const text = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+    assert.ok(text.includes(from), `${rel} holds "${from}"`);
+    fs.writeFileSync(f, text.replace(from, to));
+  };
+  // What may never be on the players' screen, as words: the pools, the marks, the working of a hit, a defence, a
+  // manoeuvre, a CoC roll, a derived figure's tag, the calculator. Matched on the view and its markup with the
+  // statuses taken out (a status is checked on its own against the system's list).
+  const { LOCATIONS, LOCATION_WORDS } = require('../lib/templates/gurps/hit-locations');
+  const PLACE_WORDS = [...new Set(LOCATIONS.flatMap((l) => l.key.split(' ')).concat(Object.keys(LOCATION_WORDS).flatMap((k) => k.split(' ')), Object.values(LOCATION_WORDS).flatMap((v) => v.split(' '))))].filter((w) => w.length >= 3);
+  const WORDS = new RegExp([
+    '\\b(?:SAN|Sanity|MP|FP|Luck|Energy|Reserve|Reeling|Shock|Knockdown|knockdown|crippled|Crippled|Death|Parry|Block|Dodge|Retreat|retreat|Manoeuvre|manoeuvre',
+    'All-Out|Evaluate|Feint|Dying|Mortal|insanity|bout|Bout|CON|INT|DR|DB|armour|Armour|outnumbered|Outnumbered|d100|calculator|Calculator|to-hit|tohit',
+    'imp|cut|cr|burn|tox|fat|ST|HT|DX|IQ|Basic|Speed|Fight Back|Fights Back|margin|aim|Aim|Shoot|dive|Dive|reload|Reload',
+    'bonus|penalty|die|dice|Bonus|Penalty|Extreme|Hard|Regular|joint|artery|vein)\\b',
+    // every hit place the table knows, by its own words, so a new place cannot slip by unchecked
+    `\\b(?:${PLACE_WORDS.join('|')})\\b`,
+    'from (?:ST|HT|Speed|DX)',
+    '[=−×]',
+    '\\b\\d*[dD]\\d+\\b',
+  ].join('|'));
+  const STATIC_WORDS = /tohit|to-hit|calculator|\bSAN\b|Energy Reserve|\bMP\b|\bFP\b|Reeling|Knockdown/i;
+  const PICID = /\/players\/pic\/[0-9a-f]{20}/g;
+  // the words a view holds: its string values (never its keys), and the text of its markup (never its tags)
+  const valuesOf = (x) => (typeof x === 'string' ? [x] : Array.isArray(x) ? x.flatMap(valuesOf) : x && typeof x === 'object' ? Object.values(x).flatMap(valuesOf) : []);
+  const textOf = (html) => html.replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  const withoutStatuses = (view) => ({ ...view, panels: view.panels.map((p) => (p.order ? { ...p, order: { ...p.order, rows: p.order.rows.map((r) => (r.statuses ? { ...r, statuses: [] } : r)) } } : p)) });
+
+  // One server, one players' stream, one fixture copy with its sentinels. `t` is the script's handle.
+  async function start({ fixture, plan, session, party, edits, system }) {
+    const vault = SYS.copyFixture(fixture);
+    made.push(path.dirname(vault));
+    for (const e of edits) edit(vault, ...e);
+    const model = readRunSheet(vault, plan, { party });
+    assert.equal(model.rules.id, system);
+    // the server's dice are fixed (every die a 4), so no random figure lands on a sentinel and fails a run by luck
+    const lines = [];
+    const picked = pickSession(listSessions(vault), session, vault);
+    assert.ok(picked.session, picked.error);
+    const run = createTableServer({ vaultPath: vault, session: picked.session, party, deps: { delayMs: 20, retryMs: [20], pingMs: 40, log: (l) => lines.push(l), randomInt: () => 4 } });
+    const port = await listenLocal(run.server, 0);
+    const stateId = stateIdOf(picked.session);
+    const sandbox = { self: {} };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'players', 'render.js'), 'utf8'), sandbox);
+    const render = sandbox.self.RunSheetPlayersRender.renderPlayers;
+    const noteAnswers = [];
+    for (const f of walk(vault).filter((x) => x.endsWith('.md'))) {
+      const rel = path.relative(vault, f).split(path.sep).join('/');
+      const r = await req(port, 'GET', `/api/note?path=${encodeURIComponent(rel)}`);
+      if (r.status === 200) noteAnswers.push(r.text);
+    }
+    // names the players may see: the PCs' first words, the Lair, the unseen word and what the GM has shown
+    const allowedNames = new Set(['Lair', ...model.pcs.map((p) => firstWordOf(p.name))]);
+    // the D&D fixture's own sentinels (an attachments folder, GM Notes lines, a foe's Recharge) are not in these vaults, and a
+    // Plan table's header row is markup, not words
+    const forbidden = forbiddenList(vault, model, { plan, session, figures: false })
+      .filter((x) => !['_attachments', 'GMNOTE', 'Recharge', 'Legendary', 'Bloodied'].includes(x.text) && !/^\|/.test(x.text));
+    forbidden.push({ text: vault, why: 'the vault\'s folder', short: false, control: false });
+    forbidden.push({ text: run.serverId, why: 'the serverId', short: false, control: true });
+    forbidden.push({ text: stateId, why: 'the stateId', short: false, control: true });
+    const armed = [];
+    const shownTexts = new Set();
+    let seq = 0;
+    const gm = stream(port, '/api/events');
+    let players = stream(port, '/api/players/events');
+    let streamSeen = 0;
+    const checked = [];
+    // the Plan is the GM's own file: the control only proves the fixture holds what the list takes from it
+    let extraGm = fs.readFileSync(path.join(vault, plan), 'utf8').split(/\r?\n/).map(clean).join('\n');
+
+    const t = {
+      model, vault, port, stateId, lines, checked,
+      id: () => `t26-${++seq}`,
+      state: async () => { const r = await req(port, 'GET', '/api/state'); return r.json.state; },
+      send: async (actions) => {
+        const r = await req(port, 'POST', '/api/actions', { stateId, base: 0, actions: actions.map((a) => ({ id: `t26-${++seq}`, ...a })) });
+        assert.equal(r.status, 200, r.text);
+        assert.deepEqual(r.json.rejected, [], `no action rejected: ${JSON.stringify(r.json.rejected)}`);
+        return r.json.state;
+      },
+      // the GM's own answers: the model, the state, every note, and whatever the script added (calculator data)
+      gmText: async () => [(await req(port, 'GET', '/api/model')).text, (await req(port, 'GET', '/api/state')).text, ...noteAnswers, extraGm].join('\n'),
+      gmAnswered: (text) => { extraGm += `\n${text}`; },
+      // arms a sentinel from now on, after checking the GM's own answers hold it
+      arm: async (key, text, opts = {}) => {
+        // a sentinel that is a working line, a card or a pool lives only as long as the state holds it: its control is the
+        // moment it is armed, and from then on the players' side must never hold it
+        const x = { text: String(text), why: key, short: Boolean(opts.short), control: false };
+        x.hit = matcher(x);
+        assert.ok(x.hit(await t.gmText()), `positive control: ${key} ("${x.text}") is not in the GM's answers`);
+        armed.push(x);
+      },
+      // a name the GM has now shown the players
+      show: (name) => { allowedNames.add(name); shownTexts.add(name); },
+      stop: async () => { gm.close(); players.close(); await run.close(); },
+    };
+    function firstWordOf(s) { return String(s).trim().split(/\s+/)[0]; }
+
+    // everything the players' half answers now, checked
+    t.look = async (where) => {
+      const got = [];
+      for (const url of ['/players', '/players/players.js', '/players/render.js', '/players/players.css']) {
+        const r = await req(port, 'GET', url);
+        assert.equal(r.status, 200, `${where}: ${url}`);
+        assert.ok(!STATIC_WORDS.test(r.text), `${where}: ${url} names a GM-side thing: ${(STATIC_WORDS.exec(r.text) || [''])[0]}`);
+        got.push({ where: `${where} ${url}`, text: r.text, headers: r.headers, kind: 'static' });
+      }
+      const v = await req(port, 'GET', '/api/players/view');
+      assert.equal(v.status, 200, `${where}: the view`);
+      const view = v.json;
+      checkShape(view, where);
+      const state = await t.state();
+      checkOrder(view, state, where, model);
+      await waitFor(() => {
+        const last = [...players.events].reverse().find((e) => e.event === 'view');
+        return last && last.text === v.text;
+      }, `${where}: the stream's view`);
+      const fresh = players.events.slice(streamSeen);
+      streamSeen = players.events.length;
+      const views = [view];
+      got.push({ where: `${where} view`, text: v.text, headers: v.headers, kind: 'view' });
+      for (const e of fresh) {
+        assert.ok(['hello', 'view'].includes(e.event), `${where}: the players' stream sent "${e.event}"`);
+        if (e.event === 'hello') { assert.equal(e.text, '{}'); continue; }
+        const ev = JSON.parse(e.text);
+        checkShape(ev, `${where} (stream)`);
+        views.push(ev);
+        got.push({ where: `${where} event view`, text: e.text, kind: 'view' });
+      }
+      for (const w of views) got.push({ where: `${where} markup`, text: render(w), kind: 'view' });
+      for (const b of players.raw().split('\n\n').filter((x) => x.length)) assert.ok(/^: ping$/.test(b) || /^event: (hello|view)\ndata: .*$/.test(b), `${where}: a stream block`);
+      got.push({ where: `${where} raw stream`, text: players.raw(), kind: 'view' });
+      for (const g of got.filter((x) => x.headers)) {
+        assert.ok(!('set-cookie' in g.headers), `${g.where}: Set-Cookie`);
+        assert.ok(!Object.keys(g.headers).some((k) => k.startsWith('access-control-')), `${g.where}: a CORS header`);
+      }
+
+      // each row is what the state gives the players, field by field
+      const f = state.fight;
+      const ticked = f ? f.rows.filter((r) => r.in) : [];
+      const sysStatuses = new Set(model.rules.statuses || []);
+      const unseen = new RegExp(`^(?:${reEsc(model.withheldWords.person)}|${reEsc(model.withheldWords.person[0].toUpperCase() + model.withheldWords.person.slice(1))} \\d+|Stranger \\d+|a stranger)$`, 'i');
+      for (const w of views) {
+        const rowsNow = w.panels.flatMap((p) => (p.order ? p.order.rows : []));
+        if (w !== view) continue;
+        assert.equal(rowsNow.length > 0, ticked.length > 0 && w.panels.some((p) => p.order), `${where}: the order is there while the fight runs`);
+        rowsNow.forEach((row, i) => {
+          const r = ticked[i];
+          assert.ok(allowedNames.has(row.name) || unseen.test(row.name) || /^Lair$/.test(row.name) || [...allowedNames].some((n) => row.name === n || new RegExp(`^${reEsc(n)} \\d+$`).test(row.name)), `${where}: row ${i} is named "${row.name}"`);
+          assert.equal(row.out, Boolean(r.out), `${where}: ${row.name} out`);
+          assert.equal(row.current, r.id === f.turn, `${where}: ${row.name} current`);
+          assert.equal(row.ini, typeof r.ini === 'number' ? r.ini : null, `${where}: ${row.name} ini`);
+          if ('hp' in row) {
+            assert.equal(row.hp, typeof r.hp === 'number' ? `${r.hp}${typeof r.max === 'number' ? `/${r.max}` : ''}${r.temp > 0 ? ` +${r.temp}` : ''}` : null, `${where}: ${row.name} HP is the HP and its max, nothing more`);
+            assert.deepEqual(row.statuses, r.conds, `${where}: ${row.name}'s statuses are the statuses set on it`);
+            for (const st of row.statuses) assert.ok(sysStatuses.has(st), `${where}: "${st}" is not one of the system's status words`);
+          }
+        });
+      }
+      for (const w of views) {
+        const bare = withoutStatuses(w);
+        for (const text of [valuesOf(bare).join(' | '), textOf(render(bare))]) {
+          const m = WORDS.exec(text.replace(PICID, '/players/pic/ID'));
+          assert.ok(!m, `${where}: "${m && m[0]}" reached the players: ${m && text.slice(Math.max(0, m.index - 40), m.index + 40)}`);
+        }
+      }
+      // the forbidden list from the vault and the sentinels armed so far
+      const active = forbidden.filter((x) => !shownTexts.has(x.text) && !(x.with && shownTexts.has(x.with))).map((x) => ({ ...x, hit: matcher(x) }));
+      const gmAll = await t.gmText();
+      for (const x of active.concat(armed)) {
+        if (x.control && !x.hit(gmAll)) assert.fail(`${where}: positive control: "${x.text}" (${x.why}) is not in the GM's answers`);
+        for (const g of got) {
+          const texts = [g.text, ...(x.short ? [] : Object.values(g.headers || {}).flat().map(String))];
+          if (x.short && g.kind !== 'view') continue;
+          for (const text of texts) assert.ok(!x.hit(text.replace(PICID, '/players/pic/ID')), `${where}: "${x.text}" (${x.why}) reached the players: ${g.where}`);
+        }
+      }
+      for (const g of got.filter((x) => x.kind === 'view')) assert.ok(!/"dead"\s*:|"hit"\s*:|"marks"\s*:|"cards"\s*:/.test(g.text), `${where}: a GM key`);
+      checked.push(...got);
+      await Promise.resolve();
+      return { view, state };
+    };
+
+    await waitFor(() => players.events.length >= 1, 'hello');
+    return t;
+  }
+
+  // The fight as the page starts it: every PC moved to the beat, then Fight, as the 6a describe above does.
+  async function fightAt(t, beatTitle, { ally } = {}) {
+    let s = await t.state();
+    const beat = t.model.beats.find((b) => b.title === beatTitle);
+    assert.ok(beat, beatTitle);
+    for (const p of t.model.pcs) await t.send([{ type: 'move', pc: p.note, to: { beat: beat.key, spot: null, title: beat.title } }]);
+    s = await t.state();
+    const id = t.id();
+    const b = M.rowsForFight({ model: t.model, derived: RS.derive(t.model, s), state: s, beatKey: beat.key, idBase: id });
+    s = await t.send([{ id, type: 'fightStart', beat: beat.key, title: beat.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds, rules: t.model.rules.fight }]);
+    return s;
+  }
+  const rowNamed = (s, name, copy) => s.fight.rows.find((r) => r.name === name && (copy === undefined || r.copy === copy));
+  const act = async (t, type, name, extra = {}, copy) => {
+    const s = await t.state();
+    const r = rowNamed(s, name, copy);
+    assert.ok(r, `a row named ${name}`);
+    return t.send([{ type, fight: s.fight.id, row: r.id, ...extra }]);
+  };
+  const turnNext = async (t) => { const s = await t.state(); return t.send([{ type: 'fightNext', fight: s.fight.id, from: s.fight.turn, round: s.fight.round }]); };
+  const turnTo = async (t, name, copy) => {
+    for (let i = 0; i < 40; i++) {
+      const s = await t.state();
+      if (s.fight.started && s.fight.turn === rowNamed(s, name, copy).id) return s;
+      await turnNext(t);
+    }
+    assert.fail(`never reached ${name}'s turn`);
+  };
+  const eventsOf = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const rolled3 = (total, target, outcome) => ({ dice: [Math.floor(total / 3), Math.floor(total / 3), total - 2 * Math.floor(total / 3)], total, target, margin: target - total, outcome: outcome || (total <= target ? 'success' : 'failure') });
+  const d100 = (kept, target, level) => ({ tens: [Math.floor(kept / 10) * 10], units: kept % 10, kept, target, difficulty: 'regular', needed: target, level, passed: level !== 'fail' && level !== 'fumble', fumbleFrom: 96, bonus: 0, penalty: 0, asked: { bonus: 0, penalty: 0 } });
+
+  it('GURPS: nothing of a worked-out fight reaches the players but a name, an ally\'s HP and the order', { timeout: 120000 }, async () => {
+    const GPLAN = 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Crates - Plan.md';
+    const t = await start({
+      fixture: 'run-sheet-gurps', plan: GPLAN, session: 'Session 01 - Crates', system: 'gurps-4e',
+      party: ['Characters/PCs/Sela Drake.md', 'Characters/PCs/Lysa Venn.md', 'Characters/PCs/Orrin Tate.md', 'Characters/PCs/Corin Ash.md'],
+      edits: [
+        // ST 19 gives a foe HP 19 "from ST"; an Energy Reserve of 13; a Dodge 18, Parry 15 and Block 14; a PC with FP 17
+        ['Characters/NPCs/Rafe Kell.md', 'ST 10 | DX 12', 'ST 19 | DX 12'],
+        ['Characters/NPCs/Mara Quint.md', 'FP 10\n', 'FP 10 (+13 Energy Reserve)\n'],
+        ['Characters/NPCs/Mara Quint.md', 'Dodge 8 · Parry 9 (Dagger) · Block — · DR 0', 'Dodge 18 · Parry 15 (Dagger) · Block 14 · DR 2'],
+        ['Characters/PCs/Sela Drake.md', '**FP:** 10/10', '**FP:** 17/17'],
+        ['Characters/PCs/Sela Drake.md', '| FP | 10 |', '| FP | 17 |'],
+      ],
+    });
+    try {
+      let s = await t.state();
+      await t.look('before the fight');
+      s = await fightAt(t, 'The Back Office');
+      assert.ok(s.fight && !s.fight.started);
+      // the sentinels are in the GM's model and state before a hit is struck
+      const rafe0 = rowNamed(s, 'Rafe Kell');
+      assert.deepEqual([rafe0.hp, rafe0.max, rafe0.from.hp], [19, 19, 'from ST']);
+      assert.equal(rowNamed(s, 'Sela Drake').fp, 17);
+      assert.equal(rowNamed(s, 'Mara Quint').er, 13);
+      assert.deepEqual([rowNamed(s, 'Mara Quint').dodge, rowNamed(s, 'Mara Quint').parry, rowNamed(s, 'Mara Quint').block], [18, 15, 14]);
+      await t.arm('a foe\'s HP from ST', '19', { short: true });
+      await t.arm('a foe\'s "(from ST)" tag', 'from ST');
+      await t.arm('a PC\'s FP', '17', { short: true });
+      await t.arm('a foe\'s Energy Reserve', '13', { short: true });
+      await t.arm('a foe\'s Parry', '15', { short: true });
+      await t.arm('a foe\'s Block', '14', { short: true });
+      await t.arm('a foe\'s Dodge', '18', { short: true });
+      await t.arm('a PC\'s spell list', 'Create Fire');
+      await t.look('the fight set up');
+
+      // Start: sorted by Speed at Fight, fixed after Start. Rafe acts first.
+      s = await turnNext(t);
+      assert.equal(s.fight.turn, rowNamed(s, 'Rafe Kell').id);
+      await t.look('Round 1 starts');
+      s = await act(t, 'manoeuvre', 'Rafe Kell', { name: 'all-out attack' });
+      assert.equal(rowNamed(s, 'Rafe Kell').manoeuvre, 'all-out attack');
+      await t.arm('a manoeuvre', 'all-out attack');
+      await t.look('a manoeuvre picked');
+
+      // a hit with its working, its place, its shock and its mark; the card's roll and the offer taken
+      s = await act(t, 'hp', 'Rafe Kell', { entry: '9 imp vitals' });
+      let rafe = rowNamed(s, 'Rafe Kell');
+      assert.deepEqual([rafe.hp, rafe.hit.location, rafe.hit.type, rafe.shock], [-8, 'vitals', 'imp', 4]);
+      assert.ok(rafe.marks.length >= 1 && rafe.cards.length === 1);
+      await t.arm('a hit\'s working line', rafe.hit.line);
+      await t.arm('a hit\'s location', 'vitals', { short: true });
+      await t.arm('a hit\'s damage type', 'imp', { short: true });
+      await t.arm('a mark', rafe.marks[0]);
+      await t.arm('a card\'s words', rafe.cards[0].what);
+      await t.look('Rafe hit 9 imp vitals');
+      // the card: roll its line, then take what it offers
+      const C = t.model.rules.fight.consequences;
+      let card = rafe.cards[0];
+      const i0 = GM.nextLine(card, C);
+      assert.ok(i0 >= 0, 'a line to roll');
+      s = await act(t, 'cardRolled', 'Rafe Kell', { card: card.id, line: i0, result: rolled3(16, GM.lineTarget(card.lines[i0], rowNamed(s, 'Rafe Kell')), 'failure') });
+      rafe = rowNamed(s, 'Rafe Kell');
+      const logged = eventsOf(s).slice(-1)[0];
+      assert.match(logged, /Rafe Kell/);
+      await t.arm('a roll on a card', logged);
+      await t.look('Rafe\'s card rolled');
+      card = rafe.cards[0];
+      assert.ok(card && card.lines[i0].offers.length >= 1, `an offer: ${JSON.stringify(card)}`);
+      s = await act(t, 'card', 'Rafe Kell', { card: card.id, line: i0, take: card.lines[i0].offers[0] });
+      assert.ok(rowNamed(s, 'Rafe Kell').conds.length >= 1, 'the offer was taken');
+      await t.arm('an offer taken', eventsOf(s).slice(-1)[0]);
+      await t.look('Rafe\'s offer taken');
+      // shown to the players by name at last, a foe's keys
+      s = await act(t, 'seen', 'Rafe Kell', { on: true });
+      t.show('Rafe Kell');
+      await t.look('Rafe shown');
+
+      // Tam, a foe the GM makes an ally: the players now get the name and the HP, and nothing else of him
+      s = await act(t, 'setSide', 'Tam Osier', { side: 'ally' });
+      t.show('Tam Osier');
+      let tam = rowNamed(s, 'Tam Osier');
+      assert.deepEqual([tam.kind, tam.seen, tam.hp, tam.max], ['ally', true, 6, 9]);
+      let look = await t.look('Tam Osier an ally');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Tam Osier').hp, '6/9');
+
+      // a groin hit on the ally: a working line, a place, a card; its HP goes down, the rest stays on the GM's page
+      s = await act(t, 'hp', 'Tam Osier', { entry: '5 cr groin' });
+      tam = rowNamed(s, 'Tam Osier');
+      assert.equal(tam.hit.location, 'groin');
+      await t.arm('an ally\'s hit working', tam.hit.line);
+      await t.arm('a hit\'s place on an ally', 'groin', { short: true });
+      look = await t.look('Tam Osier hit in the groin');
+      s = await act(t, 'hp', 'Tam Osier', { entry: '12 imp vitals' });
+      tam = rowNamed(s, 'Tam Osier');
+      assert.ok(tam.hp < -9, `Tam is past his death checks: ${tam.hp}`);
+      assert.ok(tam.cards && tam.cards.length >= 1, 'a death check on the card');
+      await t.arm('a death check\'s card', tam.cards[tam.cards.length - 1].what);
+      look = await t.look('Tam Osier past his death checks');
+      assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Tam Osier').hp, `${tam.hp}/9`);
+      // Out after the death check: what a foe's Out sends today, the flag and nothing more
+      s = await act(t, 'card', 'Tam Osier', { card: tam.cards[0].id, take: 'out' });
+      assert.equal(rowNamed(s, 'Tam Osier').out, true);
+      look = await t.look('Tam Osier out after a death check');
+      const tamOut = look.view.panels[0].order.rows.find((r) => r.name === 'Tam Osier');
+      assert.deepEqual([tamOut.out, keys(tamOut)], [true, PC_ROW], 'an ally\'s Out is the same row with out true');
+      assert.ok(!/dead|Dead|died/.test(JSON.stringify(look.view)), 'no word of dying');
+
+      // PCs: a hit by place on a PC (its HP shows, its place does not), FP spent, a spell's Energy Reserve, a status set
+      s = await act(t, 'hp', 'Orrin Tate', { entry: '9 cut spine' });
+      let orrin = rowNamed(s, 'Orrin Tate');
+      assert.equal(orrin.hit.location, 'spine');
+      await t.arm('a PC\'s hit working', orrin.hit.line);
+      await t.arm('a spine hit', 'spine', { short: true });
+      look = await t.look('Orrin hit in the spine');
+      assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Orrin').hp, `${orrin.hp}/12`);
+      // a limb past half HP is crippled; a spine past HP is crippled and knocks down and stuns outright
+      s = await act(t, 'hp', 'Lysa Venn', { entry: '7 cut arm' });
+      const corinHurt = rowNamed(s, 'Lysa Venn');
+      assert.ok(corinHurt.crippled.length > 0, `a crippled limb: ${JSON.stringify(corinHurt.crippled)}`);
+      await t.arm('a crippled mark', corinHurt.crippled[0]);
+      await t.arm('a crippling hit\'s working', corinHurt.hit.line);
+      await t.look('Lysa\'s arm crippled');
+      s = await act(t, 'hp', 'Orrin Tate', { entry: '20 cut spine' });
+      orrin = rowNamed(s, 'Orrin Tate');
+      assert.ok(orrin.crippled.includes('spine'), `a crippled spine: ${JSON.stringify(orrin.crippled)}`);
+      const autoCard = orrin.cards.find((c) => c.lines.some((l) => l.place === 'spine'));
+      assert.ok(autoCard, 'a card for the spine');
+      const auto = JSON.stringify(autoCard);
+      assert.match(auto, /auto|Auto|stun|Stun|knock/, `the automatic knockdown on the card: ${auto}`);
+      await t.arm('a spine card', autoCard.what);
+      await t.arm('a crippled spine', orrin.hit.line);
+      await t.look('Orrin\'s spine crippled');
+      s = await act(t, 'status', 'Orrin Tate', { add: 'Stunned' });
+      look = await t.look('Orrin Stunned');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Orrin').statuses, ['Stunned']);
+
+      s = await act(t, 'hp', 'Sela Drake', { entry: 'f-3' });
+      assert.equal(rowNamed(s, 'Sela Drake').fp, 14);
+      await t.arm('FP spent', eventsOf(s).filter((l) => /Sela/.test(l)).slice(-1)[0]);
+      s = await act(t, 'hp', 'Sela Drake', { entry: 'f-12' });
+      const sela = rowNamed(s, 'Sela Drake');
+      assert.equal(sela.fp, 2);
+      assert.ok(sela.tired, 'Tired at FP 2');
+      await t.arm('FP almost gone', eventsOf(s).filter((l) => /Sela/.test(l)).slice(-1)[0]);
+      assert.ok(sela.marks.length >= 1 || sela.tired, 'a Tired mark');
+      look = await t.look('Sela spent her FP');
+      assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Sela').hp, '12/12');
+      s = await act(t, 'hp', 'Lysa Venn', { entry: 'e-4' });
+      assert.equal(rowNamed(s, 'Lysa Venn').er, 2);
+      await t.arm('a PC\'s Energy Reserve spent', eventsOf(s).filter((l) => /Lysa/.test(l)).slice(-1)[0]);
+      s = await act(t, 'setShock', 'Sela Drake', { n: 3 });
+      assert.equal(rowNamed(s, 'Sela Drake').shock, 3);
+      look = await t.look('a shock chip tapped');
+
+      // Mara's turn: defences, retreat, Energy Reserve spent, a hit to the face, the face left open
+      s = await turnTo(t, 'Mara Quint');
+      s = await act(t, 'manoeuvre', 'Mara Quint', { name: 'all-out defence', defence: 'parry' });
+      assert.equal(rowNamed(s, 'Mara Quint').manoeuvre, 'all-out defence');
+      look = await t.look('Mara picks All-Out Defence');
+      const D = t.model.rules.fight.defences;
+      const live = GM.liveDefences(rowNamed(s, 'Mara Quint'), D);
+      s = await act(t, 'defendRolled', 'Mara Quint', { defence: 'parry', result: rolled3(11, live.parry.value, 'success') });
+      assert.equal(rowNamed(s, 'Mara Quint').parries, 1);
+      await t.arm('a defence rolled', eventsOf(s).slice(-1)[0]);
+      look = await t.look('Mara parries');
+      s = await act(t, 'hp', 'Mara Quint', { entry: 'e-4' });
+      assert.equal(rowNamed(s, 'Mara Quint').er, 9);
+      await t.arm('a foe\'s Energy Reserve spent', eventsOf(s).filter((l) => /Mara/.test(l)).slice(-1)[0]);
+      s = await act(t, 'faceOpen', 'Mara Quint', { on: true });
+      s = await act(t, 'hp', 'Mara Quint', { entry: '8 cr jaw' });
+      const mara = rowNamed(s, 'Mara Quint');
+      assert.equal(mara.hit.location, 'jaw');
+      await t.arm('a jaw hit', 'jaw', { short: true });
+      await t.arm('a hit with no DR', mara.hit.line);
+      look = await t.look('Mara hit on the jaw');
+      s = await act(t, 'retreat', 'Mara Quint', { on: true });
+      look = await t.look('Mara retreats');
+
+      // dice rolled on the server for a typed hit; typed defences; the Martial Arts places
+      const roll = await req(t.port, 'POST', '/api/roll', { rolls: [{ damage: '2d+1', type: 'imp' }] });
+      assert.equal(roll.status, 200, roll.text);
+      s = await act(t, 'hp', 'Corin Ash', { entry: '2d+1 imp torso', rolled: roll.json.results[0].total });
+      const corin = rowNamed(s, 'Corin Ash');
+      assert.ok(/^2d\+1 = \d+ imp/.test(corin.hit.line), corin.hit.line);
+      await t.arm('a dice hit\'s working', corin.hit.line);
+      await t.look('Corin hit with dice');
+      s = await act(t, 'hp', 'Corin Ash', { entry: '1 imp ear' });
+      assert.equal(rowNamed(s, 'Corin Ash').hit.location, 'ear');
+      await t.arm('a Martial Arts place', 'ear', { short: true });
+      s = await act(t, 'hp', 'Sela Drake', { entry: '3 cr nose' });
+      assert.equal(rowNamed(s, 'Sela Drake').hit.location, 'nose');
+      await t.arm('another Martial Arts place', 'nose', { short: true });
+      s = await act(t, 'setStat', 'Rafe Kell', { key: 'parry', value: 16 });
+      assert.equal(rowNamed(s, 'Rafe Kell').parry, 16);
+      await t.arm('a typed Parry', '16', { short: true });
+      // a foe's main combat skill, a quick figure typed at the table (Task 36)
+      s = await act(t, 'setStat', 'Rafe Kell', { key: 'skill', value: 83 });
+      assert.equal(rowNamed(s, 'Rafe Kell').skill, 83);
+      await t.arm('a typed Skill', '83', { short: true });
+      look = await t.look('places and typed figures');
+
+      // the to-hit calculator: its data, a typed skill, none of it on the state or the players' screen
+      const before = (await req(t.port, 'GET', '/api/state')).text;
+      const list = await req(t.port, 'GET', '/api/tohit');
+      assert.equal(list.status, 200);
+      const one = await req(t.port, 'GET', `/api/tohit?pc=${encodeURIComponent('Characters/PCs/Sela Drake.md')}`);
+      assert.equal(one.status, 200);
+      const typed = await req(t.port, 'POST', '/api/tohit/typed', { name: 'Typed 87', type: 'melee', level: 87 });
+      assert.equal(typed.status, 200);
+      t.gmAnswered(list.text + one.text + typed.text);
+      await t.arm('a typed skill in the calculator', '87', { short: true });
+      await t.arm('a typed skill\'s name', 'Typed 87');
+      await t.arm('a PC\'s weapon in the calculator', 'Broadsword');
+      assert.equal((await req(t.port, 'GET', '/api/state')).text, before, 'the calculator writes nothing to the state');
+      for (const url of ['/api/players/tohit', '/players/tohit/gurps-tohit.js', '/players/api/tohit']) assert.notEqual((await req(t.port, 'GET', url)).status, 200, `${url} is no players' route`);
+      look = await t.look('the calculator asked');
+
+      // the turns go round: shock runs out, a round ends, the order stays names, HP and the turn
+      for (let i = 0; i < 9; i++) await turnNext(t);
+      s = await t.state();
+      assert.ok(s.fight.round >= 2, 'a round went by');
+      look = await t.look('a round later');
+      await t.send([{ type: 'fightPause', fight: s.fight.id, on: true }]);
+      look = await t.look('paused');
+      assert.equal(look.view.panels[0].order.paused, true);
+      await t.send([{ type: 'fightPause', fight: s.fight.id, on: false }]);
+      await t.look('resumed');
+      await t.send([{ type: 'fightEnd', fight: s.fight.id }]);
+      look = await t.look('after End fight');
+      assert.ok(look.view.panels.every((q) => q.order === null));
+      assert.ok(t.checked.length > 100, 'the test looked at what the players were sent');
+    } finally { await t.stop(); }
+  });
+
+  it('CoC: nothing of a worked-out fight reaches the players but a name, an ally\'s HP and the order', { timeout: 120000 }, async () => {
+    const CPLAN = 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Fog Bound - Plan.md';
+    const t = await start({
+      fixture: 'run-sheet-coc', plan: CPLAN, session: 'Session 01 - Fog Bound', system: 'coc-7e',
+      party: ['Characters/PCs/Iris Calder.md', 'Characters/PCs/Jonas Finch.md', 'Characters/PCs/Mabel Quill.md'],
+      edits: [
+        // a PC's SAN 47, MP 17 and Luck 38; a foe's MP 29, SAN 31 and Luck 33; CON 67 and INT 59; armour 4
+        ['Characters/PCs/Iris Calder.md', '| Sanity | 99 | 62 (starting 65) |', '| Sanity | 99 | 47 (starting 65) |'],
+        ['Characters/PCs/Iris Calder.md', '| MP | 13 | 13 |', '| MP | 17 | 17 |'],
+        ['Characters/PCs/Iris Calder.md', '| Luck | — | 55 |', '| Luck | — | 38 |'],
+        ['Characters/NPCs/Tobias Reed.md', '| MP | 9 |', '| MP | 29 |'],
+        ['Characters/NPCs/Tobias Reed.md', '| SAN | 45 |', '| SAN | 31 |'],
+        ['Characters/NPCs/Tobias Reed.md', '| Luck | 40 |', '| Luck | 33 |'],
+        ['Characters/NPCs/Warden Hale.md', '| 60  | 65  | 70  | 50  | 55  | 45  | 60  | 50  |', '| 60  | 67  | 70  | 50  | 59  | 45  | 60  | 50  |'],
+        ['Characters/NPCs/Warden Hale.md', '**Armour** none', '**Armour** 4'],
+      ],
+    });
+    try {
+      let s = await t.state();
+      await t.look('before the fight');
+      s = await fightAt(t, 'The Dark Light');
+      const iris0 = rowNamed(s, 'Iris Calder');
+      assert.deepEqual([iris0.san, iris0.mp, iris0.luck, iris0.con, iris0.int], [47, 17, 38, 60, 75]);
+      assert.deepEqual([rowNamed(s, 'Tobias Reed').mp, rowNamed(s, 'Tobias Reed').san], [29, 31]); // a foe's Luck is only on its note
+      assert.deepEqual([rowNamed(s, 'Warden Hale').con, rowNamed(s, 'Warden Hale').int, rowNamed(s, 'Warden Hale').armour], [67, 59, 4]);
+      for (const [key, n] of [['a PC\'s SAN', '47'], ['a PC\'s MP', '17'], ['a PC\'s Luck', '38'], ['a foe\'s MP', '29'], ['a foe\'s SAN', '31'], ['a foe\'s Luck', '33'], ['a foe\'s CON', '67'], ['a foe\'s INT', '59']]) await t.arm(key, n, { short: true });
+      await t.look('the fight set up');
+      s = await turnNext(t);
+      assert.ok(s.fight.started);
+      await t.look('Round 1 starts');
+
+      const COC = t.model.rules.fight;
+      const faces = (...f) => { let i = 0; return () => f[i++]; };
+      const dmg = (notation, ...f) => rollDamage(notation, { floor: 0, randomInt: faces(...f) });
+      let look;
+      // an opposed melee exchange: Iris's tapped level against a Brine Walker's Fight Back, the server's d100 for the walker
+      let walker = rowNamed(s, 'Brine Walker', 1);
+      let auto = CM.attackDice(walker, COC.coc);
+      const fighting = CM.skillOf(walker, 'fightBack');
+      assert.ok(fighting > 0, 'the walker fights');
+      s = await t.send([{ type: 'melee', fight: s.fight.id, attacker: rowNamed(s, 'Iris Calder').id, defender: walker.id, response: 'fightBack', dice: CM.diceOfNet(auto.net, COC.coc), auto, attack: { level: 'regular' }, defence: d100(91, fighting, 'fail') }]);
+      assert.ok(s.fight.melee && s.fight.melee.side === 'attacker', 'Iris won the exchange');
+      await t.arm('an opposed roll', eventsOf(s).slice(-1)[0]);
+      await t.arm('a d100 result', '91', { short: true });
+      await t.look('Iris hits a walker in melee');
+      // its damage, the damage bonus and armour worked out on the row: the working line stays on the GM's page
+      s = await act(t, 'hp', 'Brine Walker', { entry: '1D6', by: rowNamed(s, 'Iris Calder').id, mode: 'full', roll: dmg('1D6', 5), exchange: s.fight.melee.n }, 1);
+      walker = rowNamed(s, 'Brine Walker', 1);
+      assert.ok(walker.hit && walker.hit.line, 'a working line on the row');
+      await t.arm('a damage working line', walker.hit.line);
+      await t.look('Iris\'s damage worked out');
+      // the walker hits back at Iris: its d100 against the PC's tapped dodge; its damage bonus (+1D6 since the fixture's
+      // figures were made its own, PRENTICE review) and Iris's HP
+      auto = CM.attackDice(rowNamed(s, 'Iris Calder'), COC.coc);
+      s = await t.send([{ type: 'melee', fight: s.fight.id, attacker: walker.id, defender: rowNamed(s, 'Iris Calder').id, response: 'dodge', dice: CM.diceOfNet(auto.net, COC.coc), auto, attack: d100(93, CM.skillOf(walker, 'attack'), 'regular'), defence: { level: 'fail' } }]);
+      assert.ok(s.fight.melee && s.fight.melee.side === 'attacker', 'the walker hit Iris');
+      await t.arm('a dodge tapped', eventsOf(s).slice(-1)[0]);
+      s = await act(t, 'hp', 'Iris Calder', { entry: '1D6+DB', by: walker.id, mode: 'full', roll: dmg('1D6+1D6', 2, 2), exchange: s.fight.melee.n });
+      const iris = rowNamed(s, 'Iris Calder');
+      assert.ok(iris.hit && iris.hp < 9, `Iris is hurt: ${iris.hp}`);
+      await t.arm('a hit on a PC, worked out', iris.hit.line);
+      look = await t.look('the walker hits Iris');
+      assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Iris').hp, `${iris.hp}/11`);
+      s = await act(t, 'outnumbered', 'Brine Walker', { off: true }, 2);
+      assert.equal(rowNamed(s, 'Brine Walker', 2).outnumberedOff, true);
+      look = await t.look('outnumbered turned off');
+
+      // a bonus die and a penalty die on Iris's attacks on Warden Hale, then a hit that goes through his armour
+      const hale0 = rowNamed(s, 'Warden Hale');
+      const haleFight = CM.skillOf(hale0, 'fightBack');
+      for (const [net, word] of [[1, 'bonus'], [-1, 'penalty']]) {
+        auto = CM.attackDice(hale0, COC.coc);
+        s = await t.send([{ type: 'melee', fight: s.fight.id, attacker: rowNamed(s, 'Iris Calder').id, defender: hale0.id, response: 'fightBack', dice: CM.diceOfNet(net, COC.coc), auto, attack: { level: 'regular' }, defence: d100(90, haleFight, 'fail') }]);
+        const diceLine = eventsOf(s).slice(-1)[0];
+        assert.match(diceLine, new RegExp(`${word} die`), diceLine);
+        await t.arm(`a ${word} die`, diceLine);
+      }
+      look = await t.look('bonus and penalty dice');
+      s = await act(t, 'hp', 'Warden Hale', { entry: '1D6', by: rowNamed(s, 'Iris Calder').id, mode: 'full', roll: dmg('1D6', 6), exchange: s.fight.melee ? s.fight.melee.n : undefined });
+      const hale = rowNamed(s, 'Warden Hale');
+      assert.match(hale.hit.line, /armour 4/, hale.hit.line);
+      await t.arm('armour worked into a hit', hale.hit.line);
+      look = await t.look('a hit through armour');
+
+      // a Major Wound: one card, a CON roll, Prone and Unconscious offered and taken; the box stays ticked
+      s = await act(t, 'hp', 'Brine Walker', { entry: '-8' }, 2);
+      walker = rowNamed(s, 'Brine Walker', 2);
+      assert.equal(walker.majorWound, true);
+      let card = walker.cards[0];
+      await t.arm('a card\'s words', card.what);
+      look = await t.look('a Major Wound card raised');
+      s = await act(t, 'cardRolled', 'Brine Walker', { card: card.id, line: 0, result: d100(88, CM.lineTarget(card.lines[0], walker), 'fail') }, 2);
+      await t.arm('a CON roll', eventsOf(s).slice(-1)[0]);
+      walker = rowNamed(s, 'Brine Walker', 2);
+      assert.deepEqual(walker.cards[0].lines[0].offers, ['proneOut']);
+      s = await act(t, 'card', 'Brine Walker', { card: card.id, line: 0, take: 'proneOut' }, 2);
+      assert.ok(rowNamed(s, 'Brine Walker', 2).conds.includes('Unconscious'));
+      look = await t.look('the Major Wound card answered');
+      // down to 0 HP with the box ticked: Dying, offered and taken; a reminder at each round's end
+      s = await act(t, 'hp', 'Brine Walker', { entry: '-6' }, 2);
+      walker = rowNamed(s, 'Brine Walker', 2);
+      assert.equal(walker.hp, 0);
+      card = walker.cards[0];
+      s = await act(t, 'card', 'Brine Walker', { card: card.id, line: 0, take: 'dying' }, 2);
+      assert.ok(rowNamed(s, 'Brine Walker', 2).conds.includes('Dying'));
+      assert.ok(Number.isInteger(rowNamed(s, 'Brine Walker', 2).dyingRound));
+      look = await t.look('a walker Dying');
+      // Iris loses SAN: an INT card, her roll a tap, temporary insanity offered and its bout rolled by the server
+      s = await act(t, 'hp', 'Iris Calder', { entry: 's-5' });
+      let irisNow = rowNamed(s, 'Iris Calder');
+      assert.equal(irisNow.san, 42);
+      card = irisNow.cards[0];
+      await t.arm('a SAN loss', eventsOf(s).filter((l) => /Iris/.test(l)).slice(-1)[0]);
+      await t.arm('a SAN card', card.what);
+      look = await t.look('Iris loses SAN');
+      s = await act(t, 'cardRolled', 'Iris Calder', { card: card.id, line: 0, result: { tap: 'passed' } });
+      irisNow = rowNamed(s, 'Iris Calder');
+      assert.deepEqual(irisNow.cards[0].lines[0].offers, ['insane']);
+      const bout = await req(t.port, 'POST', '/api/roll', { rolls: [{ sides: 10, mod: 0 }] });
+      assert.equal(bout.status, 200, bout.text);
+      s = await act(t, 'card', 'Iris Calder', { card: irisNow.cards[0].id, line: 0, take: 'insane', bout: bout.json.results[0] });
+      irisNow = rowNamed(s, 'Iris Calder');
+      assert.ok(irisNow.conds.includes('Temporary insanity'));
+      await t.arm('a bout', eventsOf(s).filter((l) => /Iris/.test(l)).slice(-1)[0]);
+      look = await t.look('Iris temporarily insane');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Iris').statuses, irisNow.conds);
+      s = await act(t, 'hp', 'Iris Calder', { entry: 'm-3' });
+      assert.equal(rowNamed(s, 'Iris Calder').mp, 14);
+      await t.arm('MP spent', eventsOf(s).filter((l) => /Iris/.test(l)).slice(-1)[0]);
+      look = await t.look('Iris spends MP');
+
+      // Nurse Orla, a foe made an ally: her name and her HP, and a Major Wound only as the status it is
+      s = await act(t, 'setSide', 'Nurse Orla Penn', { side: 'ally' });
+      t.show('Nurse Orla Penn');
+      look = await t.look('Orla an ally');
+      assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Nurse Orla Penn').hp, '10/10');
+      s = await act(t, 'hp', 'Nurse Orla Penn', { entry: '-6' });
+      let orla = rowNamed(s, 'Nurse Orla Penn');
+      assert.equal(orla.majorWound, true);
+      await t.arm('an ally\'s card', orla.cards[0].what);
+      look = await t.look('Orla hurt');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Nurse Orla Penn').statuses, orla.conds);
+      s = await act(t, 'hp', 'Nurse Orla Penn', { entry: '-4' });
+      orla = rowNamed(s, 'Nurse Orla Penn');
+      assert.equal(orla.hp, 0);
+      await t.look('Orla at 0');
+      s = await act(t, 'card', 'Nurse Orla Penn', { card: orla.cards[0].id, take: 'out' });
+      assert.equal(rowNamed(s, 'Nurse Orla Penn').out, true);
+      look = await t.look('Orla out');
+      const orlaOut = look.view.panels[0].order.rows.find((r) => r.name === 'Nurse Orla Penn');
+      assert.deepEqual([orlaOut.out, keys(orlaOut)], [true, PC_ROW]);
+
+      // rounds go by: Dying's reminders, the bout counting down, an Out after the failed CON roll
+      for (let i = 0; i < 24; i++) await turnNext(t);
+      s = await t.state();
+      assert.ok(s.fight.round >= 4, `rounds went by: ${s.fight.round}`);
+      look = await t.look('rounds later');
+      walker = rowNamed(s, 'Brine Walker', 2);
+      const reminder = walker.cards && walker.cards.find((c) => c.lines.some((l) => l.kind === 'dyingCon'));
+      assert.ok(reminder, 'a Dying reminder on the walker');
+      await t.arm('a Dying reminder', reminder.what);
+      s = await act(t, 'cardRolled', 'Brine Walker', { card: reminder.id, line: 0, result: d100(97, CM.lineTarget(reminder.lines[0], walker), 'fail') }, 2);
+      s = await act(t, 'card', 'Brine Walker', { card: reminder.id, line: 0, take: 'dead' }, 2);
+      assert.equal(rowNamed(s, 'Brine Walker', 2).out, true);
+      look = await t.look('the walker dead');
+      await t.send([{ type: 'fightEnd', fight: s.fight.id }]);
+      look = await t.look('after End fight');
+      assert.ok(look.view.panels.every((q) => q.order === null));
+
+      // a second fight, with guns: a gun made ready, an aim declared, a shot with its chips, a dive, a reload counter
+      s = await fightAt(t, 'The Net Loft');
+      const fid = s.fight.id;
+      s = await act(t, 'setStat', 'Dock Cultist', { key: 'mp', value: 52 }, 1);
+      assert.equal(rowNamed(s, 'Dock Cultist', 1).mpMax, 52);
+      s = await act(t, 'sameForAll', 'Dock Cultist', {}, 1);
+      assert.equal(rowNamed(s, 'Dock Cultist', 2).mpMax, 52, 'the same figures copied');
+      await t.arm('a typed MP copied to its group', '52', { short: true });
+      s = await act(t, 'firearm', 'Dock Cultist', { on: true }, 1);
+      assert.equal(rowNamed(s, 'Dock Cultist', 1).gun, true);
+      look = await t.look('a gun made ready');
+      s = await turnNext(t);
+      s = await turnTo(t, 'Dock Cultist', 1);
+      s = await act(t, 'aim', 'Dock Cultist', {}, 1);
+      assert.ok(rowNamed(s, 'Dock Cultist', 1).aiming, 'aiming');
+      await t.arm('an aim', eventsOf(s).slice(-1)[0]);
+      look = await t.look('a cultist aims');
+      s = await turnTo(t, 'Dock Cultist', 1); // the next round: the aim is ready
+      s = await turnTo(t, 'Dock Cultist', 1);
+      const A = rowNamed(s, 'Dock Cultist', 1);
+      const D = rowNamed(s, 'Iris Calder');
+      const chips = s.fight.round >= 2 ? ['aim'] : [];
+      assert.ok(Array.isArray(A.guns) && A.guns.length >= 1, 'a gun on the row');
+      const dice = CM.shotDice(chips, A, D, COC);
+      const result = rollPercent({ target: CM.shotSkill(A, A.guns[0]), difficulty: dice.difficulty, ...dice.asked }, { randomInt: faces(3, 3) });
+      s = await t.send([{ type: 'shot', fight: fid, shooter: A.id, target: D.id, chips, gun: 0, result }]);
+      const shotLine = eventsOf(s).slice(-1)[0];
+      assert.match(shotLine, /Dock Cultist/);
+      await t.arm('a shot\'s line', shotLine);
+      assert.ok(rowNamed(s, 'Dock Cultist', 1).reload, 'a slow gun starts its reload counter');
+      look = await t.look('a cultist shoots Iris');
+      s = await act(t, 'dive', 'Iris Calder', { result: { tap: 'passed' } });
+      await t.arm('a dive', eventsOf(s).slice(-1)[0]);
+      look = await t.look('Iris dives');
+      s = await act(t, 'reload', 'Dock Cultist', { clear: true }, 1);
+      await t.arm('a gun made ready', eventsOf(s).slice(-1)[0]);
+      s = await act(t, 'status', 'Iris Calder', { add: 'Prone' });
+      look = await t.look('Iris prone');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Iris').statuses, rowNamed(s, 'Iris Calder').conds);
+      assert.ok(rowNamed(s, 'Iris Calder').conds.includes('Prone'));
+      assert.ok(t.checked.length > 100, 'the test looked at what the players were sent');
+    } finally { await t.stop(); }
   });
 });

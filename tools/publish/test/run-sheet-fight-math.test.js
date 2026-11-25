@@ -8,13 +8,15 @@ const row = (o) => ({
 });
 
 test('entries: -37, 37, +8, t5, T5, spaces; nonsense and 10000 give null', () => {
-  assert.deepEqual(M.parseEntry('-37'), { kind: 'damage', n: 37 });
-  assert.deepEqual(M.parseEntry('37'), { kind: 'damage', n: 37 });
-  assert.deepEqual(M.parseEntry('+8'), { kind: 'heal', n: 8 });
-  assert.deepEqual(M.parseEntry('t5'), { kind: 'temp', n: 5 });
-  assert.deepEqual(M.parseEntry('T5'), { kind: 'temp', n: 5 });
-  assert.deepEqual(M.parseEntry('  -37 '), { kind: 'damage', n: 37 });
-  assert.deepEqual(M.parseEntry('9999'), { kind: 'damage', n: 9999 });
+  // step 6b Task 6 changed this on purpose: the brief names parseEntry's `pool` key (`hp`, or `temp` for t5). The
+  // kinds and numbers, and every refusal below, are as before.
+  assert.deepEqual(M.parseEntry('-37'), { pool: 'hp', kind: 'damage', n: 37 });
+  assert.deepEqual(M.parseEntry('37'), { pool: 'hp', kind: 'damage', n: 37 });
+  assert.deepEqual(M.parseEntry('+8'), { pool: 'hp', kind: 'heal', n: 8 });
+  assert.deepEqual(M.parseEntry('t5'), { pool: 'temp', kind: 'temp', n: 5 });
+  assert.deepEqual(M.parseEntry('T5'), { pool: 'temp', kind: 'temp', n: 5 });
+  assert.deepEqual(M.parseEntry('  -37 '), { pool: 'hp', kind: 'damage', n: 37 });
+  assert.deepEqual(M.parseEntry('9999'), { pool: 'hp', kind: 'damage', n: 9999 });
   for (const bad of ['', 'abc', '10000', '1.5', '--3', 't', '+', 'tt5', '3d6', null, undefined]) assert.equal(M.parseEntry(bad), null, String(bad));
 });
 
@@ -326,6 +328,20 @@ test('shownEver starts a row seen', () => {
   const r = M.rowsForFight({ model, derived: derivedOf(), state: { ...here, shownEver: { 'Creatures/Wyrm.md': '2026-11-20T20:00:00Z' } }, beatKey: 'b1', idBase: 'a' });
   assert.equal(r.rows.find((x) => x.note === 'Creatures/Wyrm.md').seen, true);
   assert.equal(r.rows.find((x) => x.note === 'Creatures/Imp.md').seen, false);
+});
+
+// S6-D7: the reader gives a fight beat blank foes (benched for a single statless NPC); the fight builds them as rows
+test('a fight beat gives blank rows: a statless NPC benched, a no-note counted line ticked in', () => {
+  const blank = (o) => ({ ally: false, ac: null, hp: null, init: null, ...o });
+  const beat = { ...gate, foes: [
+    blank({ key: 'b1.foe.plain', note: 'NPCs/Plain.md', name: 'Plain Person', benched: true }),
+    blank({ key: 'b1.foe.g1', note: null, name: 'Tarred dockhands 1' }), blank({ key: 'b1.foe.g2', note: null, name: 'Tarred dockhands 2' }),
+  ] };
+  const r = M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state: here, beatKey: 'b1', idBase: 'a' });
+  const plain = r.rows.find((x) => x.name === 'Plain Person');
+  assert.deepEqual([plain.in, plain.hp, plain.max, plain.note], [false, null, null, 'NPCs/Plain.md']);
+  const guards = r.rows.filter((x) => /^Tarred dockhands/.test(x.name));
+  assert.deepEqual(guards.map((x) => [x.in, x.hp, x.note, M.sideOfRow(x)]), [[true, null, null, 'foe'], [true, null, null, 'foe']]);
 });
 
 test('Fight on an improvised beat brings the people brought in; on a Plan beat they are unticked', () => {
@@ -673,7 +689,8 @@ test('a copy switched to ally still counts towards its word; an unseen ally is n
     const s2 = { ...s, sides: { [FEN]: 'ally' } };
     const fen = M.rowsForFight({ model: m, derived: RS.derive(m, s2), state: s2, beatKey: m.placeKeys[YARD], idBase: 'f3' }).rows.find((x) => x.note === FEN);
     assert.deepEqual([fen.kind, fen.seen, fen.sideFrom], ['ally', true, 'you set it']);
-    // a Plan beat's statless people stay as 5b has them: no row
+    // a Plan beat's statless people get no row unless the beat can fight (S6-D7 changed 5b's "never": a fight beat's
+    // statless single NPC is a benched blank row, see 'a fight beat gives blank rows')
     const plan = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: base.beats[0].key, idBase: 'f4' });
     assert.ok(!plan.rows.some((r) => r.note === FEN));
   });
@@ -750,3 +767,970 @@ test('a copy switched to ally still counts towards its word; an unseen ally is n
     assert.equal(M.addChoices(places, 'the dcks', RS.castSearch, 8, newPlace)[0].note, 'L/The Docks.md');
   });
 }
+
+test('a foe whose block says it starts hurt (hpStart) starts there; a carried or last-fight figure wins', () => {
+  const hurt = { ...imp, hpStart: 7 };
+  const ally = { ...venn, hpStart: 5, hpNow: 12 };
+  const npc = { ...gilt, hpStart: 9 };
+  const beat = { ...gate, foes: [hurt, ally, npc], points: [], ifs: [] };
+  const lastFight = (hp, max) => ({ ...here, fights: [{ id: 'old', ended: true, rows: [{ note: 'NPCs/Gilt.md', kind: 'foe', copy: 1, hp, max, conds: [] }] }] });
+  const rows = (state) => M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state, beatKey: 'b1', idBase: 'a' }).rows;
+  const by = (rs, note) => rs.find((x) => x.note === note);
+  const r = rows(here);
+  assert.deepEqual([by(r, 'Creatures/Imp.md').hp, by(r, 'Creatures/Imp.md').max], [7, 21], 'starts at its block\'s figure, max the block\'s');
+  assert.equal(by(r, 'NPCs/Venn.md').hp, 12, 'the ally\'s carried figure wins');
+  assert.equal(by(r, 'NPCs/Gilt.md').hp, 9, 'no last fight: the block\'s start');
+  const noStart = M.rowsForFight({ model, derived: derivedOf(), state: here, beatKey: 'b1', idBase: 'a' }).rows;
+  assert.equal(by(noStart, 'Creatures/Imp.md').hp, 21, 'no hpStart: full, as before');
+  const last = by(rows(lastFight(4, 40)), 'NPCs/Gilt.md');
+  assert.deepEqual([last.hp, last.max], [4, 40], 'an NPC with a last-fight row starts at its hp, max from the row, not hpStart');
+});
+
+test('hpStart is held to the block\'s HP when it has one, and taken as written when it has none', () => {
+  const start = (foe) => {
+    const beat = { ...gate, foes: [foe], points: [], ifs: [] };
+    return M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state: here, beatKey: 'b1', idBase: 'a' }).rows.find((x) => x.note === foe.note);
+  };
+  const over = start({ ...imp, hp: 10, hpStart: 12 });
+  assert.deepEqual([over.hp, over.max], [10, 10], 'HP 10 (currently 12) starts at 10');
+  const open = start({ ...imp, hp: null, hpStart: 12 });
+  assert.deepEqual([open.hp, open.max], [12, null], 'no HP figure: unclamped');
+});
+
+// ---- fight maths by system (step 6b Task 6) ----
+
+const { systemFor } = require('../lib/run-sheet/systems');
+const COC = systemFor('coc-7e').describe().fight;
+const GURPS = systemFor('gurps-4e').describe().fight;
+
+test('parseEntry by system', () => {
+  assert.deepEqual(M.parseEntry('m-4', COC), { pool: 'mp', kind: 'damage', n: 4 });
+  assert.deepEqual(M.parseEntry('M+2', COC), { pool: 'mp', kind: 'heal', n: 2 });
+  assert.deepEqual(M.parseEntry('s-6', COC), { pool: 'san', kind: 'damage', n: 6 });
+  assert.deepEqual(M.parseEntry('s+1', COC), { pool: 'san', kind: 'heal', n: 1 });
+  assert.deepEqual(M.parseEntry('-7', COC), { pool: 'hp', kind: 'damage', n: 7 });
+  assert.deepEqual(M.parseEntry('7', GURPS), { pool: 'hp', kind: 'damage', n: 7 });
+  assert.deepEqual(M.parseEntry('+3', GURPS), { pool: 'hp', kind: 'heal', n: 3 });
+  assert.deepEqual(M.parseEntry('f-8', GURPS), { pool: 'fp', kind: 'damage', n: 8 });
+  assert.deepEqual(M.parseEntry('f+2', GURPS), { pool: 'fp', kind: 'heal', n: 2 });
+  // a prefix the system lacks is invalid
+  for (const bad of ['t5', 'f-8', 'e-3']) assert.equal(M.parseEntry(bad, COC), null, bad);
+  for (const bad of ['t5', 'm-4', 's-6']) assert.equal(M.parseEntry(bad, GURPS), null, bad);
+  // Task 10 (on purpose): e-3 is GURPS's Energy Reserve
+  assert.deepEqual(M.parseEntry('e-3', GURPS), { pool: 'er', kind: 'damage', n: 3 });
+  assert.deepEqual(M.parseEntry('e+2', GURPS), { pool: 'er', kind: 'heal', n: 2 });
+  for (const bad of ['m-4', 's-6', 'f-8']) assert.equal(M.parseEntry(bad), null, `${bad} in D&D`);
+  assert.deepEqual(M.parseEntry('t5'), { pool: 'temp', kind: 'temp', n: 5 });
+  const both = { ...GURPS, pools: GURPS.pools.concat(COC.pools) };
+  for (const bad of ['m', 'm-', 'mm-4', 'f--8', 'f-1.5', 'f-10000', 'fm-2']) assert.equal(M.parseEntry(bad, both), null, bad);
+  // a bare figure after a pool's letter is a loss, as a bare number is damage
+  assert.deepEqual(M.parseEntry('f8', GURPS), { pool: 'fp', kind: 'damage', n: 8 });
+});
+
+test('afterDamage: a missing floor is 0; only an explicit null floor lets HP go below 0', () => {
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, {}), { hp: 0, temp: 0 });
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, { hpFloor: null }), { hp: -7, temp: 0 });
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, COC), { hp: 0, temp: 0 });
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, GURPS), { hp: -7, temp: 0 });
+});
+
+test('sort: GURPS ties by DX then PCs; CoC ties by the higher combat skill, then PCs; blanks last; D&D unchanged', () => {
+  const ids = (rows, rules) => M.sortRows(rows, rules).map((r) => r.id);
+  const g = [
+    row({ id: 'blank', ini: null, dx: 15 }),
+    row({ id: 'slow', ini: 5, dx: 10 }),
+    row({ id: 'foeDx11', ini: 5.5, dx: 11 }),
+    row({ id: 'pcDx11', kind: 'pc', ini: 5.5, dx: 11 }),
+    row({ id: 'foeDx13', ini: 5.5, dx: 13 }),
+    row({ id: 'fast', ini: 6.25, dx: 9 }),
+    row({ id: 'off', in: false, ini: 9 }),
+  ];
+  assert.deepEqual(ids(g, GURPS), ['fast', 'foeDx13', 'pcDx11', 'foeDx11', 'slow', 'blank', 'off']);
+  // fix round 1 changed this on purpose (coordinator's ruling): the combat skill or DX decides a tie only when both
+  // rows have it; when either lacks it the tie goes to PCs first, so a PC with no figures never loses every tie
+  const pcNoDx = [row({ id: 'foeDx14', ini: 5.5, dx: 14 }), row({ id: 'pcNoDx', kind: 'pc', ini: 5.5 })];
+  assert.deepEqual(ids(pcNoDx, GURPS), ['pcNoDx', 'foeDx14']);
+  const c = [
+    row({ id: 'fighter', ini: 60, fighting: 55, firearms: 20 }),
+    row({ id: 'gunman', ini: 60, fighting: 25, firearms: 70 }),
+    // a PC takes its highest specialisation
+    row({ id: 'pcSpec', kind: 'pc', ini: 60, fighting: { Brawl: 40, Sword: 65 }, firearms: { Handgun: 30 } }),
+    row({ id: 'foeFig', ini: 50, fighting: 80 }),
+    row({ id: 'pcNone', kind: 'pc', ini: 50 }),
+    row({ id: 'foeA', ini: 40 }),
+    row({ id: 'foeB', ini: 40, fighting: 30 }),
+    row({ id: 'blank', ini: null, fighting: 90 }),
+    row({ id: 'quick', ini: 75 }),
+  ];
+  assert.deepEqual(ids(c, COC), ['quick', 'gunman', 'pcSpec', 'fighter', 'pcNone', 'foeFig', 'foeA', 'foeB', 'blank']);
+  // the combat skill is worked out on read: a figure typed since counts
+  const typed = c.map((r) => (r.id === 'pcNone' ? { ...r, fighting: 70 } : r));
+  assert.deepEqual(ids(typed, COC).slice(4, 6), ['foeFig', 'pcNone']);
+  // D&D: the modifier, then PCs, as before; DX and combat skills mean nothing
+  const d = [row({ id: 'a', ini: 12, mod: 1, dx: 18 }), row({ id: 'b', ini: 12, mod: 3 }), row({ id: 'p', kind: 'pc', ini: 12, mod: 1, fighting: 99 })];
+  assert.deepEqual(ids(d), ['b', 'p', 'a']);
+  assert.deepEqual(ids(d, M.DND_FIGHT_RULES), ['b', 'p', 'a']);
+});
+
+test('marksOf: Reeling and 0 or less as chips; the deepest negative line passed', () => {
+  const at = (hp, max = 12) => M.marksOf({ hp, max }, GURPS);
+  assert.deepEqual(at(12), { chips: [], deepest: null });
+  assert.deepEqual(at(4).chips, [], 'exactly a third is not yet Reeling (B419)');
+  assert.deepEqual(at(3).chips, ['Reeling']);
+  assert.deepEqual(at(0).chips, ['Reeling', '0 or less']);
+  assert.deepEqual(at(-11).deepest, null);
+  assert.equal(at(-12).deepest.times, 1);
+  assert.equal(at(-30).deepest.times, 2);
+  const dead = at(-65);
+  assert.equal(dead.deepest.times, 5);
+  assert.equal(dead.deepest.name, '−5×HP');
+  assert.deepEqual(dead.chips, ['Reeling', '0 or less']);
+  // a row with no max still knows 0 or less; nothing for D&D or CoC
+  assert.deepEqual(M.marksOf({ hp: -2, max: null }, GURPS), { chips: ['0 or less'], deepest: null });
+  assert.deepEqual(M.marksOf({ hp: -2, max: 12 }), { chips: [], deepest: null });
+  assert.deepEqual(M.marksOf({ hp: 0, max: 12 }, COC), { chips: [], deepest: null });
+  assert.ok(GURPS.marks.every((m) => typeof m.name === 'string' && m.name.length <= 12), 'names and numbers only');
+});
+
+test('Reeling is not in the GURPS status list', () => {
+  const d = systemFor('gurps-4e').describe();
+  assert.deepEqual(d.statuses, ['Stunned', 'Prone', 'Kneeling', 'Unconscious', 'Mortal wound']);
+  assert.ok(!d.statuses.includes('Reeling') && !d.statuses.includes('Shock'));
+  assert.deepEqual(systemFor('coc-7e').describe().statuses, ['Major wound', 'Prone', 'Unconscious', 'Dying', 'Temporary insanity', 'Indefinite insanity']);
+});
+
+test('Tired at a third of FP', () => {
+  assert.equal(M.tiredOf({ fp: 4, fpMax: 12 }, GURPS), false, 'exactly a third is not yet Tired (B426)');
+  assert.equal(M.tiredOf({ fp: 3, fpMax: 12 }, GURPS), true);
+  assert.equal(M.tiredOf({ fp: -3, fpMax: 12 }, GURPS), true);
+  assert.equal(M.tiredOf({ fp: null, fpMax: 12 }, GURPS), false);
+  assert.equal(M.tiredOf({ fp: 1, fpMax: 12 }), false, 'D&D has none');
+  assert.equal(M.tiredOf({ fp: 1, fpMax: 12 }, COC), false);
+});
+
+test('the rows take the system\'s fields: initiative from DEX or Speed, the pools, the readers\' names mapped', () => {
+  const build = (rules, pc, foe) => {
+    const model = { rules: { fight: rules }, pcs: [pc], cast: [], beats: [{ key: 'b1', title: 'B', foes: [foe] }] };
+    return M.rowsForFight({ model, derived: { beats: model.beats, vitals: [] }, state: {}, beatKey: 'b1', idBase: 'x' }).rows;
+  };
+  const [kev, bouncer] = build(GURPS,
+    { note: 'P/Kev.md', name: 'Kev', hpNow: 10, hpMax: 12, fpNow: 9, fpMax: 11, speed: 5.25, dx: 11, ht: 10 },
+    { key: 'b1.f1', note: 'N/Bouncer.md', name: 'Bouncer', hp: 12, hpStart: 10, init: 5.5, fp: 11, fpMax: 11, fpStart: 7, speed: 5.5, dx: 12, st: 12, ht: 10, dodge: 8, dr: '1', from: { fp: 'from HT' } });
+  assert.deepEqual([kev.ini, kev.mod, kev.hp, kev.max, kev.fp, kev.fpMax, kev.speed, kev.dx, kev.ht], [5.25, 0, 10, 12, 9, 11, 5.25, 11, 10]);
+  assert.deepEqual([bouncer.ini, bouncer.mod, bouncer.hp, bouncer.max, bouncer.fp, bouncer.fpMax, bouncer.speed, bouncer.dx, bouncer.st, bouncer.ht, bouncer.dodge, bouncer.dr],
+    [5.5, 0, 10, 12, 7, 11, 5.5, 12, 12, 10, 8, '1']);
+  assert.deepEqual(bouncer.from, { fp: 'from HT' });
+  assert.deepEqual(bouncer.typedKeys, {});
+  assert.deepEqual(bouncer.marks, []);
+  const [ann, cultist] = build(COC,
+    { note: 'P/Ann.md', name: 'Ann', hpNow: 9, hpMax: 11, mpNow: 10, mpMax: 12, sanNow: 55, sanMax: 60, luck: 45, dex: 70 },
+    { key: 'b1.f1', note: 'N/Cultist.md', name: 'Cultist', hp: 12, init: 50, mp: 9, mpMax: 9, san: 40, sanMax: 40, dex: 50, armour: 'none', from: {} });
+  assert.deepEqual([ann.ini, ann.hp, ann.max, ann.mp, ann.mpMax, ann.san, ann.sanMax, ann.luck, ann.dex], [70, 9, 11, 10, 12, 55, 60, 45, 70]);
+  assert.deepEqual([cultist.ini, cultist.mod, cultist.mp, cultist.mpMax, cultist.san, cultist.sanMax, cultist.dex, cultist.armour, cultist.attacks, cultist.gun], [50, 0, 9, 9, 40, 40, 50, 0, 1, false]);
+  // D&D rows keep today's numbers: no initiative until rolled, the block's modifier
+  const [dpc, dfoe] = build(M.DND_FIGHT_RULES, { note: 'P/D.md', name: 'D', hpNow: 5, hpMax: 9, init: 2 }, { key: 'b1.f1', note: 'N/W.md', name: 'W', hp: 11, init: 3 });
+  assert.deepEqual([dpc.ini, dpc.mod, dfoe.ini, dfoe.mod], [null, 2, null, 3]);
+  assert.deepEqual(dfoe.start, { hp: 11, max: 11, conds: [], exhaustion: 0, conc: false }, 'a D&D row starts as before');
+});
+
+test('a tie group decides its figure as a whole (fix round 2): mixed goes PCs first, all-figure by figure, stable', () => {
+  const ids = (rows, rules) => M.sortRows(rows, rules).map((r) => r.id);
+  const perms = (a) => (a.length <= 1 ? [a] : a.flatMap((x, i) => perms(a.slice(0, i).concat(a.slice(i + 1))).map((p) => [x, ...p])));
+  // a mixed group of three: two with DX, one PC without; every input order puts the PC first, and the other two
+  // keep their input order (no figure decides a mixed group)
+  const mixed = [row({ id: 'foe14', ini: 5.5, dx: 14 }), row({ id: 'pcNoDx', kind: 'pc', ini: 5.5 }), row({ id: 'pc12', kind: 'pc', ini: 5.5, dx: 12 })];
+  for (const p of perms(mixed)) {
+    const got = ids(p, GURPS);
+    assert.deepEqual(got.slice().sort(), ['foe14', 'pc12', 'pcNoDx']);
+    assert.deepEqual(got.slice(0, 2).sort(), ['pc12', 'pcNoDx'], `PCs first from ${p.map((r) => r.id)}`);
+    assert.equal(got[2], 'foe14');
+    const pcs = p.filter((r) => r.kind === 'pc').map((r) => r.id);
+    assert.deepEqual(got.slice(0, 2), pcs, 'the PCs keep their input order');
+  }
+  // the same for CoC's combat skill
+  const cmix = [row({ id: 'foe80', ini: 60, fighting: 80 }), row({ id: 'pcNone', kind: 'pc', ini: 60 }), row({ id: 'pc50', kind: 'pc', ini: 60, firearms: 50 })];
+  for (const p of perms(cmix)) assert.equal(ids(p, COC)[2], 'foe80');
+  // an all-figure group orders by its figure, then PCs first, whatever the input order
+  const all = [row({ id: 'dx10', ini: 6, dx: 10 }), row({ id: 'pcDx13', kind: 'pc', ini: 6, dx: 13 }), row({ id: 'dx13', ini: 6, dx: 13 }), row({ id: 'dx15', ini: 6, dx: 15 })];
+  for (const p of perms(all)) assert.deepEqual(ids(p, GURPS), ['dx15', 'pcDx13', 'dx13', 'dx10']);
+  // stable across repeated sorts, and placeRow agrees with the sort inside a mixed group
+  let once = M.sortRows(mixed.concat(all), GURPS);
+  for (let k = 0; k < 3; k++) { const again = M.sortRows(once, GURPS); assert.deepEqual(again.map((r) => r.id), once.map((r) => r.id)); once = again; }
+  // (a tie goes after the rows already there: placing pcNoDx from the top puts it after pc12)
+  const placed = M.placeRow([mixed[1], mixed[2], mixed[0]], 'pcNoDx', GURPS).map((r) => r.id);
+  assert.deepEqual(placed, ['pc12', 'pcNoDx', 'foe14']);
+});
+
+test('a tie group leaves the Lair row out, and an unset tick sorts as unticked', () => {
+  const ids = (rows, rules) => M.sortRows(rows, rules).map((r) => r.id);
+  // the Lair row has no DX, yet the rest of the group still sorts by DX, and the Lair row goes last at the tie
+  const g = [row({ id: 'lair', kind: 'lair', ini: 6 }), row({ id: 'dx10', ini: 6, dx: 10 }), row({ id: 'dx14', ini: 6, dx: 14 })];
+  assert.deepEqual(ids(g, GURPS), ['dx14', 'dx10', 'lair']);
+  // `in` undefined and `in` false are the same: both unticked, so the comparator is consistent either way round
+  const u = [row({ id: 'off', in: false, ini: 5, dx: 9 }), row({ id: 'unset', in: undefined, ini: 5, dx: 12 }), row({ id: 'on', ini: 1 })];
+  assert.deepEqual(ids(u, GURPS), ['on', 'unset', 'off']);
+  assert.deepEqual(ids([u[1], u[0], u[2]], GURPS), ['on', 'unset', 'off']);
+});
+
+// ---- the damage helper (step 6b Task 12) ----
+const { gurpsInjury } = require('../lib/run-sheet/web/gurps-math');
+const W = GURPS.wounding;
+const hitOn = (entry, r) => { const e = M.parseEntry(entry, GURPS); return gurpsInjury({ ...e.hit, n: e.n }, r, W); };
+const foe = (o) => ({ dr: 1, max: 12, ...o });
+
+test('hit grammar: damage, type and place in GURPS; a bare number stays raw', () => {
+  const hit = (t) => M.parseEntry(t, GURPS);
+  assert.deepEqual(hit('9 imp vitals'), { pool: 'hp', kind: 'damage', n: 9, hit: { type: 'imp', location: 'vitals', side: null } });
+  assert.deepEqual(hit('9 imp v').hit, { type: 'imp', location: 'vitals', side: null });
+  assert.deepEqual(hit('9i').hit, { type: 'imp', location: 'torso', side: null });
+  assert.deepEqual(hit('9c').hit, { type: 'cr', location: 'torso', side: null });
+  assert.deepEqual(hit('12 cr skull').hit, { type: 'cr', location: 'skull', side: null });
+  assert.deepEqual(hit('7 pi+ arm').hit, { type: 'pi+', location: 'arm', side: null });
+  assert.deepEqual(hit('9 cut neck').hit, { type: 'cut', location: 'neck', side: null });
+  assert.deepEqual(hit('7 pi++ left arm').hit, { type: 'pi++', location: 'arm', side: 'left' });
+  assert.deepEqual(hit('9 vitals imp').hit, { type: 'imp', location: 'vitals', side: null }, 'any order');
+  assert.deepEqual(hit('-9 cut').hit, { type: 'cut', location: 'torso', side: null });
+  for (const [t, ty] of [['9 pi-', 'pi-'], ['9 pi', 'pi'], ['9 burn', 'burn'], ['9 cor', 'cor'], ['9 tox', 'tox'], ['9 fat', 'fat'], ['9 tbb', 'tbb']]) assert.equal(hit(t).hit.type, ty, t);
+  // dice: the server rolls them; a bare roll is raw injury
+  assert.deepEqual(hit('2d+1 imp vitals'), { pool: 'hp', kind: 'damage', n: null, dice: '2d+1', hit: { type: 'imp', location: 'vitals', side: null } });
+  assert.deepEqual(hit('1d-1 cr'), { pool: 'hp', kind: 'damage', n: null, dice: '1d-1', hit: { type: 'cr', location: 'torso', side: null } });
+  assert.deepEqual(hit('2d+1'), { pool: 'hp', kind: 'damage', n: null, dice: '2d+1', hit: null });
+  // raw as today
+  assert.deepEqual(hit('9'), { pool: 'hp', kind: 'damage', n: 9 });
+  assert.deepEqual(hit('-10'), { pool: 'hp', kind: 'damage', n: 10 });
+  assert.deepEqual(hit('+3'), { pool: 'hp', kind: 'heal', n: 3 });
+  // a place with no type, a word that is neither, healing with a type, a side with no limb: invalid
+  for (const bad of ['9 vitals', '9 imp vitals x', '+9 imp', '9 left', 'imp vitals', '9 imp imp vitals', '10000 imp']) assert.equal(hit(bad), null, bad);
+  // a side after the place is not read
+  assert.equal(hit('9 cr arm left'), null);
+  // `t`: toxic while no type is given, the torso after one
+  assert.deepEqual(hit('9t').hit, { type: 'tox', location: 'torso', side: null });
+  assert.deepEqual(hit('9 cut t').hit, { type: 'cut', location: 'torso', side: null });
+  assert.deepEqual(hit('9 t t').hit, { type: 'tox', location: 'torso', side: null });
+  // step 6b Task 25 changed this on purpose: toxic cannot target the vitals, so the case moved to the neck
+  assert.equal(hit('9 t neck').hit.type, 'tox');
+  assert.equal(hit('9 t vitals'), null);
+  // only a system with a wounding table reads hits
+  for (const t of ['9 imp vitals', '9i', '2d+1']) { assert.equal(M.parseEntry(t), null, `${t} in D&D`); assert.equal(M.parseEntry(t, COC), null, `${t} in CoC`); }
+});
+
+test('a hit\'s words for the chips, and their order with the last used first', () => {
+  const w = M.hitWords('9 cut left arm', GURPS);
+  assert.deepEqual([w.amount, w.type, w.side, w.location, w.rest], ['9', 'cut', 'left', 'arm', []]);
+  assert.equal(M.hitText({ ...M.hitWords(' arm', GURPS), type: 'cut' }), 'cut arm');
+  assert.equal(M.hitText({ ...M.hitWords('2d+1', GURPS), location: 'vitals', type: 'imp' }), '2d+1 imp vitals');
+  assert.deepEqual(M.chipOrder(['cr', 'cut', 'imp'], 'imp'), ['imp', 'cr', 'cut']);
+  assert.deepEqual(M.chipOrder(['cr', 'cut', 'imp'], null), ['cr', 'cut', 'imp']);
+  assert.deepEqual(M.chipOrder(['cr', 'cut', 'imp'], 'nope'), ['cr', 'cut', 'imp']);
+});
+
+test('9 of each type to the torso on DR 1', () => {
+  const want = { 'pi-': 4, pi: 8, 'pi+': 12, 'pi++': 16, cut: 12, imp: 16, cr: 8, burn: 8, tbb: 8, cor: 8, tox: 8, fat: 8 };
+  for (const [type, injury] of Object.entries(want)) assert.equal(hitOn(`9 ${type} torso`, foe()).injury, injury, type);
+  assert.equal(hitOn('9 cr', foe()).line, '9 cr − DR 1 = 8');
+  assert.equal(hitOn('9 cut', foe()).line, '9 cut − DR 1 = 8 × 1.5 = 12');
+});
+
+test('9 imp vitals on DR 1 takes 24, 9 tbb vitals 16, 9 cr vitals 8', () => {
+  const v = hitOn('9 imp vitals', foe());
+  assert.deepEqual([v.injury, v.line, v.location, v.type], [24, '9 imp − DR 1 = 8 × 3 = 24', 'vitals', 'imp']);
+  for (const t of ['pi-', 'pi', 'pi+', 'pi++']) assert.equal(hitOn(`9 ${t} vitals`, foe()).injury, 24, t);
+  assert.equal(hitOn('9 tbb vitals', foe()).injury, 16);
+  // step 6b Task 25 changed this on purpose: crushing may target the vitals (MA137), other types are refused by the
+  // reader (Ant: never silently allowed); the working still says so if one reaches it
+  assert.equal(hitOn('9 cr vitals', foe()).line, '9 cr − DR 1 = 8');
+  assert.equal(M.parseEntry('9 cut vitals', GURPS), null);
+  const cut = gurpsInjury({ type: 'cut', location: 'vitals', n: 9 }, foe(), W);
+  assert.deepEqual([cut.injury, cut.line], [12, '9 cut − DR 1 = 8 × 1.5 (vitals: as torso for cut) = 12']);
+});
+
+test('9 imp eye on DR 1 takes 32; 9 cr eye is refused; 9 imp left eye at 12 HP is marked', () => {
+  for (const t of ['imp', 'pi-', 'pi', 'pi+', 'pi++', 'tbb']) {
+    const e = hitOn(`9 ${t} eye`, foe({ max: 100 }));
+    assert.equal(e.injury, 32, t);
+    assert.equal(e.line, `9 ${t} − DR 1 = 8 × 4 = 32`, t);
+  }
+  // step 6b Task 25 changed this on purpose: the reader refuses a type that cannot target the place
+  assert.equal(M.parseEntry('9 cr eye', GURPS), null);
+  const cr = gurpsInjury({ type: 'cr', location: 'eye', n: 9 }, foe({ max: 100 }), W);
+  assert.deepEqual([cr.injury, cr.line, cr.crippled], [8, '9 cr − DR 1 = 8 × 1 (eye: as torso for cr) = 8', false]);
+  // 12 HP
+  const blind = hitOn('9 imp left eye', foe({ max: 12 }));
+  assert.deepEqual([blind.injury, blind.crippled, blind.place], [32, true, 'left eye']);
+});
+
+test('12 cr skull on DR 1 takes 36, 12 tox skull 11 with its line', () => {
+  const s = hitOn('12 cr skull', foe());
+  assert.deepEqual([s.injury, s.line], [36, '12 cr − DR 3 (skull +2) = 9 × 4 = 36']);
+  for (const t of ['pi-', 'cut', 'imp', 'burn']) assert.equal(hitOn(`12 ${t} skull`, foe()).injury, 36, t);
+  // fat: the row's DR for the place, then FP
+  const fat = hitOn('12 fat skull', foe());
+  assert.deepEqual([fat.injury, fat.line, fat.crippled], [11, '12 fat skull − DR 1 = 11 (fatigue: no location effects)', false]);
+  assert.deepEqual([hitOn('12 fat arm', foe()).injury, hitOn('12 fat arm', foe()).crippled], [11, false], '12 fat arm at 12 HP');
+  const tox = hitOn('12 tox skull', foe());
+  assert.deepEqual([tox.injury, tox.line], [11, '12 tox − DR 1 = 11 × 1 (skull: as torso for tox) = 11']);
+});
+
+test('9 cr face on DR 3 takes 6, 9 with face open; 9 cor face takes 9', () => {
+  assert.equal(hitOn('9 cr face', foe({ dr: 3 })).line, '9 cr − DR 3 = 6');
+  assert.equal(hitOn('9 imp face', foe({ dr: 3 })).injury, 12);
+  assert.equal(hitOn('9 cor face', foe({ dr: 3 })).injury, 9);
+  const open = hitOn('9 cr face', foe({ dr: 3, faceOpen: true }));
+  assert.deepEqual([open.injury, open.line], [9, '9 cr − DR 0 (face open) = 9']);
+  assert.equal(hitOn('9 imp eye', foe({ dr: 3, faceOpen: true, max: 100 })).injury, 36, 'an eye in an open face');
+  assert.equal(hitOn('9 cr torso', foe({ dr: 3, faceOpen: true })).injury, 6, 'the rest keeps its DR');
+});
+
+test('9 cut neck on DR 1 takes 16, 9 cr neck 12, 9 imp neck 16', () => {
+  const want = { cut: 16, cr: 12, cor: 12, imp: 16, pi: 8, 'pi-': 4, burn: 8 };
+  for (const [t, injury] of Object.entries(want)) assert.equal(hitOn(`9 ${t} neck`, foe()).injury, injury, t);
+});
+
+test('7 pi+ arm on DR 1 takes 6; 9 cut left arm at 12 HP takes 7, crippled; 9 cr hand takes 5', () => {
+  assert.equal(hitOn('7 pi+ arm', foe()).injury, 6);
+  assert.equal(hitOn('7 pi++ leg', foe()).injury, 6);
+  assert.equal(hitOn('7 imp foot', foe({ max: 100 })).injury, 6);
+  assert.equal(hitOn('7 cut arm', foe({ max: 100 })).injury, 9);
+  // 12 HP, DR 1
+  const arm = hitOn('9 cut left arm', foe());
+  assert.deepEqual([arm.injury, arm.crippled, arm.place, arm.line], [7, true, 'left arm', '9 cut − DR 1 = 8 × 1.5 = 12, capped at 7 (left arm)']);
+  assert.deepEqual([hitOn('7 cr arm', foe()).injury, hitOn('7 cr arm', foe()).crippled], [6, false], '7 cr arm at 12 HP');
+  const hand = hitOn('9 cr hand', foe());
+  assert.deepEqual([hand.injury, hand.crippled, hand.place], [5, true, 'hand']);
+  assert.deepEqual([hitOn('5 cr hand', foe()).injury, hitOn('5 cr hand', foe()).crippled], [4, false]);
+  // a row with no max
+  assert.deepEqual([hitOn('9 cut arm', foe({ max: null })).injury, hitOn('9 cut arm', foe({ max: null })).crippled], [12, false]);
+});
+
+test('4 cr torso on DR 5 takes 0, 5 imp vitals on DR 5 takes 0, 9 pi- on DR 8 takes 1', () => {
+  const stop = hitOn('4 cr torso', foe({ dr: 5 }));
+  assert.deepEqual([stop.injury, stop.line], [0, '4 cr − DR 5 = 0']);
+  assert.equal(hitOn('5 imp vitals', foe({ dr: 5 })).injury, 0);
+  const least = hitOn('9 pi- torso', foe({ dr: 8 }));
+  assert.deepEqual([least.injury, least.line], [1, '9 pi- − DR 8 = 1 × 0.5 = 0, at least 1']);
+  // DR as words a GM typed: its figure; no DR is 0
+  assert.equal(hitOn('9 cr', foe({ dr: '2 (leather)' })).injury, 7);
+  assert.equal(hitOn('9 cr', foe({ dr: null })).injury, 9);
+});
+
+test('a PC\'s DR by place, its side first, else its torso\'s', () => {
+  const sela = { max: 12, drByLocation: { skull: 4, face: 0, neck: 2, torso: 3, arm: 2, 'left leg': 5, leg: 2 } };
+  assert.equal(hitOn('9 cr torso', sela).line, '9 cr − DR 3 = 6');
+  assert.equal(hitOn('9 cr arm', sela).injury, 7, 'arm DR 2, 12 HP');
+  assert.equal(hitOn('9 cr left leg', sela).line, '9 cr − DR 5 = 4');
+  const right = hitOn('9 cr right leg', sela);
+  assert.deepEqual([right.line, right.injury, right.crippled], ['9 cr − DR 2 = 7', 7, true], 'no right-leg row: the leg\'s');
+  assert.equal(hitOn('9 imp vitals', sela).line, '9 imp − DR 3 = 6 × 3 = 18', 'no vitals row: the torso\'s');
+  assert.equal(hitOn('9 cr skull', sela).line, '9 cr − DR 6 (skull +2) = 3 × 4 = 12');
+  assert.equal(hitOn('9 imp eye', { ...sela, max: 100 }).line, '9 imp − DR 0 = 9 × 4 = 36', 'an eye takes the face\'s');
+});
+
+test('a DR typed in the fight wins over the sheet\'s by place', () => {
+  const pc = { max: 12, dr: 6, typedKeys: { dr: true }, drByLocation: { torso: 3, arm: 2 } };
+  assert.equal(hitOn('9 cr arm', pc).line, '9 cr − DR 6 = 3');
+  assert.equal(hitOn('9 cr arm', { ...pc, typedKeys: {} }).line, '9 cr − DR 2 = 7', 'not typed: the sheet\'s');
+  assert.equal(hitOn('9 cr face', { ...pc, faceOpen: true }).line, '9 cr − DR 0 (face open) = 9');
+});
+
+test('the dice\'s working starts with the roll', () => {
+  const e = M.parseEntry('2d+1 imp vitals', GURPS);
+  const out = gurpsInjury({ ...e.hit, n: 9, dice: e.dice }, foe(), W);
+  assert.deepEqual([out.injury, out.line], [24, '2d+1 = 9 imp − DR 1 = 8 × 3 = 24']);
+});
+
+// ---- what a hit and a turn owe (step 6b Task 13): gurps-math's cards, with fixed roll results ----
+
+const GC = require('../lib/run-sheet/web/gurps-math');
+const C = GURPS.consequences;
+// a roll result as the server gives it
+const rolled = (total, target, crit) => ({ dice: [1, 1, 1], total, target, margin: target - total,
+  outcome: crit || (total <= target ? 'success' : 'failure') });
+const kinds = (out) => out.lines.map((l) => `${l.kind}${l.times ? ` ${l.times}` : ''}${l.mod ? ` ${l.mod}` : ''}`);
+
+test('an injury of 4 on a 12 HP row gives Shock 4; 7 gives 4; 5 on 25 HP gives 2; 1 on 25 HP gives none', () => {
+  assert.equal(GC.shockOf(4, 12, C), 4);
+  assert.equal(GC.shockOf(7, 12, C), 4);
+  assert.equal(GC.shockOf(5, 25, C), 2);
+  assert.equal(GC.shockOf(1, 25, C), 0);
+  assert.equal(GC.shockOf(7, 25, C), 2, '7 on 25 HP');
+  assert.equal(GC.shockOf(3, null, C), 3, 'no max HP: the injury, capped');
+});
+
+test('an injury of 7 on 12 HP is a major wound; 6 is not', () => {
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 5, max: 12 }, { injury: 7, before: 12, location: 'torso' }, C)), ['knockdown']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 6, max: 12 }, { injury: 6, before: 12, location: 'torso' }, C)), []);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'arm', crippled: true }, C)), ['knockdown'], 'crippled');
+});
+
+test('a major wound to the vitals: one knockdown line at HT −5; a failure by 7 offers Unconscious; a failure by 2 offers Stunned and Prone; a success settles it', () => {
+  const out = GC.cardForHit({ hp: -1, max: 11 }, { injury: 12, before: 11, location: 'vitals' }, C);
+  assert.deepEqual(kinds(out), ['knockdown -5']);
+  const l = out.lines[0];
+  assert.equal(GC.lineText(l, { ht: 10 }, C), 'Knockdown: HT 10 −5 = 5');
+  assert.equal(GC.lineTarget(l, { ht: 10 }), 5);
+  assert.deepEqual(GC.offersFor(l, rolled(12, 5), C), ['unconscious']);
+  assert.deepEqual(GC.offersFor(l, rolled(7, 5), C), ['stunned']);
+  assert.deepEqual(GC.offersFor(l, rolled(18, 16, 'critical failure'), C), ['unconscious'], 'critical failure');
+  assert.deepEqual(GC.offersFor(l, rolled(5, 5), C), []);
+  assert.deepEqual(C.offers.stunned.add, ['Stunned', 'Prone']);
+});
+
+test('a skull hit with shock that is not a major wound: one knockdown line at HT unmodified', () => {
+  const out = GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'skull' }, C);
+  assert.deepEqual(kinds(out), ['knockdown']);
+  assert.equal(GC.lineText(out.lines[0], { ht: 11 }, C), 'Knockdown: HT 11');
+  assert.equal(out.shock, 3);
+  // a major wound to the eye is −10, the face −5
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'eye' }, C)), ['knockdown -10']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'face' }, C)), ['knockdown -5']);
+});
+
+test('a torso hit that is not a major wound: no card, a shock chip only', () => {
+  const out = GC.cardForHit({ hp: 8, max: 12 }, { injury: 4, before: 12, location: 'torso' }, C);
+  assert.deepEqual([out.shock, out.lines], [4, []]);
+  // a groin hit is not a head or vitals hit
+  assert.deepEqual(GC.cardForHit({ hp: 8, max: 12 }, { injury: 4, before: 12, location: 'groin' }, C).lines, []);
+});
+
+test('raw injury 9 on 11 HP from 5: shock, the death check it crosses and an unmodified knockdown', () => {
+  const out = GC.cardForHit({ hp: -14, max: 11 }, { injury: 19, before: 5, location: null }, C);
+  assert.deepEqual([out.shock, kinds(out)], [4, ['death 1', 'knockdown']]);
+});
+
+test('a death check missed by 2 offers Mortal wound; missed by 4 offers Out (dead); a Mortal wound row missing by 1 is offered Out (dead)', () => {
+  const l = GC.cardForHit({ hp: -12, max: 11 }, { injury: 13, before: 1, location: null }, C).lines[0];
+  assert.equal(GC.lineText(l, { ht: 10 }, C), 'Death check (−1×HP): HT 10');
+  assert.deepEqual(GC.offersFor(l, rolled(12, 10), C, false), ['mortal']);
+  assert.deepEqual(GC.offersFor(l, rolled(14, 10), C, false), ['dead']);
+  assert.deepEqual(GC.offersFor(l, rolled(11, 10), C, true), ['dead']);
+  assert.deepEqual(GC.offersFor(l, rolled(10, 10), C, true), []);
+  assert.equal(C.offers.dead.label, 'Out (dead)');
+});
+
+test('−5×HP: "dead" with Out, and no other line', () => {
+  const out = GC.cardForHit({ hp: -55, max: 11 }, { injury: 60, before: 5, location: 'vitals' }, C);
+  assert.deepEqual(kinds(out), ['dead 5']);
+  assert.deepEqual(out.lines[0].offers, ['dead']);
+  assert.equal(GC.lineText(out.lines[0], { ht: 10 }, C), '−5×HP: dead');
+  assert.equal(GC.lineTarget(out.lines[0], { ht: 10 }), null);
+});
+
+test('turn start at −13/12 brings HT −1 to stay conscious; −12/12 is −1; 0/12 is HT; above 0 none', () => {
+  const at = (hp, more) => GC.cardsAtTurnStart({ in: true, hp, max: 12, conds: [], ...more }, C);
+  assert.deepEqual(at(-13).map((c) => [c.kind, c.lines[0].mod]), [['conscious', -1]]);
+  assert.equal(GC.lineText(at(-13)[0].lines[0], { ht: 10 }, C), 'HT to stay conscious: HT 10 −1 = 9');
+  assert.equal(at(-12)[0].lines[0].mod, -1);
+  assert.equal(at(0)[0].lines[0].mod, 0);
+  assert.deepEqual(at(1), []);
+  assert.deepEqual(at(-5, { conds: ['Unconscious'] }), []);
+  assert.deepEqual(at(-5, { out: true }), []);
+  // failure offers Unconscious
+  assert.deepEqual(GC.offersFor(at(-13)[0].lines[0], rolled(12, 9), C), ['unconscious']);
+});
+
+test('a Do Nothing row that made no defence roll is not asked; one that defended, or with no record, is', () => {
+  const at = (more) => GC.cardsAtTurnStart({ in: true, hp: -3, max: 12, conds: [], ...more }, C);
+  assert.deepEqual(at({ manoeuvre: 'do nothing', defended: false }), []);
+  assert.deepEqual(at({ manoeuvre: 'do nothing', defended: 0 }), []);
+  assert.equal(at({ manoeuvre: 'do nothing', defended: true }).length, 1);
+  assert.equal(at({ manoeuvre: 'do nothing' }).length, 1, 'no defence record: asked');
+  assert.equal(at({ manoeuvre: 'attack', defended: false }).length, 1);
+});
+
+test('turn end while Stunned brings HT to recover; a success offers clear Stunned, a failure nothing', () => {
+  const [card] = GC.cardsAtTurnEnd({ in: true, hp: 5, max: 12, conds: ['Stunned', 'Prone'] }, C);
+  assert.equal(GC.lineText(card.lines[0], { ht: 12 }, C), 'HT to recover: HT 12');
+  assert.deepEqual(GC.offersFor(card.lines[0], rolled(9, 12), C), ['recover']);
+  assert.deepEqual(GC.offersFor(card.lines[0], rolled(14, 12), C), []);
+  assert.deepEqual(C.offers.recover.remove, ['Stunned']);
+  assert.deepEqual(GC.cardsAtTurnEnd({ in: true, hp: 5, max: 12, conds: ['Prone'] }, C), []);
+});
+
+test('a critical success over a target of −2 reads only critical success; HT 3 −5 reads = −2', () => {
+  const l = GC.cardForHit({ hp: -1, max: 11 }, { injury: 12, before: 11, location: 'vitals' }, C).lines[0];
+  assert.equal(GC.lineText(l, { ht: 3 }, C), 'Knockdown: HT 3 \u22125 = \u22122');
+  assert.equal(GC.resultText(rolled(4, -2, 'critical success')), 'rolled 4, critical success');
+  assert.equal(GC.resultText(rolled(3, 10, 'critical success')), 'rolled 3, critical success, made it by 7');
+  assert.equal(GC.resultText(rolled(18, 16, 'critical failure')), 'rolled 18, critical failure, failed by 2');
+  assert.equal(GC.resultText(rolled(9, 10)), 'rolled 9, made it by 1');
+});
+
+test('no HT on the row: the line has no target and reads HT ?', () => {
+  const l = GC.cardForHit({ hp: -1, max: 11 }, { injury: 12, before: 11, location: 'vitals' }, C).lines[0];
+  assert.equal(GC.lineTarget(l, { ht: null }), null);
+  assert.equal(GC.lineText(l, { ht: null }, C), 'Knockdown: HT ? −5');
+});
+
+test('the card statuses are in the GURPS status list', () => {
+  const statuses = systemFor('gurps-4e').describe().statuses;
+  for (const o of Object.values(C.offers)) for (const st of (o.add || []).concat(o.remove || [])) assert.ok(statuses.includes(st), st);
+  assert.ok(statuses.includes(C.mortalStatus) && statuses.includes(C.unconscious) && statuses.includes(C.stunned));
+  // D&D and CoC have none
+  assert.equal(systemFor('dnd-5e-2024').describe().fight.consequences, null);
+  assert.equal(COC.consequences, null);
+});
+
+// ---- Task 14: active defences as they stand this turn ----
+const DEF = GURPS.defences;
+const { readNumbers: gurpsNumbers, gurps: gurpsSystem } = require('../lib/run-sheet/systems/gurps');
+const live = (o) => GC.liveDefences({ dodge: 9, parry: 9, block: 8, conds: [], marks: [], ...o }, DEF);
+const fig = (o, k) => live(o)[k].value;
+
+test('Dodge from Speed 5.5 is 8, marked; a typed 9 wins', () => {
+  assert.deepEqual([GC.deriveGurps({ speed: 5.5 }, {}).dodge, GC.deriveGurps({ speed: 5.5 }, {}).from.dodge], [8, 'from Speed']);
+  assert.equal(GC.deriveGurps({ dx: 11, ht: 11 }, {}).dodge, 8, 'Speed 5.5 from DX 11 and HT 11');
+  assert.equal(GC.deriveGurps({ speed: 5.5, dodge: 9 }, { dodge: true }).dodge, undefined);
+  assert.deepEqual([gurpsNumbers('Basic Speed 5.5').dodge, gurpsNumbers('Basic Speed 5.5').from.dodge], [8, 'from Speed']);
+  assert.deepEqual([gurpsNumbers('Basic Speed 5.5 · Dodge 9').dodge, gurpsNumbers('Basic Speed 5.5 · Dodge 9').from.dodge], [9, undefined]);
+  assert.equal(live({ dodge: 8, from: { dodge: 'from Speed' } }).dodge.title, 'Dodge 8 (from Speed)');
+});
+
+test('Dodge 8/9 reads 8; Parry 10 and Block 9 read from the block; HP 6/11 still reads 11', () => {
+  const n = gurpsNumbers('HP 6/11 · Dodge 8/9 · Parry 10 (Broadsword) · Block 9');
+  assert.deepEqual([n.hp, n.dodge, n.parry, n.block], [11, 8, 10, 9]);
+  assert.deepEqual([gurpsNumbers('Parry: 9').parry, gurpsNumbers('Block -').block], [9, null]);
+});
+
+test('plain: Dodge 9, Parry 9, Block 8 as typed, no causes', () => {
+  const d = live({});
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [9, 9, 8]);
+  assert.deepEqual([d.dodge.title, d.block.title], ['Dodge 9', 'Block 8']);
+  assert.deepEqual(d.retreat, { on: false, allowed: true, why: null });
+  assert.equal(live({ parry: null }).parry.value, null, 'no figure, no value');
+});
+
+test('Stunned: Dodge 9 reads 5, Retreat off', () => {
+  const d = live({ conds: ['Stunned'], retreat: true });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [5, 5, 4]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 5: stunned −4');
+  assert.deepEqual(d.retreat, { on: false, allowed: false, why: 'stunned' });
+});
+
+test('Stunned and Prone: Parry 9 reads 2', () => {
+  const d = live({ conds: ['Stunned', 'Prone'] });
+  assert.deepEqual([d.dodge.value, d.parry.value], [2, 2]);
+  assert.equal(d.parry.title, 'Parry 9 → 2: stunned −4, prone −3');
+});
+
+test('Kneeling: Dodge 9 reads 7, Retreat off', () => {
+  const d = live({ conds: ['Kneeling'], retreat: true });
+  assert.deepEqual([d.dodge.value, d.block.value], [7, 6]);
+  assert.deepEqual([d.retreat.allowed, d.retreat.why], [false, 'kneeling']);
+});
+
+test('Reeling: Dodge 9 reads 5', () => {
+  const d = live({ marks: ['Reeling'] });
+  assert.deepEqual([d.dodge.value, d.parry.value], [5, 9]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 5: reeling');
+  assert.equal(fig({ dodge: 8, marks: ['Reeling'] }, 'dodge'), 4);
+});
+
+test('Tired: Dodge 9 reads 5; Tired and Reeling: 3', () => {
+  assert.equal(fig({ tired: true }, 'dodge'), 5);
+  assert.equal(live({ tired: true }).dodge.title, 'Dodge 9 → 5: tired');
+  assert.equal(fig({ tired: true }, 'parry'), 9);
+  const both = live({ tired: true, marks: ['Reeling'] }).dodge;
+  assert.deepEqual([both.value, both.title], [3, 'Dodge 9 → 3: reeling, tired']);
+  // Reeling and Stunned: 1
+  assert.equal(fig({ marks: ['Reeling'], conds: ['Stunned'] }, 'dodge'), 1);
+});
+
+test('All-Out Attack: Dodge, Parry and Block read none', () => {
+  const d = live({ manoeuvre: 'all-out attack' });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [null, null, null]);
+  assert.ok(d.dodge.none);
+  assert.equal(d.dodge.title, 'Dodge 9 → none: all-out attack');
+});
+
+test('Move and Attack: Parry none, Retreat off', () => {
+  const d = live({ manoeuvre: 'move and attack', retreat: true });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [9, null, 8]);
+  assert.equal(d.parry.title, 'Parry 9 → none: move and attack');
+  assert.deepEqual(d.retreat, { on: false, allowed: false, why: 'move and attack' });
+});
+
+test('All-Out Defence (Dodge): Dodge 11, the rest as typed', () => {
+  const d = live({ manoeuvre: 'all-out defence', aodDefence: 'dodge' });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [11, 9, 8]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 11: all-out defence +2');
+  assert.equal(fig({ manoeuvre: 'all-out defence', aodDefence: 'block' }, 'block'), 10);
+  assert.deepEqual([fig({ manoeuvre: 'all-out defence' }, 'dodge'), fig({ aodDefence: 'dodge' }, 'dodge')], [9, 9], 'neither alone');
+});
+
+test('Retreat on: Dodge 12, Parry 10, Block 9', () => {
+  const d = live({ retreat: true });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [12, 10, 9]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 12: retreat +3');
+  assert.equal(d.retreat.on, true);
+});
+
+test('parries counted 1 and 2: Parry 9 reads 5 and 1', () => {
+  assert.equal(fig({ parries: 1 }, 'parry'), 5);
+  assert.equal(live({ parries: 1 }).parry.title, 'Parry 9 → 5: parry 2 −4');
+  assert.equal(fig({ parries: 2 }, 'parry'), 1);
+  assert.equal(fig({ parries: 1 }, 'dodge'), 9);
+});
+
+test('a Block counted: Block reads used, its figure kept', () => {
+  const d = live({ blocks: 1 }).block;
+  assert.deepEqual([d.used, d.value, d.title], [true, 8, 'Block 8: used this turn']);
+  assert.equal(live({}).block.used, false);
+});
+
+test('a roll against Parry 9 after it moved to 5 says "Parry moved to 5: tap again"; Parry none says so', () => {
+  assert.equal(GC.defenceMoved(live({ parries: 1 }).parry, 9), 'Parry moved to 5: tap again');
+  assert.equal(GC.defenceMoved(live({ parries: 1 }).parry, 5), null);
+  assert.equal(GC.defenceMoved(live({ manoeuvre: 'move and attack' }).parry, 9), 'Parry: none now');
+});
+
+test('defence log text: "Parry 9 → 5 (parry 2 −4)" and "Dodge 9"', () => {
+  assert.equal(GC.defenceText(live({ parries: 1 }).parry), 'Parry 9 → 5 (parry 2 −4)');
+  assert.equal(GC.defenceText(live({}).dodge), 'Dodge 9');
+});
+
+test('the defences table: GURPS has one; D&D and CoC none; Kneeling is a GURPS status only', () => {
+  assert.ok(DEF && DEF.names && DEF.manoeuvres['all-out attack']);
+  assert.equal(GC.liveDefences({ dodge: 9 }, null), null);
+  assert.equal(systemFor('dnd-5e-2024').describe().fight.defences, null);
+  assert.equal(COC.defences, null);
+  assert.ok(systemFor('gurps-4e').describe().statuses.includes('Kneeling'));
+  assert.ok(!systemFor('dnd-5e-2024').describe().statuses.includes('Kneeling'));
+  assert.ok(!systemFor('coc-7e').describe().statuses.includes('Kneeling'));
+  for (const st of Object.keys(DEF.statuses).concat(DEF.noRetreat)) assert.ok(systemFor('gurps-4e').describe().statuses.includes(st), st);
+  assert.equal(systemFor('gurps-4e').describe().toggles.defences, true);
+  assert.equal(systemFor('coc-7e').describe().toggles.defences, false);
+});
+
+test('a PC: the sheet\'s Dodge 8, Parry 10 and Block 9 are read', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const file = path.join(__dirname, 'fixtures', 'run-sheet-gurps', 'Characters', 'PCs', 'Sela Drake.md');
+  const raw = fs.readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
+  const { data, content } = require('../lib/frontmatter').parseNote(raw);
+  const n = gurpsSystem.readPc({ body: content, fm: data }).numbers;
+  assert.deepEqual([n.dodge, n.parry, n.block], [8, 10, 9]);
+});
+
+test('the manoeuvre chips: nine names, every key the defences and Do Nothing read, caps of 3', () => {
+  assert.deepEqual(DEF.chips.map((c) => c.name), ['Attack', 'All-Out Attack', 'All-Out Defence', 'Move and Attack', 'Aim', 'Evaluate', 'Feint', 'Ready', 'Do Nothing']);
+  for (const k of [...Object.keys(DEF.manoeuvres), 'do nothing']) assert.ok(DEF.chips.some((c) => c.key === k), k);
+  assert.deepEqual(DEF.caps, { aim: 3, evaluate: 3 });
+  assert.equal(COC.defences, null);
+});
+
+// The page recognises dice with its own pattern and the server reads them with lib/dice: one list holds the two to
+// the same answer (what the page takes as dice, the server rolls; what the server refuses, the page may still send
+// only when it looks like dice, so those are the ones listed as refused-by-the-server).
+test('the page and the server read the same dice', () => {
+  const { parseDamage } = require('../lib/dice');
+  const hit = (t) => M.parseEntry(t, GURPS);
+  const both = ['-d6', '2+3d6', '2d6+1d', '2d6+1', 'd8', 'D20', '1D8+1D4', '2d6-1d4', 'd%', 'D%', '3d%', '2d', '2d+1', '1d-1', '3d', 'd6+2', '1d8+1d4+2', '3-1d4', '2+d6', 'd2', 'd1000', '50d6', '+2d6', '+d8', '+2d'];
+  for (const t of both) {
+    assert.doesNotThrow(() => parseDamage(t), `server reads ${t}`);
+    assert.equal(M.hitWords(`${t} cr torso`, GURPS).amount, t, `page takes ${t}`);
+    // the same dice typed last (Task 25 fix round 1)
+    assert.equal(M.hitWords(`cr torso ${t}`, GURPS).amount, t.toLowerCase(), `page takes ${t} last`);
+    assert.deepEqual(hit(`${t} cr torso`), { pool: 'hp', kind: 'damage', n: null, dice: t.toLowerCase().replace(/^[+-]/, ''), hit: { type: 'cr', location: 'torso', side: null } }, `hit ${t}`); // a leading minus is the damage sign, as for -9; a leading plus is read as the server reads it
+  }
+  // the page sends these on; the server answers with its sentence
+  for (const t of ['d1', 'd1001', '51d6', '2d6+100', '0d6']) {
+    assert.equal(M.hitWords(`${t} cr`, GURPS).dice, t.toLowerCase(), `page sends ${t}`);
+    assert.throws(() => parseDamage(t), RangeError, t);
+  }
+  // not dice at all: the page keeps them out, so the server never hears them
+  for (const t of ['d', '2d6+', '4d6kh3', 'banana']) assert.equal(hit(`${t} cr`), null, `page keeps ${t}`);
+  assert.equal(M.parseEntry('d6'), null);
+  // a leading plus on dice is a hit only with a type: `+2d6` alone is not taken for damage ('+3' is healing)
+  assert.equal(hit('+2d6'), null);
+  assert.equal(M.parseEntry('+1D6', systemFor('coc-7e').describe().fight), null);
+});
+
+// Generated: every shape of count, sides, second term and number. The page never keeps out a form the server accepts,
+// and what the page sends the server either reads or refuses with one of its two sentences.
+test('the page and the server agree on every generated dice shape', () => {
+  const { parseDamage } = require('../lib/dice');
+  const FORMS = "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1";
+  const LIMIT = 'damage is at most 50 dice, with a number from \u221299 to +99';
+  const SIDES = 'a damage die has 2 to 1000 sides';
+  const counts = ['', '1', '2', '50', '51'];
+  const sides = ['', '2', '6', '100', '1000', '1001', '%'];
+  let n = 0;
+  let accepted = 0;
+  for (const lead of ['', '2+', '+']) for (const c of counts) for (const sd of sides) for (const second of ['', '+d4', '-d4']) for (const tail of ['', '+3', '-3']) {
+    const t = `${lead}${c}d${sd}${second}${tail}`;
+    n++;
+    let ok = true;
+    let said = null;
+    try { parseDamage(t); } catch (e) { ok = false; said = e.message; assert.ok(e instanceof RangeError, t); assert.ok([FORMS, LIMIT, SIDES].includes(said), `${t}: ${said}`); }
+    const w = M.hitWords(`${t} cr`, GURPS);
+    const taken = w.dice !== null && w.amount === t && w.rest.length === 0;
+    if (ok) { accepted++; assert.ok(taken, `the page keeps out ${t}, which the server reads`); }
+    // taken by the page and refused by the server is fine: the server's sentence reaches the GM
+    if (!taken) assert.equal(ok, false, `${t}: the page keeps it out, so the server must refuse it`);
+    // typed last, the page takes the same shapes (Task 25 fix round 1)
+    const last = M.hitWords(`cr ${t}`, GURPS);
+    assert.equal(last.dice !== null && last.amount === t.toLowerCase() && last.rest.length === 0, taken, `${t} last`);
+  }
+  assert.equal(n, 3 * 5 * 7 * 3 * 3);
+  assert.ok(accepted > 100, `${accepted} accepted shapes`);
+});
+
+// CoC's damage entries (Task 17): the same DICE pattern, a DB the page puts in before the server hears it.
+test('the page and the server read the same CoC dice, with the attacker\'s DB put in', () => {
+  const { parseDamage } = require('../lib/dice');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const COC_RULES = systemFor('coc-7e').describe().fight;
+  for (const t of ['1D8', '1D6+1', '1D8+DB', '1D3-1', 'd6+DB', '1D6 + DB + 1', '-1D4+DB', '2D6-1D4', '1D10+DB']) {
+    const e = M.parseEntry(t, COC_RULES);
+    assert.ok(e && e.dice, `page takes ${t}`);
+    for (const db of ['+1D4', '-1', '+2D6', 0]) for (const mode of CM.DB_MODES) {
+      const spec = CM.damageRoll(e, { db }, mode);
+      assert.doesNotThrow(() => parseDamage(spec.notation), `${t}, DB ${db}, ${mode}: ${spec.notation}`);
+    }
+  }
+  for (const t of ['DB', '1D6+DB+DB', '+1D6', '1D6xDB', '4d6kh3+DB', 'd']) assert.equal(M.parseEntry(t, COC_RULES), null, `page keeps ${t}`);
+  // D&D and GURPS read no CoC dice entry
+  assert.equal(M.parseEntry('1D8+DB'), null);
+  assert.equal(M.parseEntry('1D8+DB', GURPS), null);
+});
+
+// Generated, CoC (Task 17 review): the shapes above with a leading minus and `+DB`, through parseEntry and damageRoll
+// in every DB mode. What the page takes, the server reads (or refuses with its sentence); what the server reads, the
+// page takes, except a count with no sides (`2d`), GURPS's, which CoC keeps out on purpose.
+test('the page and the server agree on every generated CoC dice shape, with DB put in', () => {
+  const { parseDamage, maxRoll } = require('../lib/dice');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const COC_RULES = systemFor('coc-7e').describe().fight;
+  const FORMS = "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1";
+  const LIMIT = 'damage is at most 50 dice, with a number from −99 to +99';
+  const SIDES = 'a damage die has 2 to 1000 sides';
+  const reads = (t) => { try { parseDamage(t); return true; } catch (e) { assert.ok([FORMS, LIMIT, SIDES].includes(e.message), `${t}: ${e.message}`); return false; } };
+  let n = 0;
+  let taken = 0;
+  for (const sign of ['', '-']) for (const lead of ['', '2+']) for (const c of ['', '1', '2', '50', '51']) for (const sd of ['', '3', '6', '100', '1001', '%'])
+    for (const second of ['', '+d4', '-d4']) for (const db of ['', '+DB']) for (const tail of ['', '+1', '-1']) {
+      const core = `${lead}${c}d${sd}${second}${tail}`;
+      const t = `${sign}${core}${db}`;
+      n++;
+      const e = M.parseEntry(t, COC_RULES);
+      const serverReads = reads(core);
+      if (serverReads && sd !== '') assert.ok(e && e.dice, `the page keeps out ${t}, whose dice the server reads`);
+      if (sd === '') assert.equal(e, null, `${t}: a count with no sides is GURPS's`);
+      if (!e) continue;
+      taken++;
+      assert.equal(e.db, db === '+DB', t);
+      for (const dbv of ['+1D4', '-1', '+2D6', 0, '1D6']) for (const mode of CM.DB_MODES) {
+        const spec = CM.damageRoll(e, { db: dbv }, mode);
+        if (reads(spec.notation)) assert.ok(maxRoll(spec.notation, { floor: 0 }).total >= 0, spec.notation);
+        assert.equal(reads(spec.weapon), serverReads, `${t}: ${spec.weapon}`);
+      }
+    }
+  assert.equal(n, 2 * 2 * 5 * 6 * 3 * 2 * 3);
+  assert.ok(taken > 300, `${taken} taken`);
+});
+
+test('CoC: a die with no count is one (d6, D3, d100, d6+DB); pool entries are unchanged in every system', () => {
+  const COC_RULES = systemFor('coc-7e').describe().fight;
+  assert.deepEqual(M.parseEntry('d6', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd6', db: false });
+  assert.deepEqual(M.parseEntry('D3', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd3', db: false });
+  assert.deepEqual(M.parseEntry('d100', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd100', db: false });
+  assert.deepEqual(M.parseEntry('d6+DB', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd6', db: true });
+  assert.deepEqual(M.parseEntry('m-2', COC_RULES), { pool: 'mp', kind: 'damage', n: 2 });
+  assert.deepEqual(M.parseEntry('s+1', COC_RULES), { pool: 'san', kind: 'heal', n: 1 });
+  assert.deepEqual(M.parseEntry('f-2', GURPS), { pool: 'fp', kind: 'damage', n: 2 });
+  assert.deepEqual(M.parseEntry('t5'), { pool: 'temp', kind: 'temp', n: 5 });
+  assert.equal(M.parseEntry('d6'), null);
+  assert.equal(M.parseEntry('d6', GURPS), null);
+});
+
+// step 6b Task 23 (D3): Same for all asks about typing field by field
+test('Same for all: a copy takes each field the source holds and it has not typed; the count is the copies that take one', () => {
+  const src = row({ id: 'a', name: 'Bouncer 1', copy: 1, hp: 22, max: 22, ac: 13, mod: 1, typed: true, typedKeys: { max: true, ac: true } });
+  const typedIni = row({ id: 'b', name: 'Bouncer 2', copy: 2, hp: null, max: null, ini: 9, typed: true, typedKeys: { ini: true } });
+  const typedAc = row({ id: 'c', name: 'Bouncer 3', copy: 3, hp: null, max: null, ac: 15, typed: true, typedKeys: { ac: true } });
+  const hurt = row({ id: 'd', name: 'Bouncer 4', copy: 4, hp: 5, max: 22, start: { hp: 22, max: 22 } });
+  const rows = [src, typedIni, typedAc, hurt];
+  assert.deepEqual(M.copyFields(src, typedIni), { fields: ['max', 'ac', 'mod'], hp: true });
+  assert.deepEqual(M.copyFields(src, typedAc), { fields: ['max', 'mod'], hp: true }, 'its typed AC is kept');
+  assert.equal(M.untouched(typedIni, true), true, 'a typed initiative does not keep a copy from taking the rest');
+  assert.equal(M.untouched(typedIni, false), false, 'but it is still a touch for Undo');
+  assert.equal(M.untouched(hurt, true), false, 'a hurt copy takes nothing');
+  assert.equal(M.sameForAllCount(rows, src), 2);
+  assert.equal(M.copyHolds(row({ hp: null, max: null, ac: null, mod: null })), false);
+  // a figure the source worked out is not copied itself: its inputs are
+  const g = row({ id: 'e', name: 'Guard 1', copy: 1, max: 11, st: 11, from: { hp: 'from ST' } });
+  assert.deepEqual(M.copyFields(g, row({ id: 'f', name: 'Guard 2', copy: 2, hp: null, max: null }), ['max', 'st']), { fields: ['st'], hp: false });
+});
+
+// ---- the extended hit locations and the location list (step 6b Task 25) ----
+
+test('Task 25: two-word places, their other words and a side read from the box', () => {
+  const hit = (t) => M.parseEntry(t, GURPS);
+  assert.deepEqual(hit('9 cut neck vein').hit, { type: 'cut', location: 'neck vein', side: null });
+  assert.deepEqual(hit('9 cut jugular').hit, { type: 'cut', location: 'neck vein', side: null });
+  assert.deepEqual(hit('9 cr left hand joint').hit, { type: 'cr', location: 'hand joint', side: 'left' });
+  assert.deepEqual(hit('9 cr wrist').hit, { type: 'cr', location: 'hand joint', side: null });
+  assert.deepEqual(hit('9 cut right leg artery').hit, { type: 'cut', location: 'leg vein', side: 'right' });
+  assert.deepEqual(hit('9 cr jaw').hit, { type: 'cr', location: 'jaw', side: null });
+  assert.deepEqual(hit('9 cr left ear').hit, { type: 'cr', location: 'ear', side: 'left' });
+  assert.deepEqual(hit('9 imp spine').hit, { type: 'imp', location: 'spine', side: null });
+  assert.deepEqual(hit('9 cr nose').hit, { type: 'cr', location: 'nose', side: null });
+  // the box's words back: the place's two words kept together
+  assert.equal(M.hitText(M.hitWords('9 cut left arm vein', GURPS)), '9 cut left arm vein');
+  // a plain place still reads alone
+  assert.deepEqual(hit('9 cut arm').hit, { type: 'cut', location: 'arm', side: null });
+});
+
+test('Task 25: a type that cannot hit the place is no hit', () => {
+  const hit = (t) => M.parseEntry(t, GURPS);
+  for (const bad of ['9 cr eye', '9 cut vitals', '9 burn vitals', '9 cr neck vein', '9 imp hand joint', '9 burn spine', '9 fat eye']) assert.equal(hit(bad), null, bad);
+  assert.deepEqual(hit('9 cr vitals').hit, { type: 'cr', location: 'vitals', side: null });
+  assert.equal(M.cannotTarget('9 cr eye', GURPS), 'cr');
+  assert.equal(M.cannotTarget('9 cr vitals', GURPS), null);
+  assert.equal(M.cannotTarget('9 cr', GURPS), null);
+});
+
+test('Task 25: a jaw, a neck vein and a hand joint each work out their injury', () => {
+  // the jaw: the face's DR and multipliers
+  assert.equal(hitOn('9 cr jaw', foe({ dr: 3 })).line, '9 cr − DR 3 = 6');
+  assert.equal(hitOn('9 cr jaw', foe({ dr: 3, faceOpen: true })).line, '9 cr − DR 0 (face open) = 9');
+  assert.equal(hitOn('9 cor jaw', foe({ dr: 1 })).line, '9 cor − DR 1 = 8 × 1.5 = 12');
+  // the neck vein: the neck's multiplier and a half
+  const vein = hitOn('9 cut neck vein', foe({ max: 100 }));
+  assert.deepEqual([vein.injury, vein.line, vein.place], [20, '9 cut − DR 1 = 8 × 2.5 = 20', 'neck vein']);
+  assert.equal(hitOn('9 imp neck vein', foe({ max: 100 })).injury, 20);
+  assert.equal(hitOn('9 pi- neck vein', foe({ max: 100 })).injury, 8);
+  // an arm vein: never crippled, never capped
+  const arm = hitOn('9 cut left arm vein', foe({ max: 12 }));
+  assert.deepEqual([arm.injury, arm.crippled, arm.place], [16, false, 'left arm vein']);
+  assert.equal(hitOn('9 imp leg vein', foe({ max: 100 })).injury, 12);
+  // a hand joint at 12 HP: crippled over 3, capped at 4
+  const joint = hitOn('9 cr left hand joint', foe({ max: 12 }));
+  assert.deepEqual([joint.injury, joint.crippled, joint.place, joint.line], [4, true, 'left hand joint', '9 cr − DR 1 = 8, capped at 4 (left hand joint)']);
+  assert.deepEqual([hitOn('4 cr hand joint', foe({ max: 12 })).injury, hitOn('4 cr hand joint', foe({ max: 12 })).crippled], [3, false]);
+  const knee = hitOn('9 cut leg joint', foe({ max: 12 }));
+  assert.deepEqual([knee.injury, knee.crippled], [5, true]);
+});
+
+test('Task 25: the spine takes DR 3 more; the nose and the spine are marked crippled', () => {
+  const s = hitOn('12 cr spine', foe({ max: 100 }));
+  assert.deepEqual([s.injury, s.line], [8, '12 cr − DR 4 (spine +3) = 8']);
+  assert.equal(hitOn('12 imp spine', foe({ max: 100 })).injury, 16);
+  assert.equal(hitOn('20 cr spine', foe({ max: 12 })).crippled, true);
+  assert.equal(hitOn('12 cr spine', foe({ max: 12 })).crippled, false);
+  const nose = hitOn('5 cr nose', foe({ max: 12 }));
+  assert.deepEqual([nose.injury, nose.crippled], [4, true]);
+  assert.equal(hitOn('4 cr nose', foe({ max: 12 })).crippled, false);
+  // the ear: a face hit
+  assert.equal(hitOn('9 cr right ear', foe({ dr: 3, faceOpen: true })).line, '9 cr − DR 0 (face open) = 9');
+});
+
+test('Task 25: a PC\'s DR for a new place is the place it sits in', () => {
+  const sela = { max: 100, drByLocation: { skull: 4, face: 1, neck: 2, torso: 3, arm: 2, 'left hand': 5, hand: 1 } };
+  assert.equal(hitOn('9 cr jaw', sela).line, '9 cr − DR 1 = 8');
+  assert.equal(hitOn('9 cut neck vein', sela).line, '9 cut − DR 2 = 7 × 2.5 = 17');
+  assert.equal(hitOn('9 cr left hand joint', sela).line, '9 cr − DR 5 = 4');
+  assert.equal(hitOn('9 cr right hand joint', sela).line, '9 cr − DR 1 = 8');
+  assert.equal(hitOn('9 cr spine', sela).line, '9 cr − DR 6 (spine +3) = 3');
+});
+
+test('Task 25: knockdown from the jaw, the nose and the spine', () => {
+  // shock alone calls the roll at these places
+  for (const place of ['jaw', 'nose', 'ear', 'spine']) assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: place, type: 'cut' }, C)), ['knockdown'], place);
+  // a major wound there
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'spine', type: 'cut' }, C)), ['knockdown -5']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'nose', type: 'cut' }, C)), ['knockdown -5']);
+  // crushing to the jaw: one more
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'jaw', type: 'cr' }, C)), ['knockdown -1']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'jaw', type: 'cr' }, C)), ['knockdown -6']);
+  // a neck vein is not a head hit
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'neck vein', type: 'cut' }, C)), []);
+});
+
+test('Task 25: the location list, mildest first, Torso first', () => {
+  const names = W.locationOrder.map((k) => `${W.locations[k].name} ${W.locations[k].penalty}`);
+  assert.deepEqual(names, ['Torso 0', 'Arm -2', 'Leg -2', 'Groin -3', 'Vitals -3', 'Hand -4', 'Foot -4', 'Face -5', 'Neck -5',
+    'Arm vein or artery -5', 'Leg vein or artery -5', 'Arm joint -5', 'Leg joint -5', 'Jaw -6', 'Skull -7', 'Ear -7', 'Nose -7',
+    'Hand joint -7', 'Foot joint -7', 'Spine -8', 'Neck vein or artery -8', 'Eye -9']);
+  assert.deepEqual(W.locationOrder.slice().sort(), Object.keys(W.locations).sort());
+});
+
+test('Task 25: each place\'s label carries the type\'s multiplier, or says the type cannot hit it', () => {
+  assert.deepEqual(GC.locationOption(W, 'neck', 'cut'), { label: 'Neck −5 · ×2', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'neck', 'cr'), { label: 'Neck −5 · ×1.5', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'vitals', 'imp'), { label: 'Vitals −3 · ×3', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'eye', 'cr'), { label: 'Eye −9 · not for cr', disabled: true });
+  assert.deepEqual(GC.locationOption(W, 'torso', null), { label: 'Torso 0', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'torso', 'cr'), { label: 'Torso 0 · ×1', disabled: false });
+});
+
+test('Task 25: for every type and place, the label\'s multiplier is the one the working uses', () => {
+  for (const type of Object.keys(W.types)) {
+    for (const place of W.locationOrder) {
+      const opt = GC.locationOption(W, place, type);
+      const at = GC.woundingAt(W, place, type);
+      if (opt.disabled) { assert.equal(at.can, false, `${type} ${place}`); assert.equal(M.parseEntry(`99 ${type} ${place}`, GURPS), null, `${type} ${place}`); continue; }
+      const m = /×([\d.]+)$/.exec(opt.label);
+      assert.ok(m, `${type} ${place}: ${opt.label}`);
+      // DR 0, no max: the working's injury is the damage times the label's figure
+      const out = gurpsInjury({ type, location: place, n: 100 }, { dr: 0, max: null }, W);
+      // the skull's and the spine's own DR comes off first
+      const loc = W.locations[place];
+      const extra = loc.dr && type !== 'fat' && !(loc.except || []).includes(type) ? loc.dr : 0;
+      const want = type === 'fat' ? 100 : Math.floor((100 - extra) * Number(m[1]));
+      assert.equal(out.injury, want, `${type} ${place}: ${opt.label} / ${out.line}`);
+      assert.equal(Number(m[1]), at.mult, `${type} ${place}`);
+    }
+  }
+});
+
+// ---- Task 25 fix round 1 ----
+
+test('Task 25 fix 1: a crippled spine offers Stunned and Prone outright, with no roll', () => {
+  // 14 cut to the spine at 10 HP: DR 3 from the vertebrae, 11 x 1.5 = 16, over 10
+  const hit = hitOn('14 cut spine', foe({ dr: 0, max: 10 }));
+  assert.deepEqual([hit.injury, hit.crippled], [16, true]);
+  const out = GC.cardForHit({ hp: -6, max: 10 }, { injury: 16, before: 10, location: 'spine', type: 'cut', crippled: true }, C);
+  const k = out.lines.find((l) => l.kind === 'knockdown');
+  assert.ok(k, JSON.stringify(out.lines));
+  assert.deepEqual(k.offers, ['stunned']);
+  assert.equal(k.noRoll, true);
+  assert.equal(GC.lineTarget(k, { ht: 10 }), null);
+  assert.equal(GC.lineStat(k), null);
+  assert.equal(GC.lineText(k, { ht: 10 }, C), 'Knockdown: automatic (spine crippled)');
+  // nothing to roll; the card waits on its offer
+  assert.deepEqual(out.lines.map((l) => l.kind), ['knockdown']);
+  assert.equal(GC.nextLine({ lines: out.lines }, C), -1);
+  assert.equal(GC.cardDone({ lines: out.lines }, C), false);
+  // not crippled: the roll at −5 as before
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'spine', type: 'cut' }, C)), ['knockdown -5']);
+});
+
+test('Task 25 fix 1: a groin hit names what a male target takes; nothing is applied to every target', () => {
+  const cr = hitOn('9 cr groin', foe({ max: 100 }));
+  assert.equal(cr.line, '9 cr − DR 1 = 8 (groin, crushing: a male target takes double shock (max 8) and knockdown −5)');
+  assert.equal(hitOn('9 cut groin', foe({ max: 100 })).line, '9 cut − DR 1 = 8 × 1.5 = 12 (groin: a male target has knockdown −5)');
+  // shock is the usual for every target
+  assert.equal(GC.cardForHit({ hp: 96, max: 100 }, { injury: 4, before: 100, location: 'groin', type: 'cr' }, C).shock, 0);
+  assert.equal(GC.cardForHit({ hp: 8, max: 12 }, { injury: 4, before: 12, location: 'groin', type: 'cr' }, C).shock, 4);
+  // a major wound to the groin: the roll unmodified, its line saying what a male target takes
+  const out = GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'groin', type: 'cr' }, C);
+  assert.deepEqual(kinds(out), ['knockdown']);
+  assert.equal(GC.lineText(out.lines[0], { ht: 10 }, C), 'Knockdown: HT 10 (groin, crushing: a male target takes double shock (max 8) and knockdown −5)');
+});
+
+test('Task 25 fix 1: toxic damage to the skull gets no −10 to knockdown', () => {
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'skull', type: 'tox' }, C)), ['knockdown']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'skull', type: 'cr' }, C)), ['knockdown -10']);
+});
+
+test('Task 25 fix 1: the damage may come last when none leads', () => {
+  const hit = (t) => M.parseEntry(t, GURPS);
+  assert.deepEqual(hit(' cr jaw 3'), { pool: 'hp', kind: 'damage', n: 3, hit: { type: 'cr', location: 'jaw', side: null } });
+  assert.deepEqual(hit('cut left hand joint 2d+1'), { pool: 'hp', kind: 'damage', n: null, dice: '2d+1', hit: { type: 'cut', location: 'hand joint', side: 'left' } });
+  assert.deepEqual(hit('imp vitals 9'), hit('9 imp vitals'));
+  // one amount only; a place with no type still refused
+  for (const bad of ['9 cr jaw 3', 'jaw 3', 'cr jaw 3 4']) assert.equal(hit(bad), null, bad);
+  // the words back with the amount first
+  assert.equal(M.hitText(M.hitWords('cr jaw 3', GURPS)), '3 cr jaw');
+});

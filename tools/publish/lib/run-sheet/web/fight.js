@@ -8,13 +8,25 @@
 // `afterClear` actions name an ended fight instead. Rows, groups and thresholds come in the action, built by
 // the page with fight-math's `rowsForFight`/`joinRows`, so `reduce` never sees the model.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fight-math'));
-  else root.RunSheetFight = factory(root.RunSheetFightMath);
-}(typeof self !== 'undefined' ? self : this, function (FM) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fight-math'), require('./gurps-math'), require('./coc-math'));
+  else root.RunSheetFight = factory(root.RunSheetFightMath, root.RunSheetGurpsMath, root.RunSheetCocMath);
+}(typeof self !== 'undefined' ? self : this, function (FM, GM, CM) {
   const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
   const int = (v) => (isNum(Number(v)) && v !== null && v !== '' ? Math.trunc(Number(v)) : null);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // An initiative or a stat: any finite number, rounded to `places` decimals; one with more places is refused (null),
+  // never truncated (GURPS's Speed keeps 2, the rest none).
+  const figureIn = (v, places) => {
+    if (v === null || v === undefined || v === '' || typeof v === 'boolean' || typeof v === 'object') return null;
+    const n = Number(v);
+    if (!isNum(n)) return null;
+    const k = 10 ** places;
+    const r = Math.round(n * k) / k;
+    return Math.abs(r - n) < 1e-9 ? r : null;
+  };
+  const initPlaces = (rules) => (isNum(rules.initDecimals) && rules.initDecimals > 0 ? Math.floor(rules.initDecimals) : 0);
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
   // The fight's lines are ordinary Log lines, marked `fight: true` (decision 2).
   const say = (s, f, at, text) => { s.events.push({ at, beat: f.beat || null, text, title: f.title || '', fight: true }); };
@@ -26,8 +38,7 @@
     if (!quiet) r.logged = true;
     const u = s.unmask && r.note ? s.unmask[r.note] : null;
     const unmasked = u ? (u.on ? u.name : null) : ((f.carried && r.note && f.carried[r.note]) || null);
-    const copies = r.note ? f.rows.filter((x) => x.note === r.note && x.kind !== 'pc').length : 1;
-    return FM.gmName(r, () => unmasked, copies);
+    return FM.gmName(r, () => unmasked, FM.copiesOf(f.rows, r));
   }
 
   // Statuses as added, then exhaustion, then concentration: `Down, Prone, Exhaustion 2, Concentrating`.
@@ -90,11 +101,46 @@
     }
   }
 
+  // The system's marks a row's HP lights (GURPS's Reeling and 0 or less): each logged once as it is crossed, and
+  // gone when healing lifts the row above it; `deepest` keeps the deepest minus-HP line passed (Task 13's). `quiet`
+  // sets them with no line (a row entering the fight). Nothing for a system with no marks.
+  function settleMarks(s, f, r, at, quiet) {
+    const rules = FM.rulesOf(f);
+    if (!Array.isArray(rules.marks) || !rules.marks.length) return;
+    const m = FM.marksOf(r, rules);
+    const was = Array.isArray(r.marks) ? r.marks : [];
+    if (!quiet) {
+      for (const name of m.chips) {
+        if (was.includes(name)) continue;
+        const mark = rules.marks.find((x) => x && x.name === name);
+        say(s, f, at, `${nameOf(s, f, r)}: ${(mark && mark.log) || name}.`);
+      }
+    }
+    r.marks = m.chips;
+    r.deepest = m.deepest ? m.deepest.times : 0;
+  }
+  // The system's Tired (GURPS's, by FP): logged when crossed, gone when FP is back above it.
+  function settleTired(s, f, r, at, quiet) {
+    const rules = FM.rulesOf(f);
+    if (!rules.tiredAt) return;
+    const now = FM.tiredOf(r, rules);
+    if (now && !r.tired && !quiet) say(s, f, at, `${nameOf(s, f, r)}: ${rules.tiredAt.name || 'Tired'}.`);
+    r.tired = now;
+  }
+
   // What follows an HP change: a foe going Bloodied is logged; at 0 a foe (a neutral too: its kind is foe)
   // is Out, a PC or ally is Down, and concentration ends; healing from 0 clears Down, Stable and the death
-  // saves; thresholds light.
+  // saves; thresholds light. Where the rules put nobody Out by themselves (`autoOut: false`, CoC and GURPS),
+  // none of D&D's follows: the marks are set and the thresholds light.
   // `opts.over` is the damage left after temp HP and HP.
   function afterHp(s, f, r, before, at, opts) {
+    // a hit takes a declared aim away (CoC, Task 19: KR p113)
+    if (opts && isNum(before) && isNum(r.hp) && r.hp < before) aimLost(s, f, r, at, 'hit');
+    if (FM.rulesOf(f).autoOut === false) {
+      settleMarks(s, f, r, at);
+      lightThresholds(s, f, r, at);
+      return;
+    }
     const o = opts || {};
     const was = { ...r, hp: before };
     if (r.kind === 'foe' && FM.isBloodied(r) && !FM.isBloodied(was)) say(s, f, at, `${nameOf(s, f, r)} is Bloodied.`);
@@ -130,10 +176,10 @@
     lightThresholds(s, f, r, at);
   }
 
-  // Damage after half and resisted, into temp HP first. Answers what the row took.
-  function hurt(r, n, half) {
+  // Damage after half and resisted, into temp HP first, down to the fight's floor. Answers what the row took.
+  function hurt(f, r, n, half) {
     const d = FM.damageTaken(n, { half, resisted: r.resisted });
-    const next = FM.afterDamage({ hp: isNum(r.hp) ? r.hp : null, temp: r.temp }, d);
+    const next = FM.afterDamage({ hp: isNum(r.hp) ? r.hp : null, temp: r.temp }, d, FM.rulesOf(f));
     r.hp = next.hp;
     r.temp = next.temp;
     return d;
@@ -176,16 +222,432 @@
   // Incapacitated and the conditions that include it (SRD 5.2.1): each ends Concentration.
   const INCAPACITATING = new Set(['Incapacitated', 'Paralyzed', 'Petrified', 'Stunned', 'Unconscious']);
 
-  // The stat keys Same for all copies (D&D's); 6b adds the keys a system declares here. Nothing else is copied.
-  const STAT_KEYS = ['max', 'ac', 'mod'];
-
-  // After Start, a row given a number is re-placed by one insert; the log says so when it moved.
-  function replace(s, f, r, at) {
-    if (!f.started) return;
-    const was = f.rows.indexOf(r);
-    f.rows = FM.placeRow(f.rows, r.id);
-    if (f.rows.indexOf(r) !== was) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
+  // The stat keys Same for all copies (D&D's, `STAT_KEYS`); CoC and GURPS copy their own stats and pool maxima
+  // (statKeysOf, by the rules' initiative). Nothing else is copied.
+  const STAT_KEYS = FM.SAME_KEYS;
+  function statKeysOf(rules) {
+    const ru = FM.rulesOf({ rules });
+    if (ru.initiative === 'dex') return ['max', 'mpMax', 'sanMax', 'dex'];
+    if (ru.initiative === 'speed') return ['max', 'fpMax', 'st', 'ht', 'dx', 'speed', 'skill', 'dodge', 'parry', 'block', 'dr'];
+    return STAT_KEYS;
   }
+  // A pool's current figure that follows its max: HP its `max`, FP and MP theirs.
+  const FOLLOWS = { max: 'hp', fpMax: 'fp', mpMax: 'mp', sanMax: 'san', erMax: 'er' };
+  // A max typed (or worked out) on a row: a row with no figure in the pool, or one that was full, takes the new
+  // max (final review P4.3: 21, a slip to 2, then 20 gives 20/20); the figure never goes above it.
+  function fitMax(r, maxKey, n) {
+    const cur = FOLLOWS[maxKey];
+    const was = r[maxKey];
+    r[maxKey] = n;
+    if (!cur || n === null) return;
+    if (!isNum(r[cur])) r[cur] = n;
+    else if (isNum(was) && r[cur] === was) r[cur] = n;
+    if (isNum(r[cur]) && r[cur] > n) r[cur] = n;
+  }
+  const typedKey = (r, k, on) => {
+    if (!r.typedKeys || typeof r.typedKeys !== 'object' || Array.isArray(r.typedKeys)) r.typedKeys = {};
+    if (on) r.typedKeys[k] = true; else delete r.typedKeys[k];
+  };
+  // The word an initiative goes by in the fixed-order line.
+  const initWord = (rules) => (rules.initiative === 'speed' ? 'Speed' : 'initiative');
+
+  // A row given a number is re-placed by one insert, the turn kept: after Start always (ruling "latest entry wins"),
+  // and before Start where the order opens sorted (CoC and GURPS; D&D's Sort is the GM's button). The log says so
+  // after Start when it moved (`quiet` drops that line, for a caller that wrote its own). `hold` sets the number
+  // only and marks the row `held`, for placeHeld. In a fixed order (GURPS after Start, B363) a row with a place keeps
+  // it, with a log line; a row without one (added after Start, or blank at Start) takes its place when its first
+  // number arrives, and is fixed from then on.
+  function replace(s, f, r, at, opts) {
+    const o = opts || {};
+    const rules = FM.rulesOf(f);
+    if (o.hold) { r.held = true; return; }
+    if (r.held) r.held = false;
+    if (!f.started) {
+      if (rules.initiative === 'roll' || rules.initiative === undefined) return;
+      f.rows = FM.placeRow(f.rows, r.id, rules);
+      return;
+    }
+    if (rules.orderFixed) {
+      if (r.fixed) { say(s, f, at, `${nameOf(s, f, r)}: ${initWord(rules)} ${isNum(r.ini) ? r.ini : 'cleared'}; the order stays as it started.`); return; }
+      if (!isNum(r.ini)) return;
+      r.fixed = true;
+    }
+    const was = f.rows.indexOf(r);
+    f.rows = FM.placeRow(f.rows, r.id, rules);
+    if (f.rows.indexOf(r) !== was && !o.quiet) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
+  }
+  // Every ticked-in row with a number holds its place in a fixed order (at Start, and at a Sort after it). A row
+  // benched then has no place yet: ticked in later, it takes one (placeLate).
+  const fixAll = (f) => { if (FM.rulesOf(f).orderFixed) for (const r of f.rows) if (r.in && isNum(r.ini)) r.fixed = true; };
+  // A row ticked in, or joined, with a number and no place yet takes its sorted place by one insert, the turn kept.
+  // In a fixed order (GURPS) that is after Start only, and the row holds its place from then on. Where the order
+  // opens sorted and later numbers re-place (CoC), it is before or after Start, by DEX with the sort's tie rules,
+  // and `fixed` is not set (a typed DEX still re-places it); a CoC row held (its DEX typed, Tab not Enter) waits for
+  // placeHeld. A row with no number stays where it is until one is typed (`replace` places it then). The acting row
+  // is never moved, so ticking it out and in again never changes who is next. D&D is rolled: its Sort stays the
+  // GM's button.
+  function placeLate(f, r) {
+    const rules = FM.rulesOf(f);
+    if (!r.in || r.kind === 'lair' || !isNum(r.ini) || r.id === f.turn) return;
+    if (rules.orderFixed) {
+      if (!f.started || r.fixed) return;
+      // placed now, so nothing is left held for placeHeld to place again
+      r.fixed = true;
+      if (r.held) r.held = false;
+    } else if (rules.initiative === 'roll' || rules.initiative === undefined || r.held) return;
+    f.rows = FM.placeRow(f.rows, r.id, rules);
+  }
+
+  // The stats setStat takes, each to its row fields (the brief's one map); `ini` follows from DEX and Speed.
+  // CoC's combat figures are the panel's boxes (Task 7); their full use is Tasks 16-17's.
+  const STAT_FIELDS = {
+    st: ['st'], ht: ['ht'], dx: ['dx'], dex: ['dex'], speed: ['speed'], hp: ['max'], fp: ['fpMax'], mp: ['mpMax'],
+    san: ['san', 'sanMax'], dodge: ['dodge'], parry: ['parry'], block: ['block'], dr: ['dr'],
+    // GURPS's main combat skill, a foe's quick figure (Task 36): the To-hit dialog opens on it
+    skill: ['skill'],
+    fighting: ['fighting'], firearms: ['firearms'], db: ['db'], armour: ['armour'], build: ['build'], attacks: ['attacks'],
+    // CoC's CON and INT, typed in a card's box when the row has none (Task 18)
+    con: ['con'], int: ['int'],
+  };
+  // The keys setStat takes, by the rules' initiative: GURPS's stats, pools and defences; CoC's DEX, MP, SAN, HP,
+  // combat figures, CON and INT; none for D&D (its panel has setMax and setAc).
+  function setStatKeysOf(rules) {
+    const ru = FM.rulesOf({ rules });
+    if (ru.initiative === 'speed') return ['st', 'ht', 'dx', 'hp', 'fp', 'speed', 'skill', 'dodge', 'parry', 'block', 'dr'];
+    if (ru.initiative === 'dex') return ['dex', 'mp', 'san', 'hp', 'fighting', 'firearms', 'dodge', 'db', 'armour', 'build', 'attacks', 'con', 'int'];
+    return [];
+  }
+  // DR and CoC's damage bonus may be words (`2 (face 0)`, `+1D4`); Build and a damage bonus may be below 0.
+  const WORDS_OK = new Set(['dr', 'db']);
+  const SIGNED = new Set(['build', 'db']);
+  // A worked-out figure's `from` key, cleared when the GM types the figure itself.
+  const FROM_KEY = FM.FROM_KEY;
+
+  // GURPS's worked-out figures (gurps-math's deriveGurps, the one copy): HP from ST, FP from HT, Basic Speed from
+  // DX and HT, each only where the GM did not type it and the row's own block did not state it, marked in `from`.
+  function deriveStats(r) {
+    if (!GM || typeof GM.deriveGurps !== 'function') return;
+    const from = r.from && typeof r.from === 'object' && !Array.isArray(r.from) ? r.from : {};
+    const stated = (field) => isNum(r[field]) && !from[FROM_KEY[field]];
+    const tk = r.typedKeys || {};
+    const keep = { max: Boolean(tk.max) || stated('max'), fpMax: Boolean(tk.fpMax) || stated('fpMax'), speed: Boolean(tk.speed) || stated('speed'),
+      dodge: Boolean(tk.dodge) || stated('dodge') };
+    const d = GM.deriveGurps(r, keep);
+    r.from = { ...from };
+    if (d.max !== undefined) { fitMax(r, 'max', d.max); r.from.hp = d.from.hp; }
+    if (d.fpMax !== undefined) { fitMax(r, 'fpMax', d.fpMax); r.from.fp = d.from.fp; }
+    if (d.speed !== undefined) { r.speed = d.speed; r.from.speed = d.from.speed; }
+    if (d.dodge !== undefined) { r.dodge = d.dodge; r.from.dodge = d.from.dodge; }
+  }
+
+  // When each pool on a row last moved: `poolAt` is { fp, mp, san, luck, er } -> time, one per pool, so the vitals
+  // replay each at its own time (state.js vitalRows). A row saved before held one time for all, a string: it is
+  // kept for the pools this entry does not move.
+  const POOL_KEYS = ['fp', 'mp', 'san', 'luck', 'er'];
+  function stampPool(r, key, at) {
+    const was = r.poolAt;
+    const own = was && typeof was === 'object' ? { ...was } : (typeof was === 'string' ? Object.fromEntries(POOL_KEYS.map((k) => [k, was])) : {});
+    own[key] = at;
+    r.poolAt = own;
+  }
+
+  // An entry into a pool other than HP (CoC's `m-4`, `s-6`; GURPS's `f-8`): it stops at the pool's floor and cap
+  // (FM.afterPool); reaching 0 is logged, and GURPS's Tired follows FP. A row with no figure in the pool is unchanged.
+  function poolEntry(s, f, r, e, at) {
+    const pool = FM.poolOf(FM.rulesOf(f), e.pool);
+    const next = FM.afterPool(r, pool, e);
+    if (next === null) return;
+    const was = r[pool.key];
+    r[pool.key] = next;
+    touch(r, at);
+    stampPool(r, pool.key, at);
+    if (was > 0 && next <= 0) say(s, f, at, `${nameOf(s, f, r)}: ${pool.label || pool.key} ${next === 0 && isNum(pool.floor) && pool.floor === 0 ? '0' : '0 or less'}.`);
+    settleTired(s, f, r, at);
+    // CoC (Task 18): a SAN loss this big in one entry brings the INT roll's card
+    const K = kitOf(f);
+    const c = K && K.coc && pool.key === 'san' && e.kind === 'damage' ? CM.sanCard(r, e.n, FM.rulesOf(f)) : null;
+    if (c) addCard(f, r, c.kind, c.lines, c.what);
+  }
+
+  // A hit (GURPS, Task 12): GM.gurpsInjury's injury to HP (a `fat` hit's to FP), `r.hit` { line, injury, location,
+  // side, type } for Task 13, the working logged, a `crippled` place added and logged once.
+  function hitEntry(s, f, r, e, at) {
+    const out = GM.gurpsInjury({ ...e.hit, n: e.n, dice: e.dice || null }, r, FM.rulesOf(f).wounding);
+    r.hit = { line: out.line, injury: out.injury, location: out.location, side: out.side, type: out.type };
+    touch(r, at);
+    say(s, f, at, `${nameOf(s, f, r)}, ${out.place}: ${out.line}.`);
+    if (out.injury <= 0) return;
+    if (out.type === 'fat') { poolEntry(s, f, r, { pool: 'fp', kind: 'damage', n: out.injury }, at); return; }
+    const before = r.hp;
+    const temp = r.temp;
+    const over = overOf(hurt(f, r, out.injury, false), temp, before);
+    touchIfHp(r, at, before, r.max);
+    if (out.crippled) {
+      const mark = `crippled (${out.place})`;
+      const had = Array.isArray(r.crippled) ? r.crippled : [];
+      if (!had.includes(out.place)) { r.crippled = had.concat(out.place); say(s, f, at, `${nameOf(s, f, r)}: ${mark}.`); }
+    }
+    afterHp(s, f, r, before, at, { over });
+    owed(f, r, before, out.injury, { location: out.location, type: out.type, place: out.place, crippled: out.crippled });
+  }
+
+  // ---- what a hit and a turn owe (GURPS, Task 13): the shock chip and cards of prompts, never an outcome ----
+  // The system's consequences table (model.rules.fight.consequences); null where there is none (D&D, CoC).
+  const consequencesOf = (f) => {
+    const C = FM.rulesOf(f).consequences;
+    return C && typeof C === 'object' && GM && typeof GM.cardForHit === 'function' ? C : null;
+  };
+  const cardsOf = (r) => { if (!Array.isArray(r.cards)) r.cards = []; return r.cards; };
+  // A card's id is the fight's count, so a replay makes the same ids. `standing`: offers the card holds besides its
+  // lines (CoC's Stabilised).
+  function addCard(f, r, kind, lines, what, standing) {
+    f.cardN = (isNum(f.cardN) ? f.cardN : 0) + 1;
+    cardsOf(r).push({ id: `k${f.cardN}`, kind, lines, ...(what ? { what } : {}), ...(standing && standing.length ? { standing } : {}) });
+  }
+  // A card of this kind (a turn's start or end, a round's end) replaces the row's last one, answered or not.
+  function replaceCards(f, r, kind, cards) {
+    if (!cards.length && !(Array.isArray(r.cards) && r.cards.some((c) => c.kind === kind))) return;
+    r.cards = cardsOf(r).filter((c) => c.kind !== kind);
+    for (const c of cards) addCard(f, r, c.kind, c.lines, c.what, c.standing);
+  }
+  // Injury a row took (a typed hit, a raw number, an area's share): its shock (B419), added to any still on, and a
+  // card when it owes more than shock. `shockEnds` counts the row's turn ends left. `hit` is null for raw injury.
+  function owed(f, r, before, injury, hit) {
+    const C = consequencesOf(f);
+    if (!C) { cocOwed(f, r, before, injury); return; }
+    if (!isNum(injury) || injury <= 0) return;
+    const out = GM.cardForHit(r, { injury, before, location: hit ? hit.location : null, type: hit ? hit.type : null, crippled: Boolean(hit && hit.crippled) }, C);
+    if (out.shock > 0) {
+      const cap = C.shock && isNum(C.shock.cap) ? C.shock.cap : out.shock;
+      r.shock = Math.min(cap, (isNum(r.shock) ? r.shock : 0) + out.shock);
+      r.shockEnds = f.turn === r.id ? 2 : 1;
+    }
+    if (out.lines.length) addCard(f, r, 'hit', out.lines, `${injury} injury${hit && hit.place ? `, ${hit.place}` : ''}`);
+  }
+  // ---- CoC's cards (Task 18): Task 13's card and its actions, with coc-math's lines; never an outcome ----
+  // The fight's card kit: GURPS's consequences table and gurps-math's line helpers, or CoC's card table (rules.coc.cards)
+  // and coc-math's. nextLine, pending, cardDone and offerOf are gurps-math's for both: they read only the table's
+  // offers. Null where there are no cards (D&D).
+  function kitOf(f) {
+    const C = consequencesOf(f);
+    if (C) return { C, M: GM, coc: false };
+    const coc = cocOf(f);
+    const K = coc && coc.cards;
+    return K && typeof K === 'object' && GM && typeof CM.cocCardForHit === 'function' ? { C: K, M: CM, coc: true } : null;
+  }
+  // A CoC hit's damage (after armour), on the row as it left it: the Major Wound box ticked when it was one (its status
+  // with it, so every place that lists statuses shows it), and one card for the first consequence that applies.
+  function cocOwed(f, r, before, damage) {
+    const K = kitOf(f);
+    if (!K || !K.coc || !isNum(damage) || damage <= 0) return;
+    const out = CM.cocCardForHit(r, { damage, before }, FM.rulesOf(f));
+    if (out.major) {
+      r.majorWound = true;
+      const st = K.C.status.major;
+      if (!r.conds.includes(st)) r.conds.push(st);
+    }
+    if (out.lines.length) addCard(f, r, 'hit', out.lines, `${damage} damage`);
+  }
+  // Healing from 0 in CoC (First Aid's point): the Dying and Unconscious offers go, a Dying status already set is
+  // cleared (logged), and with it the round reminders (settleCoc).
+  function cocHealed(s, f, r, before, at) {
+    const K = kitOf(f);
+    if (!K || !K.coc || before !== 0 || !isNum(r.hp) || r.hp <= 0) return;
+    const gone = (c) => c.kind === 'dying' || c.lines.some((l) => GM.pending(l) && l.offers.some((o) => o === 'dying' || o === 'unconscious'));
+    if (Array.isArray(r.cards) && r.cards.some(gone)) r.cards = r.cards.filter((c) => !gone(c));
+    const dying = K.C.status.dying;
+    if (!r.conds.includes(dying)) return;
+    r.conds = r.conds.filter((c) => c !== dying);
+    say(s, f, at, `${nameOf(s, f, r)}: ${K.C.offers.stabilised.label}.`);
+  }
+  // A round's end in CoC: each row Dying since an earlier round gets its CON reminder (replacing the last), and each
+  // bout of madness counts down a round, logged when it ends. A bout counts from the end of the round after the one it
+  // started in (`from`), as Dying's reminders do, so a bout of N rounds runs N full rounds; it counts for every row,
+  // Out or benched too, since time passes for them.
+  function cocRoundEnds(s, f, at) {
+    const K = kitOf(f);
+    if (!K || !K.coc) return;
+    for (const { row, card } of CM.cocCardsAtRoundEnd(f.rows, f.round, FM.rulesOf(f))) replaceCards(f, rowOf(f, row), 'dying', [card]);
+    for (const r of f.rows) {
+      if (!r.bout || !isNum(r.bout.left) || (isNum(r.bout.from) && r.bout.from >= f.round)) continue;
+      const left = r.bout.left - 1;
+      touch(r, at);
+      if (left > 0) { r.bout = { ...r.bout, left }; continue; }
+      say(s, f, at, `${nameOf(s, f, r)}: the bout of madness ends (${CM.roundsText(r.bout.of)}).`);
+      r.bout = null;
+    }
+  }
+  // After every action on a CoC fight: the Major Wound box follows its status (ticked by a hit, or set or cleared by
+  // hand), and the round Dying was set is kept while the row is Dying; a row no longer Dying owes no reminder.
+  function settleCoc(f) {
+    const K = kitOf(f);
+    if (!K || !K.coc) return;
+    const { major, dying } = K.C.status;
+    for (const r of f.rows) {
+      if (!Array.isArray(r.conds)) continue;
+      const mw = r.conds.includes(major);
+      if (Boolean(r.majorWound) !== mw) r.majorWound = mw;
+      if (r.conds.includes(dying)) { if (!isNum(r.dyingRound)) r.dyingRound = f.round; continue; }
+      if (r.dyingRound !== null && r.dyingRound !== undefined) r.dyingRound = null;
+      if (Array.isArray(r.cards) && r.cards.some((c) => c.kind === 'dying')) r.cards = r.cards.filter((c) => c.kind !== 'dying');
+    }
+  }
+  // An offer taken on a card: from a line (`l`), or one the card holds standing (`l` null). Its statuses added and
+  // removed, Out when it says so, and a bout started from the server's 1D10 (`a.bout`; refused without one). One log
+  // line. False when it could not be taken.
+  function takeOffer(s, f, r, K, l, take, a, at) {
+    const o = GM.offerOf(K.C, take);
+    if (!o) return false;
+    let bout = null;
+    if (o.bout) { bout = CM.boutRoll(a.bout, FM.rulesOf(f)); if (bout === null) return false; }
+    if (l) l.taken = take;
+    for (const st of o.add || []) if (!r.conds.includes(st)) r.conds.push(st);
+    if (o.remove) r.conds = r.conds.filter((c) => !o.remove.includes(c));
+    if (o.out) r.out = true;
+    if (bout !== null) r.bout = { left: bout, of: bout, from: f.round };
+    touch(r, at);
+    say(s, f, at, `${nameOf(s, f, r)}: ${l ? `${K.M.lineName(l, K.C, true)}: ` : ''}${o.label}${bout !== null ? `, a bout of ${CM.roundsText(bout)}${a.bout.typed === true ? ' (typed)' : ''}` : ''}.`);
+    return true;
+  }
+  // A round ends, the one place (Task 18): its roster line, then what the round's end owes (CoC's Dying reminders and
+  // bouts), then the next round, its melee defences from 0.
+  function roundEnds(s, f, at) {
+    sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
+    cocRoundEnds(s, f, at);
+    shotRoundEnds(f, at);
+    f.round += 1;
+    meleeRound(f);
+  }
+  // A row's turn ends: its shock counts down, and HT to recover while it is Stunned.
+  function turnEnds(f, r, at) {
+    // the attack a dive for cover lost: its mark goes when the turn it was shown on ends (CoC, Task 19)
+    if (r && r.lostAttack && r.lostAttack.on) { r.lostAttack = null; touch(r, at); }
+    // whose turn ended last, which tells a late pick from one set ahead, across a round's end too (Task 37 fix round)
+    if (r && defencesOf(f)) f.lastEnded = r.id;
+    // the Aim and Evaluate counts as the turn left them, so one tapped late, after Next, counts on from them as if tapped
+    // on time (Task 37 fix round)
+    if (r && defencesOf(f)) r.manBefore = { aim: isNum(r.aim) && r.aim > 0 ? Math.floor(r.aim) : 0, evaluate: isNum(r.evaluate) && r.evaluate > 0 ? Math.floor(r.evaluate) : 0 };
+    // Aim and Evaluate count turns in a row: a turn that ends with neither picked starts them again (Task 15)
+    if (r && defencesOf(f) && r.manoeuvre !== 'aim' && r.manoeuvre !== 'evaluate' && (r.aim || r.evaluate)) { r.aim = 0; r.evaluate = 0; touch(r, at); }
+    const C = consequencesOf(f);
+    if (!C || !r) return;
+    if (isNum(r.shock) && r.shock > 0) {
+      r.shockEnds = (isNum(r.shockEnds) ? r.shockEnds : 1) - 1;
+      if (r.shockEnds <= 0) { r.shock = 0; r.shockEnds = 0; }
+      touch(r, at);
+    }
+    replaceCards(f, r, 'recover', GM.cardsAtTurnEnd(r, C));
+  }
+  // A row's turn starts: HT to stay conscious at 0 HP or less.
+  function turnStarts(f, r) {
+    // a diver's next turn: its lost attack shows on it (CoC, Task 19)
+    if (r && r.lostAttack && !r.lostAttack.on) r.lostAttack = { ...r.lostAttack, on: true };
+    const C = consequencesOf(f);
+    if (C && r) replaceCards(f, r, 'conscious', GM.cardsAtTurnStart(r, C));
+  }
+  // Already Mortal wound for line `i`: the row has the status, or an earlier line of this card offers or took it.
+  const mortalBefore = (r, card, C, i) => (C.mortalStatus ? (r.conds || []).includes(C.mortalStatus) : false)
+    || card.lines.slice(0, i).some((x) => x.taken === 'mortal' || (GM.pending(x) && x.offers.includes('mortal')));
+  // Rolled lines from `from` on that nobody has answered take their offers again as things stand now.
+  function reoffer(r, card, K, from) {
+    for (let i = from; i < card.lines.length; i++) {
+      const l = card.lines[i];
+      if (l.result && !l.taken && !l.declined) l.offers = K.M.offersFor(l, l.result, K.C, mortalBefore(r, card, K.C, i));
+    }
+  }
+  // ---- active defences (GURPS, Task 14): the live figure is gurps-math's liveDefences; the roll is the server's ----
+  const defencesOf = (f) => {
+    const D = FM.rulesOf(f).defences;
+    return D && typeof D === 'object' && GM && typeof GM.liveDefences === 'function' ? D : null;
+  };
+  // A row's turn starts: what it counted since its last turn starts again (the defence rolls, parries, Blocks), its
+  // retreat goes off, the manoeuvre it chose last turn (Task 15's) is over, and its last roll's line goes
+  // (Task 30). After turnStarts, which reads them.
+  function defencesTurn(f, r) {
+    if (!defencesOf(f) || !r) return;
+    r.defended = 0;
+    r.parries = 0;
+    r.blocks = 0;
+    r.retreat = false;
+    // a manoeuvre set ahead, off the row's turn, is this turn's (Task 37 fix round): kept now, cleared at the next one
+    if (r.manAhead) r.manAhead = false;
+    else { r.manoeuvre = null; r.aodDefence = null; }
+    r.defRoll = null;
+  }
+  // ---- CoC melee (Task 16): the levels compared by coc-math, the d100s the server's, a PC's level the GM's tap ----
+  const cocOf = (f) => { const C = FM.rulesOf(f).coc; return C && typeof C === 'object' && CM ? C : null; };
+  // A round starts: every row's melee defences count from 0 again (KR p108), on the round, never on a row's turn.
+  function meleeRound(f) {
+    if (!cocOf(f)) return;
+    for (const r of f.rows) if (r.meleeDefences) r.meleeDefences = 0;
+  }
+  // The damage an exchange owes (Task 17), for the page's damage box: `n` the fight's count (a replay makes the same),
+  // who hits whom, the exchange's kind (Task 16's 'melee'; Task 19's shot is 'shot', a very long one `veryLong`),
+  // which side hit, at which level, and whether it offers the Extreme maximum. Cleared at every turn's start and
+  // once its damage is applied.
+  // A shot's (Task 19) also carries its gun's `impales` (false: the toggle stays off) and `damage` (the box's choices)
+  // when the gun's line gives them.
+  function exchangeOf(f, by, on, { kind, side, level, veryLong = false, impales = null, damage = null }) {
+    f.meleeN = (isNum(f.meleeN) ? f.meleeN : 0) + 1;
+    const offer = CM.extremeOffer({ side, level, veryLong, onTurn: by.id === f.turn });
+    return { n: f.meleeN, by: by.id, on: on.id, round: f.round, kind, side, level, ...(veryLong ? { veryLong: true } : {}), offer,
+      ...(typeof impales === 'boolean' ? { impales } : {}), ...(damage ? { damage } : {}) };
+  }
+  // ---- CoC firearms (Task 19): the aim, the shot, the dive; the d100 the server's, a PC's level the GM's tap ----
+  const fireOf = (f) => { const C = cocOf(f); return C && C.firearm && typeof C.firearm === 'object' ? C : null; };
+  // A declared aim lost (`why`: 'hit' or 'moved'), logged.
+  function aimLost(s, f, r, at, why) {
+    if (!r.aiming || !fireOf(f)) return;
+    r.aiming = null;
+    touch(r, at);
+    say(s, f, at, `${nameOf(s, f, r)}: ${why === 'hit' ? 'hit' : 'moves'}, the aim is lost.`);
+  }
+  // A round's end: each slow gun's counter goes down a round (gone at 0); an aim declared before the round now ending
+  // and never shot with lapses, quietly. Every row, Out or benched too: time passes for them.
+  function shotRoundEnds(f, at) {
+    if (!fireOf(f)) return;
+    for (const r of f.rows) {
+      if (Array.isArray(r.reload) && r.reload.length) {
+        const left = r.reload.map((c) => ({ ...c, left: c.left - 1 })).filter((c) => isNum(c.left) && c.left > 0);
+        r.reload = left.length ? left : null;
+        touch(r, at);
+      }
+      if (r.aiming && isNum(r.aiming.round) && r.aiming.round < f.round) { r.aiming = null; touch(r, at); }
+    }
+  }
+  // A CoC damage entry (Task 17): dice the page rolled with the attacker's DB put in (`by`, `mode`, `roll`), an
+  // Extreme hit's maximum (`extreme`, `roll` maxRoll's, `extra` the impaling weapon roll), or a bare number in the box
+  // an exchange opened (`exchange`, its `n`), taken as rolled. The target's armour comes off; the working line goes
+  // on the row (`hit`, with what Task 18's card reads: { damage, maxHp }) and in the log. False when the entry is
+  // not one of these (a bare number typed cold stays raw); true when it was taken, or dropped as not holding.
+  function cocHit(s, f, r, e, a, at) {
+    if (!cocOf(f) || e.pool !== 'hp' || e.kind !== 'damage') return false;
+    const sent = a.exchange !== undefined && a.exchange !== null;
+    const x = sent && f.melee && f.melee.n === a.exchange && f.melee.on === r.id ? f.melee : null;
+    // an exchange that is over (its damage applied, the turn moved on in another window): dropped, never taken raw
+    if (sent && !x) return true;
+    if (!e.dice && !x) return false;
+    const A = a.by === undefined || a.by === null ? null : rowOf(f, a.by);
+    if (x && (!A || A.id !== x.by)) return true;
+    if (a.extreme && !(x && x.offer && e.dice)) return true;
+    const mode = CM.DB_MODES.includes(a.mode) ? a.mode : 'full';
+    const out = CM.cocDamage(e, A, r, { mode, roll: a.roll, extreme: Boolean(a.extreme), extra: a.extreme ? a.extra || null : null, asRolled: Boolean(x) });
+    if (!out) return true;
+    const before = r.hp;
+    const temp = r.temp;
+    const took = hurt(f, r, out.damage, false);
+    r.hit = { line: out.line, damage: out.damage, maxHp: isNum(r.max) ? r.max : null };
+    touch(r, at);
+    if (x) f.melee = null;
+    const who = A && A.id !== r.id ? `, hit by ${nameOf(s, f, A)}${e.db && mode !== 'full' ? ` (${CM.DB_WORDS[mode]})` : ''}` : '';
+    say(s, f, at, `${nameOf(s, f, r)}${who}: ${out.line}.`);
+    touchIfHp(r, at, before, r.max);
+    afterHp(s, f, r, before, at, { over: overOf(took, temp, before) });
+    owed(f, r, before, out.damage, null);
+    return true;
+  }
+  const cardOf = (r, id) => (Array.isArray(r.cards) ? r.cards.find((c) => c.id === id) || null : null);
+  const dropCard = (r, id) => { r.cards = cardsOf(r).filter((c) => c.id !== id); };
 
   const FIGHT_HANDLERS = {
     fightStart(s, a, at) {
@@ -196,8 +658,19 @@
         rows: clone(a.rows).map((r) => entered(r, at)), thresholds: clone(a.thresholds || []), lit: {}, startedAt: at,
         carried: clone(a.carried || {}),
       };
+      // the system's part for the reducer (model.rules.fight, step 6b): a fight with none runs as D&D (FM.rulesOf)
+      if (a.rules && typeof a.rules === 'object' && !Array.isArray(a.rules)) f.rules = clone(a.rules);
       numberUnseen(f);
       lairOf(f);
+      // CoC and GURPS sort at Fight (S6-D8), when the order opens prefilled from DEX or Speed, blanks last; D&D's
+      // Sort stays the GM's button. Held rows sort with the rest, and the marks a row enters with are set quietly.
+      const rules = FM.rulesOf(f);
+      if (rules.initiative !== 'roll' && rules.initiative !== undefined) {
+        f.rows = FM.sortRows(f.rows, rules);
+        f.sorted = true;
+        for (const r of f.rows) if (r.held) r.held = false;
+      }
+      for (const r of f.rows) { settleMarks(s, f, r, at, true); settleTired(s, f, r, at, true); }
       // Fight here (plan 6a Task 7, review P3): the place goes behind the focused group's panel until End fight
       const bd = a.backdrop;
       if (bd && typeof bd === 'object' && typeof bd.group === 'string' && bd.group && typeof bd.place === 'string' && bd.place) {
@@ -233,16 +706,20 @@
       let newThresholds = 0;
       for (const t of clone(a.thresholds || [])) if (!have.has(t.key)) { f.thresholds.push(t); have.add(t.key); newThresholds += 1; }
       for (const [note, name] of Object.entries(a.carried || {})) if (!f.carried[note]) f.carried[note] = name;
-      // newcomers go to the bottom until the next Sort; the turn stays with its row
+      // newcomers go to the bottom until the next Sort; the turn stays with its row. In a fixed order after Start
+      // (GURPS), a newcomer with its Speed takes its place by one insert and holds it; one without waits for it.
+      for (const r of fresh.concat(ticked)) placeLate(f, r);
+      for (const r of fresh) { settleMarks(s, f, r, at, true); settleTired(s, f, r, at, true); }
       numberUnseen(f);
       lairOf(f);
       if (!fresh.length && !ticked.length && !groups.length) return;
-      const who = fresh.concat(ticked).filter((r) => r.kind !== 'lair');
+      // a benched newcomer (a statless NPC, an Entities NPC) sits out until ticked: the line names who is in
+      const who = fresh.concat(ticked).filter((r) => r.kind !== 'lair' && r.in !== false);
       const label = String(a.label || '').trim() || who.map((r) => nameOf(s, f, r, true)).join(', ');
-      if (label) say(s, f, at, `${label} ${who.length > 1 ? 'join' : 'joins'} the fight.`);
+      if (label && who.length) say(s, f, at, `${label} ${who.length > 1 ? 'join' : 'joins'} the fight.`);
       // a join that only added rows can be taken back: its line and its rows carry the join's id, for Undo. A group
       // or beat join (it ticks, adds groups or thresholds) carries none, so `undoable` says no to it.
-      if (label && fresh.length && a.id != null && !ticked.length && !groups.length && !newThresholds) {
+      if (label && who.length && fresh.length && a.id != null && !ticked.length && !groups.length && !newThresholds) {
         s.events[s.events.length - 1].join = a.id;
         for (const r of fresh) r.joinId = a.id;
       }
@@ -250,6 +727,7 @@
     fightTick: onRow((s, f, r, a, at) => {
       r.in = !!a.in;
       touch(r, at);
+      placeLate(f, r);
       numberUnseen(f);
       // an owner ticked in later gets the fight's Lair row when it has none
       if (r.in && r.lair && r.kind !== 'lair' && !f.rows.some((x) => x.kind === 'lair')) f.rows.push({ ...FM.lairRow([r], r.group), id: `${a.id || f.id}-lair` });
@@ -258,13 +736,17 @@
     // Before Start the number is all that changes (Sort stays the GM's button). After Start the latest entry
     // wins (ruling "latest entry wins", step6.md): that one row is re-placed by one insert at its sorted
     // place, the rest are not re-sorted, and `f.turn` stays on the same row.
+    // The number keeps the rules' decimals (GURPS's 5.25), never truncated; more places than that is refused.
+    // `hold` sets the number without moving the row (placeHeld moves it).
     setInit: onRow((s, f, r, a, at) => {
       if (r.kind === 'lair') return;
-      if (a.ini === null || a.ini === '' || a.ini === undefined) r.ini = null;
-      else { const n = int(a.ini); if (n === null) return; r.ini = n; }
+      const clear = a.ini === null || a.ini === '' || a.ini === undefined;
+      if (clear) r.ini = null;
+      else { const n = figureIn(a.ini, initPlaces(FM.rulesOf(f))); if (n === null) return; r.ini = n; }
       r.typed = true;
+      typedKey(r, 'ini', !clear);
       touch(r, at);
-      replace(s, f, r, at);
+      replace(s, f, r, at, { hold: a.hold });
     }),
     // Roll fills only boxes still empty, so a number typed meanwhile wins; a PC's box is never rolled.
     rollInit(s, a, at) {
@@ -272,18 +754,32 @@
       if (!f) return;
       for (const [id, v] of Object.entries(a.values || {})) {
         const r = rowOf(f, id);
-        const n = int(v);
+        const n = figureIn(v, initPlaces(FM.rulesOf(f)));
         if (!r || r.kind === 'pc' || n === null || isNum(r.ini)) continue;
         r.ini = n;
         touch(r, at);
         replace(s, f, r, at);
       }
     },
-    fightSort(s, a) {
+    // In a fixed order after Start (GURPS), Sort is how a mistyped Speed is put right: the whole order once, the
+    // turn kept on its row, with a line naming the new order.
+    fightSort(s, a, at) {
       const f = running(s, a);
       if (!f) return;
-      f.rows = FM.sortRows(f.rows);
+      f.rows = FM.sortRows(f.rows, FM.rulesOf(f));
       f.sorted = true;
+      for (const r of f.rows) if (r.held) r.held = false;
+      if (f.started && FM.rulesOf(f).orderFixed) {
+        fixAll(f);
+        const items = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => ({ id: r.id, text: `${nameOf(s, f, r, true)}${isNum(r.ini) ? ` ${r.ini}` : ''}` }));
+        sayRoster(s, f, at, 'The order is sorted again: ', items, '.');
+      }
+    },
+    // Re-places every held row by one insert each, the turn kept (the page sends it, Task 23).
+    placeHeld(s, a, at) {
+      const f = running(s, a);
+      if (!f) return;
+      for (const r of f.rows.filter((x) => x.held)) replace(s, f, r, at);
     },
     // Built on a turn and a round: a second Next built on the same turn is dropped (Review M3).
     fightNext(s, a, at) {
@@ -291,41 +787,346 @@
       if (!f) return;
       if ((a.from === undefined ? null : a.from) !== f.turn || a.round !== f.round) return;
       if (!f.started) {
-        if (!f.sorted) { f.rows = FM.sortRows(f.rows); f.sorted = true; }
+        // Start sorts held rows with the rest: all of them when the order is not sorted yet, else one insert each
+        if (!f.sorted) { f.rows = FM.sortRows(f.rows, FM.rulesOf(f)); f.sorted = true; }
+        else for (const r of f.rows.filter((x) => x.held)) f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f));
+        for (const r of f.rows) if (r.held) r.held = false;
         const first = FM.nextLive(f.rows, null).row;
         if (!first) return;
+        fixAll(f);
         f.started = true;
         f.round = 1;
+        meleeRound(f);
+        f.melee = null;
         f.turn = first.id;
         const order = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => ({ id: r.id, text: `${nameOf(s, f, r, true)}${isNum(r.ini) ? ` ${r.ini}` : ''}` }));
         sayRoster(s, f, at, 'Round 1: ', order, '.');
         turnStart(f, first, at);
+        turnStarts(f, first);
+        defencesTurn(f, first);
         return;
       }
+      const ending = rowOf(f, f.turn);
       const { row, wrapped } = FM.nextLive(f.rows, f.turn);
       if (!row) return;
-      if (wrapped) {
-        sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
-        f.round += 1;
-      }
+      turnEnds(f, ending, at);
+      if (wrapped) roundEnds(s, f, at);
+      // an exchange's damage is owed on its own turn only: a box left unapplied never opens on a later one
+      f.melee = null;
       f.turn = row.id;
       turnStart(f, row, at);
+      turnStarts(f, row);
+      defencesTurn(f, row);
     },
+    // `rolled` is the server's total for an entry of dice (`2d+1 imp vitals`): the page rolls, never the reducer.
     hp: onRow((s, f, r, a, at) => {
       if (r.kind === 'lair') return;
-      const e = FM.parseEntry(a.entry);
+      const e = FM.parseEntry(a.entry, FM.rulesOf(f));
       if (!e) return;
+      if (cocOf(f) && (e.dice || a.exchange !== undefined) && cocHit(s, f, r, e, a, at)) return;
+      if (e.dice) {
+        const n = int(a.rolled);
+        if (n === null || n < 0 || n > 9999 || Number(a.rolled) !== n) return;
+        e.n = n;
+      }
+      // the last hit's working stays on the row until the next entry
+      if (r.hit) { r.hit = null; touch(r, at); }
+      if (e.hit) { hitEntry(s, f, r, e, at); return; }
+      if (e.dice) say(s, f, at, `${nameOf(s, f, r)}: ${e.dice} = ${e.n}.`);
+      if (e.pool !== 'hp' && e.pool !== 'temp') { poolEntry(s, f, r, e, at); return; }
       const before = r.hp;
       const temp = r.temp;
       let over = null;
+      let took = null;
       if (e.kind === 'temp') r.temp = e.n;
-      else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { over = overOf(hurt(r, e.n, r.half), temp, before); r.half = false; }
+      else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { took = hurt(f, r, e.n, r.half); over = overOf(took, temp, before); r.half = false; }
       touchIfHp(r, at, before, r.max);
       afterHp(s, f, r, before, at, { over });
+      // raw injury (`-9`, a bare `2d+1`) owes its shock and the lines it crosses (GURPS), raw damage its card (CoC)
+      if (took !== null) owed(f, r, before, took, null);
+      if (e.kind === 'heal') cocHealed(s, f, r, before, at);
     }),
     half: onRow((s, f, r, a, at) => { r.half = !!a.on; touch(r, at); }),
+    // A card's line rolled (GURPS, Task 13): the server's result onto the card's next line (the reducer never rolls,
+    // so a replay is the same). Dropped when the line is not the next, or HT changed since the roll was asked.
+    // CoC's too (Task 18): an NPC's line is the server's d100 against the row's CON or INT; a PC's is the GM's Passed or
+    // Failed tap of the player's roll (`result: { tap }`), and an offer the rule gives no choice about (the Major
+    // Wound's Prone) is taken with that tap.
+    cardRolled: onRow((s, f, r, a, at) => {
+      const K = kitOf(f);
+      const card = K && cardOf(r, a.card);
+      if (!card) return;
+      const C = K.C;
+      const i = GM.nextLine(card, C);
+      // a card's line takes a tap for any row (CoC: a made-up foe with no CON, PRENTICE review M2; GURPS's always did)
+      const res = K.M.rollResult(a.result, r, true);
+      if (i < 0 || a.line !== i || !res) return;
+      const l = card.lines[i];
+      if (!res.tapped && K.M.lineTarget(l, r) !== res.target) return;
+      l.result = res;
+      l.offers = K.M.offersFor(l, res, C, mortalBefore(r, card, C, i));
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)}: ${K.M.lineText(l, r, C, true)}, ${K.M.resultText(res)}.`);
+      const only = l.offers.length === 1 ? GM.offerOf(C, l.offers[0]) : null;
+      if (res.tapped && only && only.tap) takeOffer(s, f, r, K, l, l.offers[0], a, at);
+      if (GM.cardDone(card, C)) dropCard(r, card.id);
+    }),
+    // A card answered: one of a line's offers applied (`line`, `take`), the card's standing Out (`take: 'out'`), or the
+    // card dismissed (`take: 'dismiss'`, no log line). Each applied tap is one log line.
+    // A standing offer (`take` one of the card's `standing`, no line: CoC's Stabilised) is taken and the card goes. A
+    // bout's offer carries the server's 1D10 (`bout`).
+    card: onRow((s, f, r, a, at) => {
+      const K = kitOf(f);
+      const card = K && cardOf(r, a.card);
+      if (!card) return;
+      const C = K.C;
+      // a dismissed line: its offers declined, nothing logged; the lines after it that were rolled are offered again
+      // as they stand now (a declined Mortal wound no longer counts for them). A line not rolled yet is skipped the
+      // same way (Task 37): declined, and the next Roll passes over it.
+      if (a.take === 'dismiss' && a.line !== undefined && a.line !== null) {
+        const l = card.lines[a.line];
+        if (!l || !(GM.pending(l) || GM.skippable(l))) return;
+        l.offers = [];
+        l.declined = true;
+        reoffer(r, card, K, a.line + 1);
+        touch(r, at);
+        if (GM.cardDone(card, C)) dropCard(r, card.id);
+        return;
+      }
+      if (a.take === 'dismiss') { dropCard(r, card.id); touch(r, at); return; }
+      if (a.take === 'out') {
+        dropCard(r, card.id);
+        touch(r, at);
+        if (!r.out) { r.out = true; say(s, f, at, `${nameOf(s, f, r)} is out of the fight.`); }
+        return;
+      }
+      if ((a.line === undefined || a.line === null) && Array.isArray(card.standing) && card.standing.includes(a.take)) {
+        if (takeOffer(s, f, r, K, null, a.take, a, at)) dropCard(r, card.id);
+        return;
+      }
+      const l = card.lines[a.line];
+      if (!l || !GM.pending(l) || !l.offers.includes(a.take)) return;
+      if (!takeOffer(s, f, r, K, l, a.take, a, at)) return;
+      if (GM.cardDone(card, C)) dropCard(r, card.id);
+    }),
+    // The shock chip tapped (GURPS): its size set, 1 to the cap, or 0 to clear; a new one lasts to the end of the row's
+    // next turn.
+    setShock: onRow((s, f, r, a, at) => {
+      const C = consequencesOf(f);
+      const n = int(a.n);
+      const cap = C && C.shock && isNum(C.shock.cap) ? C.shock.cap : null;
+      if (!C || n === null || n < 0 || (cap !== null && n > cap) || Number(a.n) !== n) return;
+      if (!(isNum(r.shock) && r.shock > 0) && n > 0) r.shockEnds = f.turn === r.id ? 2 : 1;
+      r.shock = n;
+      if (n === 0) r.shockEnds = 0;
+      touch(r, at);
+    }),
+    // A defence rolled (GURPS, Task 14): the server's roll against the figure as it stands now (the page posts, the
+    // reducer never rolls). Dropped for a PC (the sheet never rolls for one), a defence with no figure, a roll whose
+    // target is not the figure now, and a second Block in a turn unless the GM said again. It counts toward the parry
+    // and Block counts, and `defended` (Task 13's turn-start check), until the row's turn.
+    defendRolled: onRow((s, f, r, a, at) => {
+      const D = defencesOf(f);
+      if (!D || r.kind === 'pc' || r.kind === 'lair' || !GM.DEFENCE_KEYS.includes(a.defence)) return;
+      const d = GM.liveDefences(r, D)[a.defence];
+      const res = GM.rollResult(a.result);
+      if (!d || d.value === null || !res || res.target !== d.value || (d.used && a.again !== true)) return;
+      r.defended = (isNum(r.defended) ? r.defended : 0) + 1;
+      if (a.defence === 'parry') r.parries = (isNum(r.parries) ? r.parries : 0) + 1;
+      if (a.defence === 'block') r.blocks = (isNum(r.blocks) ? r.blocks : 0) + 1;
+      // the row's second line shows it (Task 30) until the next roll or the row's turn
+      r.defRoll = GM.defRollOf(d, res, d.used);
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)}: ${GM.defenceText(d)}${d.used ? ', again' : ''}, ${GM.resultText(res)}.`);
+    }),
+    // The retreat toggle (GURPS): on for the row's defences until its turn; refused where the row may not retreat.
+    retreat: onRow((s, f, r, a, at) => {
+      const D = defencesOf(f);
+      if (!D || r.kind === 'pc' || r.kind === 'lair') return;
+      const on = !!a.on;
+      if (on && !GM.retreatOf(r, D).allowed) return;
+      if (!!r.retreat === on) return;
+      r.retreat = on;
+      touch(r, at);
+    }),
+    // The manoeuvre chip (GURPS, Task 15): a note of the row's choice for this turn, `null` to take it back. It feeds
+    // the defences, the Do Nothing check and the Aim and Evaluate counts; it never rolls. A PC may carry one (the to-hit
+    // dialog reads it). The turn's start clears it (defencesTurn). The log writes one line a turn: a second pick in the
+    // same turn rewrites it. All-Out Defence names the one defence it helps.
+    manoeuvre: onRow((s, f, r, a, at) => {
+      const D = defencesOf(f);
+      // any row in the fight, at any time (Task 37): a pick off the row's turn is the one it is on now (a manoeuvre
+      // forgotten before Next), and like any pick it stands until the row's next turn starts
+      if (!D || r.kind === 'lair' || !Array.isArray(D.chips) || !r.in || r.out) return;
+      const key = a.name === null ? null : String(a.name);
+      const chip = key === null ? null : D.chips.find((c) => c.key === key);
+      if (key !== null && !chip) return;
+      const aod = key === 'all-out defence';
+      if (aod && !GM.DEFENCE_KEYS.includes(a.defence)) return;
+      const defence = aod ? a.defence : null;
+      if (key === (r.manoeuvre || null) && defence === (r.aodDefence || null)) return;
+      // the counts before this turn's pick, kept while a pick stands so a second pick counts from the same place
+      const count = (v) => (isNum(v) && v > 0 ? Math.floor(v) : 0);
+      // off the row's turn the pick is its next turn's (`manAhead`, kept when that turn starts), and counts on from
+      // where the row's last turn left Aim and Evaluate, before a turn with no pick put them to 0 (fix round)
+      const off = f.turn !== r.id;
+      // off its turn, the previous actor (its turn the one that just ended, no other ended since, a round's end or not)
+      // gets a late pick, a correction to the turn just gone: it clears when the row's next turn starts, as one made on
+      // time does. Any other row gets its next turn's (fix rounds 2 and 3)
+      const late = off && f.lastEnded === r.id;
+      if (!r.manoeuvre) r.manFrom = off && r.manBefore ? { aim: count(r.manBefore.aim), evaluate: count(r.manBefore.evaluate) } : { aim: count(r.aim), evaluate: count(r.evaluate) };
+      const from = r.manFrom || { aim: 0, evaluate: 0 };
+      const caps = D.caps || {};
+      const grow = (k) => (key === k ? Math.min(isNum(caps[k]) ? caps[k] : 3, from[k] + 1) : 0);
+      if (key === null) { r.aim = from.aim; r.evaluate = from.evaluate; } else { r.aim = grow('aim'); r.evaluate = grow('evaluate'); }
+      r.manoeuvre = key;
+      r.aodDefence = defence;
+      r.manAhead = key !== null && off && !late;
+      touch(r, at);
+      const turn = `${f.round}:${f.turn}`;
+      const own = r.manTurn === turn ? s.events.findLastIndex((e) => e.fight && e.text === r.manLine) : -1;
+      if (key === null) {
+        // taken back in the turn it was picked: its line goes; in a later turn the log stays as it was
+        if (own >= 0) { s.events.splice(own, 1); r.manTurn = null; r.manLine = null; }
+        return;
+      }
+      const text = `${nameOf(s, f, r)}: ${chip.name}${defence ? ` (${D.names[defence] || defence})` : ''}.`;
+      if (own >= 0) s.events[own].text = text; else say(s, f, at, text);
+      r.manTurn = turn;
+      r.manLine = text;
+    }),
+    // A melee exchange (CoC, Task 16): `attacker` attacks `defender`, which Dodges or Fights Back (`response`). Each
+    // side is the server's d100 for an NPC or creature (`attack` with the `dice` the stepper gave, `defence` with none)
+    // or the GM's tap of a PC's level ({ level }): the sheet never rolls for a PC and the reducer never rolls. `auto` is
+    // the row's own dice the page showed ({ net, why }). Dropped
+    // when a roll's target is not the figure now. The defender's melee defences count one more; the side whose damage
+    // is owed is `f.melee` (Task 17 opens its box). One log line; a dismissed exchange sends nothing.
+    melee(s, a, at) {
+      const f = running(s, a);
+      const C = f && cocOf(f);
+      if (!C) return;
+      const A = rowOf(f, a.attacker);
+      const D = rowOf(f, a.defender);
+      if (!A || !D || A === D || !CM.RESPONSES.includes(a.response)) return;
+      if ([A, D].some((r) => r.kind === 'lair' || !r.in || r.out)) return;
+      const dice = CM.diceIn(a.dice, C);
+      if (!dice) return;
+      const atk = CM.sideIn(A, a.attack, CM.skillOf(A, 'attack'), dice);
+      const def = CM.sideIn(D, a.defence, CM.skillOf(D, a.response), { bonus: 0, penalty: 0 });
+      if (!atk || !def) return;
+      const out = CM.opposedMelee(atk.level, def.level, a.response, C);
+      // the row's own dice as the page saw them when the exchange opened (another window may have changed the row since),
+      // so "set by hand" means the GM's taps only; an action without them falls back to the row as it stands
+      const auto = CM.autoIn(a.auto, C) || CM.attackDice(D, C, 'melee');
+      const net = CM.netOf(dice);
+      D.meleeDefences = CM.defenceAfter(D, 'melee');
+      touch(A, at);
+      touch(D, at);
+      f.melee = out.hits ? exchangeOf(f, out.hits === 'attacker' ? A : D, out.hits === 'attacker' ? D : A, {
+        kind: 'melee', side: out.hits, level: out.hits === 'attacker' ? atk.level : def.level,
+      }) : null;
+      const why = net > 0 && auto.net > 0 ? auto.why : [];
+      say(s, f, at, CM.meleeLine({ attacker: nameOf(s, f, A), defender: nameOf(s, f, D) }, a.response, { net, why, byHand: net !== auto.net }, atk, def, out));
+    },
+    // The row's outnumbered switch (CoC): `off` true, its attackers never get the outnumbered die (KR p108).
+    outnumbered: onRow((s, f, r, a, at) => {
+      if (!cocOf(f) || r.kind === 'lair') return;
+      const off = !!a.off;
+      if (!!r.outnumberedOff === off) return;
+      r.outnumberedOff = off;
+      touch(r, at);
+    }),
+    // The aim (CoC, Task 19): declared on the row's own turn (`on` true), for a shot next round; taken back as a move
+    // (`on` false), logged. A hit takes it too (afterHp), the shot uses it, and a round's end lapses it (shotRoundEnds).
+    aim: onRow((s, f, r, a, at) => {
+      if (!fireOf(f) || r.kind === 'lair' || !r.in || r.out) return;
+      if (a.on === false) { aimLost(s, f, r, at, 'moved'); return; }
+      if (!f.started || f.turn !== r.id || (r.aiming && r.aiming.round === f.round)) return;
+      r.aiming = { round: f.round };
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)} aims.`);
+    }),
+    // A shot (CoC, Task 19): `shooter` at `target`, with the chips on (`chips`: the range past regular and the
+    // modifiers, 'dive' when the target's dive passed) and the gun picked (`gun`, its index in the shooter's list, or
+    // null). An NPC's d100 is the server's (`result`, at the range's difficulty with the dice asked); a PC's level the
+    // GM's tap (`level`): the sheet never rolls for a PC. Dropped when the roll is not against the figure and dice the
+    // shot holds now. A hit opens its damage (`f.melee`, kind 'shot'); a kept roll at or over the malfunction number
+    // (`malfunction`, typed, else the gun's) is flagged and fires nothing. The gun's slow reload starts its counter;
+    // the shooter's aim is spent. Never a melee defence (KR p108). One log line.
+    shot(s, a, at) {
+      const f = running(s, a);
+      const C = f && fireOf(f);
+      if (!C) return;
+      const A = rowOf(f, a.shooter);
+      const D = rowOf(f, a.target);
+      if (!A || !D || A === D || [A, D].some((r) => r.kind === 'lair' || !r.in || r.out)) return;
+      const keys = CM.shotKeys(C);
+      if (!Array.isArray(a.chips) || a.chips.some((k) => !keys.includes(k))) return;
+      const guns = CM.gunsOf(A);
+      const noGun = a.gun === null || a.gun === undefined;
+      if (!noGun && !(Number.isInteger(a.gun) && guns[a.gun])) return;
+      const gun = noGun ? null : guns[a.gun];
+      const mal = CM.malfunctionOf(a.malfunction, gun);
+      if (mal === undefined) return;
+      // the aimed chip: for an aim declared the round before and not yet spent (KR p113), or the GM's own tap of it
+      // (`aimByHand`, Task 37) for an aim the sheet never heard of; a spent aim sent again is refused
+      if (a.chips.includes('aim') && !CM.aimReady(A, f.round) && a.aimByHand !== true) return;
+      const dice = CM.shotDice(a.chips, A, D, C);
+      const skill = CM.shotSkill(A, gun);
+      let level;
+      let roll = null;
+      if (A.kind === 'pc') {
+        if (!CM.isLevel(a.level) || a.result !== undefined) return;
+        level = a.level;
+      } else {
+        roll = CM.shotRoll(a.result, skill, dice);
+        if (!roll) return;
+        level = roll.level;
+      }
+      const flag = roll ? CM.malfunctionFlag(roll.kept, mal, C) : '';
+      const hit = flag !== 'malfunction' && CM.shotHits(level, dice.difficulty);
+      touch(A, at);
+      touch(D, at);
+      if (A.aiming) A.aiming = null;
+      // each slow gun keeps its own counter (a brace of pistols: two)
+      if (gun && isNum(gun.reload) && gun.reload > 1) {
+        const others = (Array.isArray(A.reload) ? A.reload : []).filter((c) => c.gun !== a.gun);
+        A.reload = others.concat([{ gun: a.gun, weapon: gun.name, left: gun.reload, of: gun.reload }]).sort((x, y) => x.gun - y.gun);
+      }
+      f.melee = hit ? exchangeOf(f, A, D, { kind: 'shot', side: 'attacker', level, veryLong: dice.range === 'veryLong',
+        impales: gun ? gun.impales : null, damage: gun ? gun.damage : null }) : null;
+      const cite = C.firearm.malfunction && C.firearm.malfunction.cite;
+      say(s, f, at, CM.shotLine({ shooter: nameOf(s, f, A), target: nameOf(s, f, D) }, { dice, skill, roll, level, hit, flag, malfunction: mal, cite }));
+    },
+    // A slow gun made ready by hand (CoC, Task 19): `gun` its index, or every counter on the row with none. Logged.
+    reload: onRow((s, f, r, a, at) => {
+      if (!fireOf(f) || !a.clear || !Array.isArray(r.reload) || !r.reload.length) return;
+      const all = a.gun === null || a.gun === undefined;
+      const gone = r.reload.filter((c) => all || c.gun === a.gun);
+      if (!gone.length) return;
+      const named = r.reload.length > 1 && !all ? `${CM.reloadName(gone[0], r)} ` : '';
+      r.reload = all ? null : (r.reload.filter((c) => c.gun !== a.gun).length ? r.reload.filter((c) => c.gun !== a.gun) : null);
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)}: ${named}ready.`);
+    }),
+    // A dive for cover (CoC, Task 19): the target's answer to a shot. An NPC's is the server's d100 against its Dodge
+    // (`result`, Regular, no dice); a PC's the GM's Passed or Failed tap (`result: { tap }`). Pass or fail, the diver
+    // loses its next attack (all of a creature's): a mark on its next turn, gone when that turn ends. The page adds the
+    // passed dive's die to the shot. Never a melee defence (KR p108, p113). One log line.
+    dive: onRow((s, f, r, a, at) => {
+      if (!fireOf(f) || r.kind === 'lair' || !r.in || r.out) return;
+      const res = CM.rollResult(a.result, r);
+      if (!res || (!res.tapped && res.target !== r.dodge)) return;
+      const attacks = CM.limitOf(r);
+      r.lostAttack = { attacks, on: false };
+      touch(r, at);
+      say(s, f, at, CM.diveLine(nameOf(s, f, r), res, attacks));
+    }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
-    // A max typed on a row with no numbers sets its HP too, so a stock creature runs once its HP is typed.
+    // the face-open toggle (GURPS, Task 12), read by GM.gurpsInjury
+    faceOpen: onRow((s, f, r, a, at) => { if (r.kind === 'lair') return; r.faceOpen = !!a.on; touch(r, at); }),
+    // A max typed on a row with no numbers sets its HP too, so a stock creature runs once its HP is typed; a row that
+    // was full stays full, and HP never goes above the maximum (SRD) (fitMax).
     setMax: onRow((s, f, r, a, at) => {
       if (r.kind === 'lair') return;
       const clear = a.max === null || a.max === '';
@@ -333,13 +1134,10 @@
       if (!clear && (n === null || n < 0)) return;
       const before = r.hp;
       const maxBefore = r.max;
-      r.max = n;
+      fitMax(r, 'max', n);
       r.typed = true;
-      if (n !== null && !isNum(r.hp)) r.hp = n;
-      // a row that was full stays full: a corrected max (21, a slip to 2, then 20) gives 20/20 (final review P4.3)
-      else if (n !== null && isNum(maxBefore) && r.hp === maxBefore) r.hp = n;
-      // SRD: HP never goes above the maximum
-      if (n !== null && isNum(r.hp) && r.hp > n) r.hp = n;
+      typedKey(r, 'max', !clear);
+      if (r.from && r.from.hp) { r.from = { ...r.from }; delete r.from.hp; }
       touchIfHp(r, at, before, maxBefore);
       afterHp(s, f, r, before, at);
     }),
@@ -348,23 +1146,99 @@
       if (n === null && a.ac !== null && a.ac !== '') return;
       r.ac = n;
       r.typed = true;
+      typedKey(r, 'ac', n !== null);
       touch(r, at);
     }),
-    // A counted row's typed numbers go to the others of this group nobody has typed into, hurt or given a status
-    // (FM.untouched), and their HP is the max. The stat keys come (`STAT_KEYS`: max, ac and mod for D&D);
-    // nothing else does (not HP, initiative, side, seen or typed).
+    // A stat typed in the panel (latest entry wins): `key` is one of STAT_FIELDS's, `value` a number (Speed to two
+    // places; DR and DB may be text, Build and DB below 0), or blank to clear it. GURPS works out the figures not
+    // typed (deriveStats); a new DEX or Speed replaces the initiative and re-places the row (replace), a blank one
+    // never clears it. `hold` as setInit.
+    setStat: onRow((s, f, r, a, at) => {
+      const rules = FM.rulesOf(f);
+      if (r.kind === 'lair' || typeof a.key !== 'string' || !has(STAT_FIELDS, a.key) || !setStatKeysOf(rules).includes(a.key)) return;
+      const clear = a.value === null || a.value === '' || a.value === undefined;
+      let v = null;
+      if (!clear) {
+        if (WORDS_OK.has(a.key) && typeof a.value === 'string' && !isNum(Number(a.value))) v = a.value.replace(/\s+/g, ' ').trim().slice(0, 40) || null;
+        else v = figureIn(a.value, a.key === 'speed' ? 2 : 0);
+        if (v === null || (isNum(v) && v < 0 && !SIGNED.has(a.key))) return;
+        // a skill is a whole number from 1 to 99, as the To-hit dialog's typed level is (tohit.js)
+        if (a.key === 'skill' && (v < 1 || v > 99)) return;
+      }
+      const before = r.hp;
+      const maxBefore = r.max;
+      const poolsBefore = POOL_KEYS.map((k) => r[k]);
+      const iniBefore = FM.initOf(r, rules);
+      for (const k of STAT_FIELDS[a.key]) {
+        if (has(FOLLOWS, k)) fitMax(r, k, v); else r[k] = v;
+        typedKey(r, k, !clear);
+        if (FROM_KEY[k] && r.from && r.from[FROM_KEY[k]]) { r.from = { ...r.from }; delete r.from[FROM_KEY[k]]; }
+      }
+      if (rules.initiative === 'speed') deriveStats(r);
+      r.typed = true;
+      if (r.hp !== before || r.max !== maxBefore) touchHp(r, at); else touch(r, at);
+      POOL_KEYS.forEach((k, i) => { if (r[k] !== poolsBefore[i]) stampPool(r, k, at); });
+      // DEX or Speed typed is the latest initiative entry; another stat changes the initiative only when the figure
+      // it is worked out from moved (an ST typed never undoes a typed initiative)
+      const ini = FM.initOf(r, rules);
+      const own = a.key === 'dex' || a.key === 'speed';
+      if (ini !== null && ini !== r.ini && (own || ini !== iniBefore)) {
+        r.ini = ini;
+        // a worked-out Speed that replaces a typed initiative leaves it untyped
+        if (!own) typedKey(r, 'ini', false);
+        if (!(f.started && rules.orderFixed && r.fixed)) say(s, f, at, `${nameOf(s, f, r)}: initiative ${ini} from the typed stats.`);
+        replace(s, f, r, at, { hold: a.hold, quiet: true });
+      }
+      // DEX or Speed typed with a number is a typed initiative, even when it equals the one the row had
+      if (own && ini !== null) typedKey(r, 'ini', true);
+      afterHp(s, f, r, before, at);
+      settleTired(s, f, r, at);
+    }),
+    // CoC's firearm ready: its initiative is DEX plus the rules' firearmBonus while it is on, re-placed as a typed
+    // number is (after Start, and before it where the order opened sorted).
+    firearm: onRow((s, f, r, a, at) => {
+      if (r.kind === 'lair') return;
+      const on = !!a.on;
+      if (!!r.gun === on) return;
+      r.gun = on;
+      touch(r, at);
+      const ini = FM.initOf(r, FM.rulesOf(f));
+      if (ini !== null && ini !== r.ini) { r.ini = ini; replace(s, f, r, at, { hold: a.hold }); }
+    }),
+    // Same for all, field by field (Task 23, D3): each of this group's others not hurt or given a status
+    // (FM.untouched) takes each figure the source holds and it has not typed itself (FM.copyFields): the stat keys
+    // (`statKeysOf`: max, ac and mod for D&D), each pool at its copied max (a spent one keeps what is left), the HP at the max. A figure the source
+    // worked out is not copied; its inputs are, and GURPS works the copy's out again (deriveStats). A copy with no typed
+    // initiative takes the one its figures give (CoC's DEX, GURPS's Speed), placed as a typed one is. Nothing else is
+    // copied (not HP lost, side, seen or typed).
     sameForAll: onRow((s, f, r, a, at) => {
-      const others = FM.groupMates(f.rows, r).filter((x) => x !== r && FM.untouched(x, true));
-      if (!others.length) return;
-      const fields = STAT_KEYS.filter((k) => isNum(r[k]));
-      for (const x of others) {
-        for (const k of fields) x[k] = r[k];
-        if (isNum(r.max)) x.hp = r.max;
+      const rules = FM.rulesOf(f);
+      const keys = statKeysOf(rules);
+      const takers = FM.sameForAllTakers(f.rows, r, keys);
+      if (!takers.length) return;
+      for (const x of takers) {
+        const c = FM.copyFields(r, x, keys);
+        const tk = x.typedKeys || {};
+        for (const k of c.fields) {
+          // a pool's max: a blank or full pool follows it, a spent one keeps what is left (fitMax; CodeRabbit on #887)
+          if (FOLLOWS[k] && FOLLOWS[k] !== 'hp') fitMax(x, k, r[k]);
+          else { x[k] = r[k]; if (FOLLOWS[k]) x[FOLLOWS[k]] = r[k]; }
+          if (FROM_KEY[k] && x.from && x.from[FROM_KEY[k]]) { x.from = { ...x.from }; delete x.from[FROM_KEY[k]]; }
+        }
+        if (rules.initiative === 'speed') deriveStats(x);
+        if (!tk.max && isNum(x.max) && (c.hp || c.fields.length)) x.hp = x.max;
+        // the marks and Tired worked out again from the copy's new figures (CodeRabbit on #887)
+        settleMarks(s, f, x, at, true);
+        settleTired(s, f, x, at, true);
+        if (!tk.ini) {
+          const ini = FM.initOf(x, rules);
+          if (ini !== null && ini !== x.ini) { x.ini = ini; replace(s, f, x, at, { quiet: true }); }
+        }
         x.copied = { hp: x.hp, max: x.max };
         touchHp(x, at);
       }
       // naming the copies in this line marks them touched, rightly: copying numbers onto them is an act on them
-      say(s, f, at, `${others.map((x) => nameOf(s, f, x)).join(', ')}: the same numbers as ${nameOf(s, f, r)}.`);
+      say(s, f, at, `${takers.map((x) => nameOf(s, f, x)).join(', ')}: the same numbers as ${nameOf(s, f, r)}.`);
     }),
     // Takes back the rows one join added, while none has been touched. One line says so; the join's own line
     // goes with its rows, so no line of the fight names an undone row (the Table Log never will).
@@ -467,7 +1341,7 @@
         done.add(r.id);
         const before = r.hp;
         const temp = r.temp;
-        const took = hurt(r, n, !!h.half);
+        const took = hurt(f, r, n, !!h.half);
         touchIfHp(r, at, before, r.max);
         hits.push({ r, before, took, half: !!h.half, over: overOf(took, temp, before) });
       }
@@ -480,7 +1354,7 @@
       if (!hits.length && !spent) return;
       const list = hits.map((x) => `${nameOf(s, f, x.r)} ${x.took}${x.half ? ' (half)' : ''}`).join(', ');
       say(s, f, at, `${spent ? `${spent}: ` : 'Area: '}${n} damage${list ? ` to ${list}` : ''}.`);
-      for (const x of hits) afterHp(s, f, x.r, x.before, at, { over: x.over });
+      for (const x of hits) { afterHp(s, f, x.r, x.before, at, { over: x.over }); owed(f, x.r, x.before, x.took, null); }
     },
     // A foe's, or an ally's (one the reader inferred starts unseen): the GM's tick is kept apart as `seenTick`,
     // so a side switched later leaves it standing.
@@ -585,8 +1459,11 @@
       const before = new Map(rows.map((r) => [r, statusesOf(r).join('\n')]));
       fn(s, a, at);
       for (const [r, was] of before) if (statusesOf(r).join('\n') !== was) r.condAt = at;
+      if (s.fight && Array.isArray(s.fight.rows)) settleCoc(s.fight);
+      // a row Out, by any route, owes nothing more: its cards go, with no line
+      for (const r of s.fight && Array.isArray(s.fight.rows) ? s.fight.rows : []) if (r.out && Array.isArray(r.cards) && r.cards.length) r.cards = [];
     };
   }
 
-  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS };
+  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS, STAT_FIELDS, statKeysOf, setStatKeysOf };
 }));

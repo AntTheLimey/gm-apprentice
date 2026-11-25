@@ -12,6 +12,7 @@ const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
 const { withPage } = require('./helpers/cdp');
 const { findChrome } = require('../lib/chrome');
+const { sane, where, picked, landing } = require('./helpers/fight-layout');
 
 const PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0">
 <button id="b" style="position:absolute;left:40px;top:40px;width:120px;height:40px">go</button>
@@ -142,6 +143,25 @@ describe('real-input page helpers', { skip: browserSkip() }, () => {
       assert.ok(r.inView && r.hit);
       assert.strictEqual(await page.evaluate('window.hits.far'), 1);
       assert.ok(await page.evaluate('scrollY') > 0);
+    });
+  });
+
+  it('choose picks options of a plain select by typing, then by arrow, and the page hears each change', async () => {
+    const page_ = `<!doctype html><meta charset="utf-8"><body style="margin:0"><select id="m" style="position:absolute;left:40px;top:40px">
+      <option value="strike">Strike</option><option value="sweep">Sweep</option><option value="sweep2">Sweep (Double)</option>
+      <option value="shove">Shove</option><option value="tuck">Tuck in</option></select>
+      <script>window.heard = []; document.getElementById('m').addEventListener('change', (e) => window.heard.push(e.target.value));</script>`;
+    await withPage({ width: 600, height: 400 }, async (page) => {
+      await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(page_)}`);
+      await page.waitFor('document.getElementById("m")');
+      assert.strictEqual(await page.choose('#m', 'Sweep (D'), 'Sweep (Double)');
+      assert.strictEqual(await page.choose('#m', 'Sho'), 'Shove');
+      assert.strictEqual(await page.choose('#m', 'Tuck i'), 'Tuck in');
+      assert.strictEqual(await page.choose('#m', 'Str'), 'Strike');
+      assert.strictEqual(await page.evaluate('document.getElementById("m").value'), 'strike');
+      // typing passes through the options on the way ("Sweep" is heard before "Sweep (Double)"): the last four are the choices
+      assert.deepStrictEqual((await page.evaluate('window.heard')).slice(-4), ['sweep2', 'shove', 'tuck', 'strike']);
+      await assert.rejects(() => page.choose('#m', 'Nothing like it'), /no option starting/);
     });
   });
 
@@ -349,11 +369,14 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
       p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Bouncer 1" && r.max === 30)');
       await tap(page, `[data-fpeek="${one.id}"]`);
       await page.waitFor('document.querySelector("[data-fsame]")');
-      assert.match(await page.evaluate('document.querySelector("[data-fsame]").textContent'), /^Same for all 3$/);
+      // step 6b Task 23 changed this on purpose (D3): the number is how many will take something, the two copies
+      assert.match(await page.evaluate('document.querySelector("[data-fsame]").textContent'), /^Same for all 2$/);
       await tap(page, '[data-fsame]');
       p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => /^Bouncer/.test(r.name) && r.max === 30).length === 3');
       assert.deepStrictEqual(['Bouncer 2', 'Bouncer 3'].map((n) => named(p, n).hp), [30, 30]);
-      assert.strictEqual(await page.evaluate('document.querySelectorAll("[data-fsame]").length'), 0, 'nothing left to copy to');
+      // step 6b Task 23 fix round 1 changed this on purpose: the button stays, disabled, saying why
+      assert.strictEqual(await page.evaluate('document.querySelector("[data-fsame]").disabled'), true, 'nothing left to copy to');
+      assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /No copy can take these/);
       assert.deepStrictEqual(p.errors, []);
     });
   });
@@ -364,19 +387,7 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
 // comes from another window's actions or from the page's own storage, never from a synthetic event.
 const WYRM = 'Creatures/Glacier Wyrm.md';
 const SIZES = [[1449, 762], [1280, 762], [1100, 762]];
-// What every layout test holds: no row clipped, no sideways scroll, the probe's layout fields there.
-function sane(p, where = '') {
-  const l = p.layout;
-  assert.ok(l, `${where}: a layout in the probe`);
-  for (const k of ['railW', 'sheetW', 'paneTop']) assert.strictEqual(typeof l[k], 'number', `${where}: layout.${k}`);
-  for (const k of ['folded', 'pvOpen']) assert.strictEqual(typeof l[k], 'boolean', `${where}: layout.${k}`);
-  assert.ok(l.grip && typeof l.grip.shown === 'boolean', `${where}: layout.grip`);
-  assert.ok('pvTop' in l && 'pvBottom' in l && 'cutTop' in l, `${where}: layout.pvTop, pvBottom, cutTop`);
-  const over = (l.rows || []).filter((r) => r.over);
-  assert.deepStrictEqual(over.map((r) => r.name), [], `${where}: rows clipped`);
-  assert.strictEqual(l.wide, false, `${where}: the page scrolls sideways`);
-  assert.deepStrictEqual(p.errors, [], `${where}: script errors`);
-}
+// What every layout test holds (no row clipped, no sideways scroll, the probe's layout fields there): helpers/fight-layout.js.
 // Both PCs to beat 1 (or `at`), then Fight on beat `on` (default the first), by real clicks.
 async function fightAt(page, run, { at = 0, on = 0 } = {}) {
   await page.goto(`${run.base}/?probe=1`);
@@ -1610,6 +1621,28 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
     });
   });
 
+  // Task 31: a click into D&D's End of the night HP box selects its number too. This changes D&D on purpose
+  // (coordinator's ruling, 2026-11-24: the fault was the same in every system): before, the click left the caret
+  // where it landed and a typed 3 made 93.
+  it('a click into D&D\'s End of the night HP box selects the number: click, then 3 replaces it', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const id = await page.evaluate('document.querySelector("#sheet [data-vhp]").dataset.vhp');
+      const box = `#sheet [data-vhp="${id}"]`;
+      const before = await page.evaluate(`document.querySelector(${JSON.stringify(box)}).value`);
+      assert.ok(before.length >= 1, 'the box is prefilled');
+      const at = await page.click(box);
+      assert.ok(at.inView && at.hit, JSON.stringify(at));
+      await page.type('3');
+      await page.key('Tab');
+      await settled(page);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${JSON.stringify(box)}).value`), '3');
+    });
+  });
+
   // fix round 1, M4: a click into the box that already has focus selects it too
   it('a click into the focused max box selects it: 20 Enter, click, 21 gives 21', async () => {
     const run = await start();
@@ -1737,6 +1770,219 @@ describe('Esc and J, from the review of the fixes', { skip: browserSkip() }, () 
       await tap(page, '#fAddName');
       await page.waitFor('document.querySelector("#fHits button")');
       assert.strictEqual(await page.evaluate('document.querySelector("#fAddName").value'), 'Ben', 'the words stay');
+    });
+  });
+});
+
+// ---- step 6b Task 23 for D&D: Tab past the end (D2), rows held while typed (D3c), Same for all field by field (D3).
+// CoC's and GURPS's are in run-sheet-fight-systems-browser.test.js.
+describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input', { skip: browserSkip() }, () => {
+  const pcFigures = (p) => p.fight.rows.filter((r) => r.kind === 'pc').map((r) => [r.name, r.ini, r.hp, r.max, r.ac]);
+  async function setUp(page, run) {
+    await page.goto(`${run.base}/?probe=1`);
+    await settled(page);
+    const b = run.model.beats[0];
+    await tap(page, `[id="beat:${b.key}"] [data-all]`);
+    await settled(page);
+    await tap(page, `[id="beat:${b.key}"] [data-fight]`);
+    return until(page, 'p.fight && p.fight.rows.length > 0 && p.saved === "Saved" && p.pending === 0');
+  }
+  const bouncers = async (page, n) => {
+    await addNew(page, 'Bouncer', n);
+    return until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => /^Bouncer /.test(r.name)).length === ${n}`);
+  };
+  async function typeIn(page, s, v, key = 'Enter') {
+    await tap(page, s);
+    await page.waitFor(`document.activeElement === document.querySelector(${JSON.stringify(s)})`, 2000);
+    await page.type(String(v));
+    await page.key(key);
+    return settled(page);
+  }
+
+  it('Add Bouncer ×3, then 10 Tab 9 Tab 8 Tab before Start: focus on Start, no PC figure changed, never a seen button', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await setUp(page, run);
+      let p = await bouncers(page, 3);
+      const pcs = pcFigures(p);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      await tap(page, sel('data-fini', b[0]));
+      const went = [];
+      for (const v of ['10', '9', '8']) { await page.type(v); await page.key('Tab'); went.push(await where(page)); }
+      assert.deepStrictEqual(went, [`data-fini=${b[1]}`, `data-fini=${b[2]}`, '#fNext']);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[2])}).ini === 8`);
+      assert.deepStrictEqual(b.map((id) => p.fight.rows.find((r) => r.id === id).ini), [10, 9, 8]);
+      assert.deepStrictEqual(pcFigures(p), pcs);
+      assert.strictEqual(p.fight.started, false);
+    });
+  });
+
+  it('the same after Start: focus stays on the last box with its number selected; Enter commits it and ends no turn', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      let p = await bouncers(page, 3);
+      const turn = [p.fight.turn, p.fight.round];
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      await tap(page, sel('data-fini', b[0]));
+      const went = [];
+      for (const v of ['10', '9', '8']) { await page.type(v); await page.key('Tab'); went.push(await where(page)); }
+      assert.deepStrictEqual(went, [`data-fini=${b[1]}`, `data-fini=${b[2]}`, `data-fini=${b[2]}`]);
+      assert.deepStrictEqual(await picked(page), ['8', 0, 1]);
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[2])}).ini === 8 && p.fight.rows.every((r) => !r.held)`);
+      assert.deepStrictEqual([p.fight.turn, p.fight.round], turn, 'no turn ended');
+      assert.strictEqual(await where(page), `data-fini=${b[2]}`);
+    });
+  });
+
+  // Task 23b B2: D&D's line for a row with numbers and no block stays (CoC and GURPS say nothing, their rows are complete)
+  it('a row with HP and no stat block says "No stat block in the vault." in its panel', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await setUp(page, run);
+      let p = await bouncers(page, 2);
+      const id = named(p, 'Bouncer 1').id;
+      p = await typeIn(page, `[data-fmax="${id}"]`, 10);
+      await tap(page, `[data-fpeek="${id}"]`);
+      await until(page, 'p.fight.actingName === "Bouncer 1"');
+      assert.strictEqual(await page.evaluate(`(() => { const w = document.querySelector('#acting .warn'); return w && w.textContent; })()`), 'No stat block in the vault.');
+    });
+  });
+
+  it('with the source blank Same for all is disabled and "Type a number first" is on screen beside it; the copies\' typed initiatives are kept', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      let p = await bouncers(page, 3);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      p = await typeIn(page, sel('data-fini', b[1]), 9);
+      p = await typeIn(page, sel('data-fini', b[2]), 8);
+      await tap(page, `[data-fpeek="${b[0]}"]`);
+      await until(page, 'p.fight.actingName === "Bouncer 1"');
+      assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fsame="${b[0]}"]').disabled`), true);
+      assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /Same for all\s*Type a number first/);
+      p = await settled(page);
+      assert.deepStrictEqual([named(p, 'Bouncer 2').ini, named(p, 'Bouncer 3').ini], [9, 8]);
+    });
+  });
+
+  // D3 and review Part 2: once the copies had a typed initiative, Same for all was not offered at all (initiative first is
+  // the natural order at a table); now it is, counts them, and copies the rest
+  it('copies with typed initiatives: Same for all is offered, counts them, and each takes the source\'s max HP and AC', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      let p = await bouncers(page, 3);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      p = await typeIn(page, sel('data-fini', b[1]), 9);
+      p = await typeIn(page, sel('data-fini', b[2]), 8);
+      p = await typeIn(page, sel('data-fmax', b[0]), 22, 'Tab');
+      assert.strictEqual(await where(page), `data-fac=${b[0]}`);
+      await page.type('13');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[0])}).ac === 13`);
+      await tap(page, `[data-fpeek="${b[0]}"]`);
+      await until(page, 'p.fight.actingName === "Bouncer 1"');
+      assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fsame="${b[0]}"]').textContent`), 'Same for all 2');
+      await tap(page, `#acting [data-fsame="${b[0]}"]`);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[2])}).max === 22`);
+      assert.deepStrictEqual(['Bouncer 2', 'Bouncer 3'].map((n) => [named(p, n).ini, named(p, n).max, named(p, n).hp, named(p, n).ac]), [[9, 22, 22, 13], [8, 22, 22, 13]]);
+      assert.strictEqual(await page.evaluate('document.querySelector("#acting [data-fsame]").disabled'), true, 'nothing left to copy');
+      assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /Same for all\s*No copy can take these/);
+    });
+  });
+
+  it('a held number is placed before Start sorts (Start pressed straight from the column)', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await setUp(page, run);
+      await addNew(page, 'Bouncer');
+      let p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Bouncer")');
+      await tap(page, sel('data-fini', named(p, 'Bouncer').id));
+      await page.type('30');
+      await tap(page, '#fNext');
+      await page.waitFor('document.querySelector("#fStartAnyway") || JSON.parse(document.body.dataset.probe).fight.started');
+      if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+      p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(named(p, 'Bouncer').ini, 30);
+      const n = p.fight.rows.filter((r) => r.in && r.ini !== null).map((r) => r.ini);
+      assert.ok(n.every((v, i) => i === 0 || n[i - 1] >= v), `sorted: ${n}`);
+      assert.strictEqual(p.fight.rows.filter((r) => r.in && r.kind !== 'lair')[0].name, 'Bouncer');
+    });
+  });
+
+  // Task 23 fix round 1: the page's scroll-padding-top is the one offset a rail jump gets (the beats' own scroll-margin
+  // went): the beat's top lands on the sticky bar's bottom plus 8, and in a fight the pane's offset is not doubled
+  for (const [width, height] of SIZES) {
+    it(`${width}: a rail jump puts the beat's top at the sticky bar plus 8; in a fight the pane's beat sits under its own bar`, async () => {
+      const run = await start();
+      await withPage({ width, height }, async (page) => {
+        await page.goto(`${run.base}/?probe=1`);
+        await settled(page);
+        const key = run.model.beats[1].key;
+        await tap(page, `#rail [data-go="beat:${key}"]`);
+        await page.sleep(100);
+        let l = await landing(page, `[id="beat:${key}"]`);
+        if (l.scrollY < l.maxY - 1) assert.ok(Math.abs(l.top - (l.bar + 8)) <= 3, `${width}: ${JSON.stringify(l)}`);
+        else assert.ok(l.top >= l.bar + 5, `${width} at the page's end: ${JSON.stringify(l)}`);
+        // in a fight the pane scrolls by itself, its beat under the pane's bar plus 8
+        await tap(page, `[id="beat:${run.model.beats[0].key}"] [data-all]`);
+        await settled(page);
+        await tap(page, `[id="beat:${run.model.beats[0].key}"] [data-fight]`);
+        await until(page, 'p.fight && p.saved === "Saved" && p.pending === 0');
+        const railState = () => page.evaluate(`(() => { const e = document.querySelector('#rail [data-go="beat:${key}"]'); if (!e) return 'none'; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? 'shown' : 'folded'; })()`);
+        let railLink = await railState();
+        // the fight's layout folds the rail by itself below 1449 at this height (still the pane's own scroll, not the page's); the GM's way to a jump there is to open it
+        if (width === 1449) assert.strictEqual(railLink, 'shown', 'the rail shows in a fight at 1449');
+        else {
+          assert.strictEqual(railLink, 'folded', `${width}: the rail starts folded in a fight`);
+          await tap(page, '#railOpen');
+          await page.sleep(200);
+          railLink = await railState();
+        }
+        // an opened rail that cannot show is a failure, not a skipped check (Task 23b A3)
+        assert.strictEqual(railLink, 'shown', `${width}: the GM's tap on the rail's opener shows its beats`);
+        await tap(page, `#rail [data-go="beat:${key}"]`);
+        await page.sleep(100);
+        l = await landing(page, `[id="beat:${key}"]`);
+        // the pane must have room past the beat, or the offset goes unchecked: fail rather than skip
+        assert.ok(l.sheetScroll < l.maxSheet - 1, `${width} fight: the pane reached its end, the offset is not checked: ${JSON.stringify(l)}`);
+        assert.ok(Math.abs(l.top - (l.sheetTop + l.rbar + 8)) <= 3, `${width} fight: ${JSON.stringify(l)}`);
+      });
+    });
+  }
+
+  // Task 23: the page's scroll-padding-top keeps a box or link reached by Tab below the sticky bar
+  it('1100: Shift-Tab onto a link under the sticky bar brings it below the bar', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      // a beat's Bring box and the control Tab reaches just before it, a little above it (read only: nothing is set)
+      const ALL = `Array.from(document.querySelectorAll('#sheet a[tabindex="0"], #sheet button, #sheet input, #sheet select, #sheet summary')).filter((e) => e.offsetParent && !e.disabled)`;
+      const pair = await page.evaluate(`(() => { const all = ${ALL};
+        for (let i = 1; i < all.length; i++) {
+          const b = all[i]; const a = all[i - 1];
+          if (!b.matches('input[data-bring]')) continue;
+          const gap = b.getBoundingClientRect().top - a.getBoundingClientRect().top;
+          if (gap > 40 && gap < 300) return { i: i - 1, bring: b.dataset.bring };
+        }
+        return null; })()`);
+      assert.ok(pair, 'a Bring box with a control above it');
+      const jot = `#sheet input[data-bring="${pair.bring}"]`;
+      const boxA = () => page.evaluate(`(() => { const r = (${ALL})[${pair.i}].getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })()`);
+      const bar = await page.evaluate('document.querySelector(".top").getBoundingClientRect().bottom');
+      // the wheel puts the control above the box under the bar, the box in view
+      const a0 = await boxA();
+      await page.wheel(500, 400, Math.round(a0.top - bar / 2));
+      const a1 = await boxA();
+      assert.ok(a1.top < bar, `the control is under the bar before: ${a1.top} < ${bar}`);
+      await tap(page, jot);
+      await page.key('Tab', { shift: true });
+      assert.ok(await page.evaluate(`document.activeElement === (${ALL})[${pair.i}]`), 'Shift-Tab reached it');
+      const a2 = await boxA();
+      assert.ok(a2.top >= bar && a2.bottom <= 762, `below the bar: ${JSON.stringify(a2)} bar ${bar}`);
     });
   });
 });

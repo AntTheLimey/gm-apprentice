@@ -1,12 +1,14 @@
 // The to-hit calculator's data block: the parsed GURPS model turned into the one
 // JSON block js/gurps-tohit.js reads, so the page reads no table cells.
-// Names and numbers only. The hit-location penalties and the Speed/Range yard
-// values come from the reference rows already shipped (B552, B550); the
+// Names and numbers only. The hit-location penalties come from the one hit-location
+// table (hit-locations.js: B552, MA137), the Speed/Range yard values from the
+// reference rows already shipped (B550); the
 // Dual-Weapon Attack figure is the technique's default of skill-4, capped at
 // the skill (MA83, B230). Aid names are looked for; the bonus is whatever the note says.
 // The calculator's own rules numbers ride in the block as `rules` (blocks/tohit-rules.js, #420).
 
-const { HIT_LOCATION_ROWS, SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
+const { SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
+const { LOCATIONS, LOCATION_ORDER } = require('./hit-locations');
 const { TOHIT_RULES } = require('./blocks/tohit-rules');
 const { levelAtEnd } = require('./weapon-level');
 const { gravityDx } = require('../../../js/gurps-live');
@@ -38,25 +40,41 @@ const SIGNED_RE = /(?:([+−])|(?:^|[\s(])(-))\s*(\d+)/;
 // Dual-Weapon Attack: default skill-4, so up to 4 points can be bought off (MA83, B230).
 const DUAL_PENALTY = TOHIT_RULES.dualBoughtMax;
 
-// [key, label, the reference-table row label whose penalty it carries]. Arms and legs
-// are apart (a low target is harder to hit in the torso, groin and legs, not the arms, B548);
-// hand and foot share one key.
+// [key, label, the hit-location table's places it stands for]. Arms and legs are apart (a
+// low target is harder to hit in the torso, groin and legs, not the arms, B548); places
+// with the same penalty that the calculator need not tell apart share a key (hand and
+// foot). test/combat-reference-sync.test.js holds every place of the table to one key
+// here, and each key's places to one penalty.
 const LOCATION_KEYS = [
-  ['torso', 'Torso', 'Torso'],
-  ['vitals', 'Vitals', 'Vitals'],
-  ['arm', 'Arm', 'Right Arm'],
-  ['leg', 'Leg', 'Right Leg'],
-  ['extremity', 'Hand or foot', 'Hand'],
-  ['groin', 'Groin', 'Groin'],
-  ['face', 'Face', 'Face'],
-  ['neck', 'Neck', 'Neck'],
-  ['skull', 'Skull', 'Skull'],
-  ['eye', 'Eye', 'Eye'],
+  ['torso', 'Torso', ['torso']],
+  ['vitals', 'Vitals', ['vitals']],
+  ['arm', 'Arm', ['arm']],
+  ['leg', 'Leg', ['leg']],
+  ['extremity', 'Hand or foot', ['hand', 'foot']],
+  ['groin', 'Groin', ['groin']],
+  ['face', 'Face', ['face']],
+  ['neck', 'Neck', ['neck']],
+  ['skull', 'Skull', ['skull']],
+  ['eye', 'Eye', ['eye']],
+  // Martial Arts's extended locations (MA137)
+  ['arm vein', 'Arm vein or artery', ['arm vein']],
+  ['leg vein', 'Leg vein or artery', ['leg vein']],
+  ['arm joint', 'Arm joint', ['arm joint']],
+  ['leg joint', 'Leg joint', ['leg joint']],
+  ['jaw', 'Jaw', ['jaw']],
+  ['ear', 'Ear', ['ear']],
+  ['nose', 'Nose', ['nose']],
+  ['extremity joint', 'Hand or foot joint', ['hand joint', 'foot joint']],
+  ['spine', 'Spine', ['spine']],
+  ['neck vein', 'Neck vein or artery', ['neck vein']],
 ];
 // Words a Targeted Attack names that are not themselves a key.
 const LOCATION_WORDS = {
   arms: 'arm', legs: 'leg',
-  hand: 'extremity', hands: 'extremity', foot: 'extremity', feet: 'extremity', eyes: 'eye',
+  hand: 'extremity', hands: 'extremity', foot: 'extremity', feet: 'extremity', eyes: 'eye', ears: 'ear',
+  'hand joint': 'extremity joint', 'foot joint': 'extremity joint', wrist: 'extremity joint', ankle: 'extremity joint',
+  elbow: 'arm joint', knee: 'leg joint', jugular: 'neck vein',
+  'arm artery': 'arm vein', 'leg artery': 'leg vein', 'neck artery': 'neck vein',
 };
 
 const str = (v) => (v === undefined || v === null ? '' : String(v));
@@ -64,13 +82,14 @@ const norm = (s) => str(s).toLowerCase().replace(/\s+/g, ' ').trim();
 const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
 const firstInt = (s, dflt) => { const m = /\d+/.exec(str(s)); return m ? parseInt(m[0], 10) : dflt; };
 
+// In the run sheet's order (LOCATION_ORDER, mildest penalty first), each key placed by its first place, so the
+// calculator's list and the run sheet's dropdown read alike.
 function buildLocations() {
   const out = [];
-  for (const [key, label, row] of LOCATION_KEYS) {
-    const r = HIT_LOCATION_ROWS.find(x => x[1] === row);
-    if (!r) continue;
-    const n = /\d+/.exec(r[2]);
-    out.push([key, label, n ? -parseInt(n[0], 10) : 0]);
+  const at = (places) => LOCATION_ORDER.indexOf(places[0]);
+  for (const [key, label, places] of LOCATION_KEYS.slice().sort((a, b) => at(a[2]) - at(b[2]))) {
+    const loc = LOCATIONS.find(x => x.key === places[0]);
+    if (loc) out.push([key, label, loc.penalty]);
   }
   return out;
 }
@@ -481,8 +500,10 @@ function readTechniques(techniques, match, locKeys, weapons, ambidextrous, say) 
     const skillNotFound = [`technique "${name}" names a skill that is not in the Skills table, so it is not offered`, 'spell the skill in full in its name and Default, as the Skills table has it'];
     if (targeted) {
       const inner = targeted[1]; const cut = inner.lastIndexOf('/');
-      const word = cut < 0 ? '' : (/(\S+)\s*$/.exec(inner.slice(cut + 1)) || [, ''])[1].toLowerCase();
-      const loc = locKeys.has(word) ? word : LOCATION_WORDS[word];
+      // the words after the slash (`Neck Vein`), else its last word (`Neck`)
+      const tail = cut < 0 ? '' : norm(inner.slice(cut + 1));
+      const word = (/(\S+)\s*$/.exec(tail) || [, ''])[1];
+      const loc = [tail, word].map((x) => (locKeys.has(x) ? x : LOCATION_WORDS[x])).find(Boolean);
       if (!loc) { say('warning', `technique "${name}" names no hit location the calculator knows, so it is not offered`, `end its bracket with /Neck, /Vitals, /Arm, /Leg and the like`); continue; }
       const bracket = inner.slice(0, cut).replace(/\s+(?:swing|thrust)$/i, '').trim();
       const hit = match(defSkill) || match(bracket);
@@ -760,4 +781,5 @@ function tohitMarkup(data) {
   return `<div class="wide cat-table tohit" id="tohit-calc"></div>\n${tohitDataScript(data)}`;
 }
 
-module.exports = { buildTohitData, tohitDataScript, tohitMarkup, SKILL_ALIASES };
+module.exports = {
+  LOCATION_KEYS, buildTohitData, tohitDataScript, tohitMarkup, SKILL_ALIASES };

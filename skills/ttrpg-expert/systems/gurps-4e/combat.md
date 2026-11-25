@@ -5,7 +5,7 @@ full turn sequence, maneuvers, attack resolution, defenses,
 hit locations, damage types, ranged modifiers, shock/knockdown,
 and death/dying thresholds.
 
-Source: GURPS Basic Set — Campaigns, Chapters 11-13.
+Source: GURPS Basic Set — Campaigns, Chapters 11-13; GURPS Martial Arts (MA123, MA137) where noted.
 
 ---
 
@@ -29,7 +29,7 @@ Ties broken by highest DX, then by player/GM choice.
 | Aim | Step | Aim weapon | +Acc on next attack; cumulative +1/turn (max +2) |
 | Attack | Step | One attack | Melee or ranged |
 | All-Out Attack | Half | Attack | Determined (+4 hit), Strong (+2 dmg or +1/die), Double (2 attacks), or Feint+Attack; no active defense |
-| Move and Attack | Full | One attack | -4 to hit (min effective skill 9); all active defenses available |
+| Move and Attack | Full | One attack | Melee -4, effective skill at most 9; ranged -2 or Bulk; Dodge or Block only, no retreat (B365) |
 | All-Out Defense | Step | None | +2 to one defense, or two different defenses |
 | Concentrate | Step | Mental | For spells, psionics, etc. |
 | Ready | Step | Ready item | Draw weapon, reload, etc. |
@@ -73,7 +73,7 @@ Ties broken by highest DX, then by player/GM choice.
 
 | Defense | Base | Notes |
 |---------|------|-------|
-| Dodge | Basic Speed + 3 (floor) | Always available unless stunned; -1 per encumbrance level |
+| Dodge | Basic Speed + 3 (floor) | -1 per encumbrance level; -4 while stunned (B420) |
 | Parry | Skill/2 + 3 (floor) | Weapon or unarmed; -4 cumulative same weapon; retreating Parry +1 (+3 for fencing weapons) |
 | Block | Shield skill/2 + 3 (floor) | Requires shield; retreating Block +1 |
 
@@ -85,15 +85,16 @@ Once per turn, step back 1 yard for a defense bonus:
   smallsword, main-gauche)
 - **Block**: +1
 
-**Slip**: Sidestep variant that gives +3 to Dodge without
-requiring backward movement. Useful when your back is to a wall.
+**Sideslip** and **Slip** (Martial Arts, MA123): a sideways
+step at -1 plus the retreat bonus, or a step closer at -2 plus
+it. Useful when your back is to a wall.
 
 ### Key Modifiers to Defenses
 
 - **Combat Reflexes** [15]: +1 to all active defenses at all
   times, +6 to recover from surprise, never freeze.
 - **Enhanced Defenses**: +1 per level to one specific defense.
-- **Stunned**: No active defenses until you recover.
+- **Stunned**: -4 to every active defense and no retreat (B420).
 - **Side/rear attacks**: -2 to defend from the side; no defense
   against attacks from directly behind (without Peripheral
   Vision or 360-degree Vision).
@@ -102,30 +103,52 @@ requiring backward movement. Useful when your back is to a wall.
 
 ## Hit Locations
 
-| Location | Penalty | DR Modifier | Wounding Modifier |
-|----------|---------|-------------|-------------------|
-| Torso | +0 | -- | x1 |
-| Skull | -7 | DR 2 (bone) | x4 |
-| Face | -5 | -- | x4 (no DR 2 bone) |
-| Neck | -5 | -- | x2 (crushing x1.5) |
-| Eye | -9 | -- | x4, can blind |
-| Groin | -3 | -- | x1 (knockdown at HT-5) |
-| Arm | -2 | -- | x1 (cripple at HP/2) |
-| Leg | -2 | -- | x1 (cripple at HP/2) |
-| Hand | -4 | -- | x1 (cripple at HP/3) |
-| Foot | -4 | -- | x1 (cripple at HP/3) |
-| Vitals | -3 | -- | x3 (imp/pi only) |
+Every location the Basic Set (B398, B552) and Martial Arts
+(MA137) give a humanoid, mildest penalty first, with its page.
+The run sheet's damage helper works out each place's DR,
+wounding, crippling and knockdown; for the rule itself, read the
+page in your own book.
+
+<!-- The table between the markers is written by
+`node tools/publish/scripts/gen-combat-reference.js --write`
+from the run sheet's hit-location table; edit that, not this. -->
+<!-- generated: hit-locations -->
+| Location | Penalty | Page |
+|---|---|---|
+| Torso | 0 | B398, B552 |
+| Arm | -2 | B398, B552 |
+| Leg | -2 | B398, B552 |
+| Groin | -3 | B398, B552 |
+| Vitals | -3 | B398, B552, MA137 |
+| Hand | -4 | B398, B552 |
+| Foot | -4 | B398, B552 |
+| Face | -5 | B398, B552, MA137 |
+| Neck | -5 | B398, B552 |
+| Arm vein or artery | -5 | MA137 |
+| Leg vein or artery | -5 | MA137 |
+| Arm joint | -5 | MA137 |
+| Leg joint | -5 | MA137 |
+| Jaw | -6 | MA137 |
+| Skull | -7 | B398, B552, MA137 |
+| Ear | -7 | MA137 |
+| Nose | -7 | MA137 |
+| Hand joint | -7 | MA137 |
+| Foot joint | -7 | MA137 |
+| Spine | -8 | MA137 |
+| Neck vein or artery | -8 | MA137 |
+| Eye | -9 | B398, B552 |
+<!-- /generated -->
+
+Chinks in armour (B400): impaling, piercing and tight-beam
+burning only; -8 for the torso, -10 anywhere else in place of
+the location's penalty; DR halved.
 
 ### Crippling
 
 A limb or extremity is crippled when injury to that location
-exceeds the crippling threshold in a single blow:
-- **Arms and Legs**: Over HP/2 injury
-- **Hands and Feet**: Over HP/3 injury
-- **Eyes**: Over HP/10 injury
-
-Excess injury beyond the crippling threshold is lost (does not
-carry over to general HP).
+exceeds the crippling threshold in a single blow (the run
+sheet works it out; B420). A crippling injury counts as a major wound
+(B420).
 
 ---
 
@@ -166,7 +189,7 @@ carry over to general HP).
 | Aim (3+ turns) | +Acc +2 |
 | Braced | Included in Acc for 2-handed |
 | Scope | +1 to +3 (stacks with Acc) |
-| Move and Attack | -4 (max effective 9) |
+| Move and Attack | -2 or Bulk, whichever is worse (B365) |
 | Pop-up attack | -2 |
 | Shooting into melee | -4 per interposing figure |
 
@@ -197,12 +220,17 @@ harder to use while moving. Pistols are typically -2; rifles
 ## Shock and Knockdown
 
 - **Shock**: Lose HP in one turn -> -HP lost to DX and IQ next
-  turn only (max -4)
-- **Knockdown**: Take HP/2+ in one blow -> roll HT or fall prone
-  and be stunned. Major Wound (HP/2+ from single attack) also
-  requires a HT roll.
-- **Stun**: Skip next turn; recover by rolling HT at start of
-  each turn.
+  turn only (max -4) (B419).
+- **Major wound**: injury of more than half HP from one blow,
+  or any crippling injury (B420).
+- **Knockdown**: one HT roll, called by a major wound or by a
+  hit to the skull, face, eye or vitals that gives any shock
+  (Martial Arts adds jaw, nose, ear and spine). The run sheet
+  applies each location's modifier. Failure: stunned and
+  prone; failure by 5 or more, or a critical failure:
+  unconscious (B420).
+- **Stun**: Do Nothing each turn; roll HT at the **end** of each
+  turn to recover, acting normally from the next turn (B420).
 - **High Pain Threshold** [10]: Immune to shock penalties;
   +3 to resist knockdown/stun.
 

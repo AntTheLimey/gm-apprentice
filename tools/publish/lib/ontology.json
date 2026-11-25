@@ -467,7 +467,52 @@
         "coc",
         "coc7e",
         "cthulhu"
-      ]
+      ],
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max",
+            "max": "max",
+            "sheet": "hp"
+          },
+          {
+            "column": "MP",
+            "field": "mp",
+            "shape": "current/max",
+            "max": "mpMax",
+            "sheet": "mp"
+          },
+          {
+            "column": "SAN",
+            "field": "san",
+            "shape": "current",
+            "max": "sanMax",
+            "sheet": "san"
+          },
+          {
+            "column": "Luck",
+            "field": "luck",
+            "shape": "current",
+            "pcs_only": true,
+            "sheet": "luck"
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text",
+            "both_ways": true,
+            "sheet": {
+              "Major wound": "major-wound",
+              "Unconscious": "unconscious",
+              "Dying": "dying",
+              "Temporary insanity": "temporary-insanity",
+              "Indefinite insanity": "indefinite-insanity"
+            }
+          }
+        ]
+      }
     },
     {
       "id": "coc-7e-regency",
@@ -475,7 +520,52 @@
       "aliases": [
         "regency-cthulhu"
       ],
-      "rules": "coc-7e/regency"
+      "rules": "coc-7e/regency",
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max",
+            "max": "max",
+            "sheet": "hp"
+          },
+          {
+            "column": "MP",
+            "field": "mp",
+            "shape": "current/max",
+            "max": "mpMax",
+            "sheet": "mp"
+          },
+          {
+            "column": "SAN",
+            "field": "san",
+            "shape": "current",
+            "max": "sanMax",
+            "sheet": "san"
+          },
+          {
+            "column": "Luck",
+            "field": "luck",
+            "shape": "current",
+            "pcs_only": true,
+            "sheet": "luck"
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text",
+            "both_ways": true,
+            "sheet": {
+              "Major wound": "major-wound",
+              "Unconscious": "unconscious",
+              "Dying": "dying",
+              "Temporary insanity": "temporary-insanity",
+              "Indefinite insanity": "indefinite-insanity"
+            }
+          }
+        ]
+      }
     },
     {
       "id": "gurps-4e",
@@ -483,7 +573,30 @@
       "aliases": [
         "gurps",
         "gurps4e"
-      ]
+      ],
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max",
+            "max": "max",
+            "sheet": "hp"
+          },
+          {
+            "column": "FP",
+            "field": "fp",
+            "shape": "current/max",
+            "max": "fpMax",
+            "sheet": "fp"
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text"
+          }
+        ]
+      }
     },
     {
       "id": "dnd-5e-2024",
@@ -494,7 +607,23 @@
         "dnd5e",
         "5e",
         "d&d"
-      ]
+      ],
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max",
+            "max": "max",
+            "sheet": "hp"
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text"
+          }
+        ]
+      }
     },
     {
       "id": "pf2e",

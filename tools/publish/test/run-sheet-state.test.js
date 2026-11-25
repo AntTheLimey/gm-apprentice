@@ -72,6 +72,15 @@ describe('run sheet state', () => {
     assert.strictEqual(d.vitals.find((v) => v.rowId === BEN).hp, 20);
   });
 
+  // CodeRabbit on #887: a figure blanked in the end panel goes as null (JSON keeps it; undefined it drops) and clears
+  it('a blank end-panel figure, sent as null through JSON, clears the saved one', () => {
+    const sent = JSON.parse(JSON.stringify({ type: 'endSet', vitals: { [ADA]: { hp: null } } }));
+    let s = run([{ type: 'endSet', vitals: { [ADA]: { hp: 15 } } }, sent]);
+    assert.strictEqual('hp' in s.end.vitals[ADA], false);
+    const d = RS.derive(model, s);
+    assert.strictEqual(d.vitals.find((v) => v.rowId === ADA).hp, 22);
+  });
+
   it("rowIds: a PC's path, an ally's path, #2 for its second copy", () => {
     const d = RS.derive(allyModel(), fresh());
     const G = 'Characters/NPCs/Guard.md';
@@ -703,5 +712,120 @@ describe('place beats (fix round 1)', () => {
     assert.deepStrictEqual(s.events, []);
     assert.ok(RS.derive(model, s).beats.some((b) => b.key === key));
     assert.strictEqual(run([{ type: 'improvise', title: 'Loud' }]).events.length, 1, 'a plain improvise still logs');
+  });
+});
+
+describe('fight figures by system (step 6b Task 6)', () => {
+  it('fightFigures records fp, mp, san and luck by their row names', () => {
+    const { systemFor } = require('../lib/run-sheet/systems');
+    const M = require('../lib/run-sheet/web/fight-math');
+    const COC = systemFor('coc-7e').describe().fight;
+    const ada = model.pcs.find((p) => p.note === ADA);
+    const pc = M.blankRow({ id: 'r1', kind: 'pc', note: ADA, name: ada.name, hp: 9, max: 11, mp: 10, mpMax: 12, san: 55, sanMax: 60, luck: 45 });
+    const withStart = { ...pc, start: { hp: 9, max: 11, conds: [], exhaustion: 0, conc: false, mp: 10, san: 55, luck: 45 } };
+    let s = run([{ type: 'fightStart', id: 'f1', title: 'T', rules: COC, rows: [withStart] }]);
+    s = RS.reduce(s, act({ type: 'hp', fight: 'f1', row: 'r1', entry: 's-6' }), at(50));
+    const figures = RS.fightFigures(model, s).figures.get(ADA);
+    assert.ok(figures, 'a SAN loss alone is a change');
+    const f = figures[figures.length - 1];
+    assert.deepStrictEqual([f.hp, f.max, f.mp, f.mpMax, f.san, f.sanMax, f.luck], [9, 11, 10, 12, 49, 60, 45]);
+    assert.strictEqual(f.fp, undefined, 'a pool the row lacks is not recorded');
+  });
+});
+
+// Step 6b Task 20: the vitals rows hold the system's pools, each a figure of its own with its own time.
+describe("vitals: each system's pools (Task 20)", () => {
+  const COC = readRunSheet(path.join(__dirname, 'fixtures', 'run-sheet-coc'), 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Fog Bound - Plan.md', {});
+  const GURPS = readRunSheet(path.join(__dirname, 'fixtures', 'run-sheet-gurps'), 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Crates - Plan.md', {});
+  const IRIS = 'Characters/PCs/Iris Calder.md';
+  const ORRIN = 'Characters/PCs/Orrin Tate.md';
+  const empty = () => RS.emptyState({ stateId: 'x' });
+  const at2 = (n) => at(n);
+  const rowOf = (m, s, id) => RS.derive(m, s).vitals.find((v) => v.rowId === id);
+  const recOf = (m, s, id) => RS.derive(m, s).vitalsRecorded.find((v) => v.rowId === id);
+  // an ended fight whose row for `note` moved the pools named in `now` from `start`
+  const fought = (s, note, start, now, when) => ({ ...s, fights: [...(s.fights || []), { beat: 'b', startedAt: when, endedAt: when,
+    rows: [{ kind: 'pc', note, name: 'x', hp: start.hp, max: start.max, conds: [], exhaustion: 0, start: { conds: [], exhaustion: 0, ...start }, ...start, ...now, poolAt: when, at: when }] }] });
+
+  it("a PC's row starts from the sheet's pools, and none is recorded untouched", () => {
+    const r = rowOf(COC, empty(), IRIS);
+    assert.deepStrictEqual([r.hp, r.max, r.mp, r.mpMax, r.san, r.sanMax, r.luck], [9, 11, 13, 13, 62, 99, 55]);
+    assert.strictEqual(recOf(COC, empty(), IRIS), undefined);
+    const g = rowOf(GURPS, empty(), ORRIN);
+    assert.deepStrictEqual([g.hp, g.fp, g.fpMax], [12, 11, 11]);
+  });
+
+  it('an end-panel pool is recorded alone; HP stays out of the record', () => {
+    const s = RS.reduce(empty(), act({ type: 'endSet', vitals: { [IRIS]: { san: 48 } } }), at2(1));
+    const v = recOf(COC, s, IRIS);
+    assert.deepStrictEqual([v.hp, v.san, v.sanMax, v.mp], [null, 48, 99, undefined]);
+    assert.strictEqual(typeof s.end.vitals[IRIS].at.san, 'string');
+  });
+
+  it('each pool keeps its own time: a later fight wins over an earlier end-panel figure, and a later one over the fight', () => {
+    let s = RS.reduce(empty(), act({ type: 'endSet', vitals: { [IRIS]: { mp: 5, san: 50 } } }), at2(1));
+    s = fought(s, IRIS, { hp: 9, max: 11, mp: 5, mpMax: 13, san: 50, sanMax: 99 }, { mp: 2 }, at2(5));
+    let r = rowOf(COC, s, IRIS);
+    // the fight moved MP, not SAN: SAN stays the end panel's
+    assert.deepStrictEqual([r.mp, r.mpSource, r.san, r.sanSource], [2, 'fight', 50, 'end']);
+    s = RS.reduce(s, act({ type: 'endSet', vitals: { [IRIS]: { mp: 7 } } }), at2(9));
+    r = rowOf(COC, s, IRIS);
+    assert.deepStrictEqual([r.mp, r.mpSource, r.san], [7, 'end', 50]);
+    // a conditions edit after the fight never makes the older MP look newer than it
+    s = RS.reduce(fought(RS.reduce(empty(), act({ type: 'endSet', vitals: { [IRIS]: { mp: 5 } } }), at2(1)), IRIS, { hp: 9, max: 11, mp: 5, mpMax: 13 }, { mp: 1 }, at2(5)),
+      act({ type: 'endSet', vitals: { [IRIS]: { conditions: 'Prone' } } }), at2(8));
+    assert.strictEqual(rowOf(COC, s, IRIS).mp, 1);
+  });
+
+  it("one time per pool: the fight moves MP, the end panel then sets MP, the fight then moves SAN: the end panel's MP holds", () => {
+    const FM = require('../lib/run-sheet/web/fight-math');
+    let s = RS.reduce(empty(), act({ type: 'move', pc: IRIS, to: { beat: COC.beats[0].key, spot: null, title: COC.beats[0].title } }), at2(0));
+    const built = FM.rowsForFight({ model: COC, derived: RS.derive(COC, s), state: s, beatKey: COC.beats[0].key, idBase: 'f1' });
+    s = RS.reduce(s, act({ id: 'f1', type: 'fightStart', beat: COC.beats[0].key, title: 'T', rules: COC.rules.fight, groups: built.groups, rows: built.rows, thresholds: [] }), at2(1));
+    const row = s.fight.rows.find((r) => r.note === IRIS);
+    s = RS.reduce(s, act({ type: 'hp', fight: 'f1', row: row.id, entry: 'm-3' }), at2(2));
+    s = RS.reduce(s, act({ type: 'endSet', vitals: { [IRIS]: { mp: 6 } } }), at2(3));
+    s = RS.reduce(s, act({ type: 'hp', fight: 'f1', row: row.id, entry: 's-2' }), at2(4));
+    const r = s.fight.rows.find((x) => x.note === IRIS);
+    assert.deepStrictEqual(r.poolAt, { mp: at2(2), san: at2(4) }, 'fight.js stamps each pool at its own time');
+    const v = rowOf(COC, s, IRIS);
+    assert.deepStrictEqual([v.mp, v.mpSource, v.san, v.sanSource], [6, 'end', 60, 'fight']);
+    // a row saved before 6b's fix round held one time for all its pools: still read, for every pool
+    const old = JSON.parse(JSON.stringify(s));
+    old.fight.rows.find((x) => x.note === IRIS).poolAt = at2(4);
+    assert.deepStrictEqual([rowOf(COC, old, IRIS).mp, rowOf(COC, old, IRIS).mpSource], [10, 'fight']);
+  });
+
+  it('a GURPS fight that took FP below 0 is recorded with its max', () => {
+    const s = fought(empty(), ORRIN, { hp: 12, max: 12, fp: 11, fpMax: 11 }, { hp: -3, fp: -2 }, at2(3));
+    const v = recOf(GURPS, s, ORRIN);
+    assert.deepStrictEqual([v.hp, v.max, v.fp, v.fpMax], [-3, 12, -2, 11]);
+  });
+
+  it('the next fight starts from the pools the night holds', () => {
+    const s = RS.reduce(empty(), act({ type: 'endSet', vitals: { [IRIS]: { mp: 4, san: 47 } } }), at2(1));
+    const d = RS.derive(COC, s);
+    const FM = require('../lib/run-sheet/web/fight-math');
+    const rows = FM.rowsForFight({ model: COC, derived: d, state: s, beatKey: COC.beats[0].key, idBase: 'f' }).rows;
+    const iris = rows.find((r) => r.note === IRIS);
+    assert.deepStrictEqual([iris.mp, iris.mpMax, iris.san], [4, 13, 47]);
+  });
+
+  it("an end-panel HP over the PC's max is refused and not saved; GURPS HP and FP may go below 0", () => {
+    assert.match(RS.endFigureProblem(COC, IRIS, 'hp', 12), /over the sheet's max \(11\)/);
+    assert.match(RS.endFigureProblem(COC, IRIS, 'mp', 14), /max \(13\)/);
+    assert.match(RS.endFigureProblem(COC, IRIS, 'san', 100), /max \(99\)/);
+    assert.match(RS.endFigureProblem(GURPS, ORRIN, 'fp', 12), /max \(11\)/);
+    // Luck has no max on the sheet but a ceiling of its own (Task 31)
+    assert.match(RS.endFigureProblem(COC, IRIS, 'luck', 100), /over Luck's ceiling \(99\): not saved/);
+    assert.match(RS.endFigureProblem(COC, IRIS, 'luck', 5550), /ceiling \(99\)/);
+    assert.strictEqual(RS.endFigureProblem(COC, IRIS, 'luck', 99), null);
+    for (const [m, id, f, v] of [[COC, IRIS, 'hp', 11], [COC, IRIS, 'san', 0], [GURPS, ORRIN, 'hp', -3], [GURPS, ORRIN, 'fp', -1], [COC, IRIS, 'hp', 'fine'], [COC, IRIS, 'hp', undefined]]) {
+      assert.strictEqual(RS.endFigureProblem(m, id, f, v), null, `${f} ${v}`);
+    }
+    assert.match(RS.endFigureProblem(COC, IRIS, 'hp', -1), /below 0/);
+    // an ally is not held to a sheet; D&D is as before
+    assert.strictEqual(RS.endFigureProblem(COC, 'Characters/NPCs/Edda Voss.md', 'hp', 99), null);
+    assert.strictEqual(RS.endFigureProblem(model, ADA, 'hp', 999), null);
   });
 });

@@ -1,79 +1,30 @@
 'use strict';
-// Foes: the fight rows. Name, AC, HP, initiative and boss counters are read from a note's
-// `### Stats` (the block itself is kept as written). Works with what it has: a foe whose stat
-// block lacks numbers is still a foe, with null numbers and a warning; nothing here throws.
-// No rules text ships, so the prototype's SRD recharge table is not ported.
+// Foes: the fight rows. A note's stat block and its numbers are read by the vault's system (systems/: D&D's name,
+// AC, HP, initiative and boss counters from `### Stats`; the block itself is kept as written). Works with what it
+// has: a foe whose stat block lacks numbers is still a foe, with null numbers and a warning; nothing here throws.
 
-const path = require('node:path');
+const { stemName } = require('./notes');
+const fate = require('../fate');
 const { itemKeys } = require('./keys');
-const { SIGNED_SOURCE, toNumber } = require('./signed');
-const { bullets } = require('./plan-text');
+const { bullets, links } = require('./plan-text');
 const { startingSide } = require('./sides');
+const { systemFor } = require('./systems');
 
-const FOE_TYPES = new Set(['npc', 'creature']);
+const DND = systemFor(null);
+// The notes that stand for several people at once (beats.js): a counted link to one gives rows.
+const GROUP_TYPES = new Set(['faction', 'organization', 'npc_group']);
 
-const number = (m) => (m ? toNumber(m[1]) : null);
-
-// The bullet list under the line that holds `Lair Actions`, as written (dedented, so it renders as a list): the
-// consecutive bullet lines after that line, indented or not. '' when the line has no list.
-const BULLET = /^([ \t]*)[-*+][ \t]+\S/;
-function lairActionsOf(stats) {
-  const lines = String(stats).split('\n');
-  for (let at = 0; at < lines.length; at++) {
-    if (!/Lair Actions/i.test(lines[at])) continue;
-    const list = [];
-    for (let i = at + 1; i < lines.length && BULLET.test(lines[i]); i++) list.push(lines[i]);
-    if (!list.length) continue;
-    const indent = Math.min(...list.map((l) => BULLET.exec(l)[1].length));
-    return list.map((l) => l.slice(indent)).join('\n');
-  }
-  return '';
-}
-
-const BOLD_CHARGE = /\*\*\*([^*]+?)\s*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g;
-
-// Only a number AFTER the HP / Hit Points word counts ("regains 10 HP" and "DC 14" are not figures).
-function readNumbers(stats, behaviour) {
-  const ac = number(/\b(?:AC|Armor Class)[ \t*:]*(\d+)/.exec(stats));
-  // The last HP figure stated wins: a session's tuning is written after the stock block.
-  const hps = [...stats.matchAll(/\b(?:HP|Hit Points)[ \t*:]*(\d+)/g)];
-  const hp = hps.length ? Number(hps[hps.length - 1][1]) : null;
-  const init = number(new RegExp(`Initiative[^\\d\\n]{0,3}(${SIGNED_SOURCE})`).exec(stats));
-  const full = `${stats}\n${behaviour}`;
-  // A declaration with no number (`(Recharge -)`, a draft) is no recharge.
-  const charges = [...full.matchAll(BOLD_CHARGE)];
-  // The plain form of a one-line block, `Frost Breath (Recharge 6)`: the name is the run of capitalised words
-  // before the bracket, small joining words kept (`Breath of Frost`). The bold form wins a name it already gave.
-  const plain = [...full.replace(BOLD_CHARGE, ' ').matchAll(/((?:[A-Z][\w'’-]*)(?:[ \t]+(?:(?:of|the|and|in|on|from|to|at|with|a|an)[ \t]+)*[A-Z][\w'’-]*)*)[ \t]*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g)]
-    .map((m) => [null, m[1], m[2]]);
-  const all = [...charges, ...plain];
-  const recharge = [...new Set(all.map((m) => m[1].trim()))].sort();
-  // The lowest roll that recharges each: `(Recharge 5–6)` is 5, `(Recharge 6)` is 6. The first of a name counts.
-  const rechargeAt = {};
-  for (const m of all) {
-    const name = m[1].trim();
-    if (!(name in rechargeAt)) rechargeAt[name] = Math.min(...m[2].match(/\d+/g).map(Number));
-  }
-  return {
-    ac, hp, init,
-    // `(2/Day)`, or SRD 5.2.1's `(3/Day, or 4/Day in Lair)`: the first count (the in-lair use is the GM's)
-    legendaryResistance: number(/Legendary Resistance \((\d+)\/Day[^)\n]*\)/i.exec(stats)) || 0,
-    // `Legendary Actions (3)`, or SRD 5.2.1's `Legendary Action Uses: 3 (4 in Lair)`
-    legendaryActions: number(/Legendary Actions \((\d+)\)/i.exec(stats)) || number(/Legendary Action Uses\W{0,6}(\d+)/i.exec(stats)) || 0,
-    recharge, rechargeAt,
-    lair: /Lair Actions/i.test(stats),
-    lairActions: lairActionsOf(stats),
-  };
-}
-
-// What a note gives a fight row: null for a note the index lacks; `stats` '' when it has none.
-function inspect(notePath, index) {
+// What a note gives a fight row: null for a note the index lacks; `stats` '' when it has none. The system reads the
+// stat block and its numbers (`readFoe`), so the place a block is found is one place.
+function inspect(notePath, index, system = DND) {
   if (!index.has(notePath)) return null;
-  const fm = index.read(notePath).fm || {};
+  const note = index.read(notePath);
+  const fm = note.fm || {};
   const type = String(fm.type || '').toLowerCase();
-  const name = String(fm.name || path.posix.basename(notePath, '.md'));
-  const stats = FOE_TYPES.has(type) ? index.gmSection(notePath, 'Stats') : '';
-  return { name, type, stats, behaviour: stats ? index.gmSection(notePath, 'Behaviour') : '', treasure: stats ? index.gmSection(notePath, 'Treasure') : '' };
+  const name = String(fm.name || stemName(notePath));
+  const read = system.readFoe({ notePath, index, text: note.body });
+  const stats = read.stats;
+  return { name, type, stats, read, treasure: stats ? index.gmSection(notePath, 'Treasure') : '' };
 }
 
 // The starting side of a note (sides.js), from its own frontmatter and stats and the Plan's context:
@@ -101,56 +52,53 @@ function warner(seen, warnings) {
   };
 }
 
-// What a block's numbers lack, as [{ kind, text }]. A block with no numbers at all says so once; its
-// missing initiative is part of that.
-function lacks(name, nums) {
-  if (nums.ac === null && nums.hp === null) {
-    return [{ kind: 'no-numbers', text: `${name} names a stat block with no numbers in the vault: fill them in prep` }];
-  }
-  const out = [];
-  if (nums.ac === null) out.push({ kind: 'no-ac', text: `${name} has no AC in its Stats: fill it in prep` });
-  if (nums.hp === null) out.push({ kind: 'no-hp', text: `${name} has no hit points in its Stats: fill them in prep` });
-  if (nums.init === null) out.push({ kind: 'no-initiative', text: `${name} has no initiative modifier in its Stats (rolled at +0)` });
-  return out;
+// The note-less numbers of a blank row: nothing to read, so every figure is null for the GM to type.
+const BLANK_NUMS = () => ({ ac: null, hp: null, init: null, from: {}, legendaryResistance: 0, legendaryActions: 0, recharge: [], rechargeAt: {}, lair: false, lairActions: '', dex: null, speed: null });
+const NO_NUMBERS = (name) => `${name}: no numbers in the vault: type them in the fight, or fill them in prep`;
+
+// A blank row's entry: no stat block, so no numbers, for a fight beat the GM types them into (S6-D7). `label` is
+// what its rows are called; `notePath` is null for a line with no note. `benched` rows start unticked (D4).
+function blankEntry(notePath, label, type, n, side, benched) {
+  return { notePath, n, info: { name: label, type, stats: '', treasure: '' }, nums: BLANK_NUMS(), hpStart: null, fpStart: null, prepNote: null, side, benched };
 }
 
-// A `### Stats` that names a stock block (SRD or stock) and holds no action of its own.
-const STOCK_NAMED = /\b(?:SRD|stock)\b/i;
-const HAS_ACTION = /^[ \t]*(?:[-*+][ \t]+)?[*_]*Actions\b|Hit:|Attack Roll|to hit/im;
-
 // One who entry read for a fight: its note's numbers and how many, or null when it makes no foe. A
-// creature with no Stats, or any entry counted more than once with none, is a fight the sheet
-// cannot run: it warns `no-stats`. An NPC listed once with no Stats is a social NPC: no warning.
+// creature with no Stats, or any entry counted more than once with none, warns `no-stats`; so does an
+// entry for a beat that `blank`s its statless entries (`blank` is `{ label }`, the name a group note's
+// rows go by, or null), which gives them rows with blank numbers instead of none: a creature or counted
+// entry ticked in, a single statless NPC benched with no warning. Any other single entry with no Stats is a
+// social one: no row, no warning.
 // `canFight` is false for a beat that cannot fight (see beatCanFight): the numbers it lacks then go
 // into the row's `prepNote` instead of a warning, for the Fight to say when it is wanted (5b).
-function entry(notePath, index, count, add, canFight = true, sides = null, whoText = null) {
-  const info = inspect(notePath, index);
+function entry(notePath, index, count, add, canFight = true, sides = null, whoText = null, system = DND, blank = null) {
+  const info = inspect(notePath, index, system);
   if (!info) return null;
   const n = Number.isInteger(count) && count > 0 ? count : 1;
   if (!info.stats) {
-    if (info.type === 'creature' || n > 1) {
-      add('no-stats', notePath, `${info.name} has no ### Stats under ## GM Notes: no fight row for ${n > 1 ? 'them' : 'it'}`);
-    }
-    return null;
+    const crowd = info.type === 'creature' || n > 1;
+    const label = blank && GROUP_TYPES.has(info.type) && blank.label ? blank.label : info.name;
+    // `blank` false is a beat that makes no row for this one (the dead): nothing to type into, so no warning
+    if (crowd && blank !== false) add('no-stats', notePath, NO_NUMBERS(label));
+    if (!blank || !(crowd || info.type === 'npc')) return null;
+    return blankEntry(notePath, label, info.type, crowd ? n : 1, sideOf(notePath, index, sides, whoText, ''), !crowd);
   }
-  const nums = readNumbers(info.stats, info.behaviour);
-  const missing = lacks(info.name, nums);
+  const { nums, lacks: missing } = info.read;
   let prepNote = null;
   if (canFight) missing.forEach((w) => add(w.kind, notePath, w.text));
   else if (missing.length) prepNote = missing.map((w) => w.text).join('; ');
-  if (STOCK_NAMED.test(info.stats) && !HAS_ACTION.test(info.stats)) {
+  if (system.stockNoActions && system.stockNoActions(info.stats)) {
     const text = `${info.name} names a stock stat block but no actions are in the vault: fill them in prep (gma stat-fill)`;
     if (canFight) add('stock-no-actions', notePath, text);
     else prepNote = prepNote ? `${prepNote}; ${text}` : text;
   }
-  return { notePath, n, info, nums, prepNote, side: sideOf(notePath, index, sides, whoText, info.stats) };
+  return { notePath, n, info, nums, hpStart: info.read.hpStart ?? null, fpStart: info.read.fpStart ?? null, prepNote, side: sideOf(notePath, index, sides, whoText, info.stats) };
 }
 
 // Can this beat fight: its Type is combat, fight, battle or ambush, or it is a contingency, or its who holds a
-// creature or a count above 1. A beat with no `type` field (one built by hand) can.
+// creature or a count above 1. A beat with no type (no field, or an empty one) can.
 function beatCanFight(beat, index) {
-  if (beat.type === undefined || beat.contingency) return true;
-  if (/\b(?:combat|fight|battle|ambush)\b/.test(beat.type)) return true;
+  if (beat.type === undefined || beat.type === null || !String(beat.type).trim() || beat.contingency) return true;
+  if (/\b(?:combat|fight|battle|ambush)\b/.test(String(beat.type))) return true;
   return (beat.who || []).some((w) => (w.count || 1) > 1 || (w.note && index.has(w.note) && String((index.read(w.note).fm || {}).type || '').toLowerCase() === 'creature'));
 }
 
@@ -158,40 +106,67 @@ function beatCanFight(beat, index) {
 // note across the list (two lines of one creature give `Wolf 1` to `Wolf 5`). An ally starts from
 // `carried` (the reader's `{ of(note) }`: `{ hp, log }` from the latest Table Log naming the ally,
 // or null) when it has a figure: `hpNow` is that figure and `carriedFrom` the log; `hp` stays the
-// note's. A foe never carries, and an ally with no figure has both null.
-function rows(entries, beatKey, carried = null) {
-  const paths = entries.flatMap((e) => Array(e.n).fill(e.notePath));
+// note's. A foe never carries, and an ally with no figure has both null. An ally's carried MP, SAN or FP
+// (step 6b) is `mpNow`, `sanNow` or `fpNow`, on the row only when carried and the row has that pool.
+function rows(entries, beatKey, carried = null, system = DND) {
+  const idOf = (e) => e.notePath || `name:${e.info.name}`;
+  const paths = entries.flatMap((e) => Array(e.n).fill(idOf(e)));
   const keys = itemKeys(beatKey, 'foe', paths);
   const total = new Map();
   for (const p of paths) total.set(p, (total.get(p) || 0) + 1);
   const at = new Map();
   let k = 0;
   return entries.flatMap((e) => Array.from({ length: e.n }, () => {
-    const i = (at.get(e.notePath) || 0) + 1;
-    at.set(e.notePath, i);
+    const i = (at.get(idOf(e)) || 0) + 1;
+    at.set(idOf(e), i);
     const { info, nums } = e;
-    const got = e.side.ally && carried ? carried.of(e.notePath, i) : null;
+    const got = e.side.ally && carried && e.notePath ? carried.of(e.notePath, i) : null;
     const hpNow = got && got.hp !== null ? got.hp : null;
+    const sysRow = system.foeRow(nums);
     return {
-      key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
+      key: keys[k++], note: e.notePath || null, name: total.get(idOf(e)) > 1 ? `${info.name} ${i}` : info.name,
       ally: e.side.ally, allyFrom: e.side.allyFrom, allyBy: e.side.allyBy, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
-      hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote,
+      ...sysRow,
+      hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote, hpStart: e.hpStart,
+      ...carriedPools(got, sysRow),
+      ...(e.fpStart == null ? {} : { fpStart: e.fpStart }),
+      ...(e.benched ? { benched: true } : {}),
     };
   }));
 }
 
+// The pools an ally carried from an earlier Table Log, for those its row holds: { mpNow, sanNow, fpNow }.
+function carriedPools(got, row) {
+  const out = {};
+  if (!got) return out;
+  for (const k of ['mp', 'san', 'fp']) if (typeof got[k] === 'number' && row[k] !== undefined && row[k] !== null) out[`${k}Now`] = got[k];
+  return out;
+}
+
 // One note's foes, `count` of them. Exported for the Fight's Add (step 5).
-function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null, sides = null) {
+function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null, sides = null, system = DND) {
   const warnings = [];
-  const e = entry(notePath, index, count, warner(seen, warnings), true, sides);
-  return { foes: e ? rows([e], beatKey, carried) : [], warnings };
+  const e = entry(notePath, index, count, warner(seen, warnings), true, sides, null, system);
+  return { foes: e ? rows([e], beatKey, carried, system) : [], warnings };
+}
+
+// A line with no note: counted (`Tarred dockhands x4`), blank rows named and numbered by the line's words, which
+// are all there is to read its side from; single (`The shikarri`), one benched row with no warning, as D4 gives a
+// statless NPC.
+function noteless(w, whoText, sides, add) {
+  const label = w.name;
+  const single = !(w.count > 1);
+  if (!single) add('no-stats', null, NO_NUMBERS(label));
+  const side = startingSide({ whoText, quickRefText: '', statsText: '', fm: {}, partyNotes: ((sides || {}).partyNotes) || [], resolve: null });
+  return blankEntry(null, label, '', single ? 1 : w.count, side, single);
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
 // `carried` is the allies' carried vitals, as `rows` reads them.
-function foesFor(beat, index, seen = new Set(), carried = null, sides = null) {
+// `others` is every beat of the Plan: a contingency's Then links skip people a planned beat already lists.
+function foesFor(beat, index, seen = new Set(), carried = null, sides = null, system = DND, others = []) {
   const warnings = [];
   const add = warner(seen, warnings);
   const entries = [];
@@ -199,14 +174,47 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null) {
   const doneNotes = new Set();
   const canFight = beatCanFight(beat, index);
   for (const w of beat.who || []) {
-    const e = entry(w.note, index, w.count, add, canFight, sides, `${w.wants || ''} ${w.knownAs || ''}`.trim());
+    const wants = `${w.wants || ''} ${w.knownAs || ''}`.trim();
+    // a fight beat's statless entries get blank rows: a group note's rows go by the line's own words
+    // (the dead are bodies, never fighters: they get none)
+    const blank = canFight ? (w.dead ? false : { label: w.knownAs && w.knownAs !== w.name ? w.knownAs : '' }) : null;
+    const e = w.note ? entry(w.note, index, w.count, add, canFight, sides, wants, system, blank)
+      : canFight && !w.dead ? noteless(w, wants, sides, add) : null;
     if (!e) continue;
-    entries.push(e);
+    // a dead one is a body, never a fighter, stat block or none (CodeRabbit on #887); its treasure still counts
+    if (!w.dead) entries.push(e);
     if (doneNotes.has(w.note)) continue;
     doneNotes.add(w.note);
     for (const b of bullets(e.info.treasure)) texts.push({ text: b.text, box: b.box });
   }
-  const foes = rows(entries, beat.key, carried);
+  if (!(beat.who || []).length) {
+    const kindOf = (p) => (index.has(p) ? String((index.read(p).fm || {}).type || '').toLowerCase() : '');
+    // the dead are bodies, never fighters (the who path's rule, lib/fate.js): no row, no warning
+    const living = (p) => !fate.isDeadBody(index.read(p).body, index.read(p).fm);
+    const people = (paths) => [...new Set(paths)].filter((p) => p && ['npc', 'creature'].includes(kindOf(p)) && living(p));
+    if (beat.contingency) {
+      // no NPCs block: its Then lines name the people who arrive, so they are ticked, statless ones too (they
+      // get a blank row and the warning), minus anyone a planned beat already lists
+      const planned = new Set(others.filter((o) => o !== beat && !o.contingency).flatMap((o) => (o.who || []).map((w) => w.note)));
+      for (const p of people(links(beat.then || '').map((l) => index.resolve(l))).filter((p) => !planned.has(p))) {
+        const e = entry(p, index, 1, add, true, sides, '', system, { label: '' });
+        if (!e) continue;
+        if (e.benched) { e.benched = false; add('no-stats', p, NO_NUMBERS(e.info.name)); }
+        entries.push(e);
+      }
+      if (entries.length) add('who-from-then', null, `${beat.title}: no NPCs block; its rows come from the people its Then lines link`);
+    } else if (canFight) {
+      // an older Plan's fight names its people in Entities only: creatures ticked, NPCs benched
+      for (const p of people(beat.entities || [])) {
+        const e = entry(p, index, 1, add, true, sides, '', system, { label: '' });
+        if (!e) continue;
+        if (e.info.type === 'npc') e.benched = true;
+        entries.push(e);
+      }
+      if (entries.length) add('who-from-entities', beat.sceneNote || null, `${beat.title}: no NPCs list; the fight rows come from its Entities line (NPCs unticked)`);
+    }
+  }
+  const foes = rows(entries, beat.key, carried, system);
   // A scene that lists its own treasure stands alone: a note's hoard is the same loot in other words.
   const own = (beat.treasure || []).map((t) => t.text);
   const fresh = own.length ? [] : texts;
@@ -215,4 +223,4 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null) {
   return { foes, treasure, warnings };
 }
 
-module.exports = { foesOf, foesFor, sideOf };
+module.exports = { foesOf, foesFor, sideOf, beatCanFight };

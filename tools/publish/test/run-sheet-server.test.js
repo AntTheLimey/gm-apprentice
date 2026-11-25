@@ -1117,6 +1117,27 @@ describe('run sheet server: rolls and actions', () => {
     assert.strictEqual((await stateOf(run)).rev, before.rev);
   });
 
+  it('roll answers every kind and refuses a bad item with the four kinds named', async () => {
+    const run = await start(copyOf());
+    const r = await post(run, '/api/roll', { rolls: [{ sides: 6 }, { against: 12 }, { damage: '2d+1', type: 'imp' }, { d100: { target: 50, difficulty: 'hard' } }] });
+    assert.strictEqual(r.status, 200);
+    const [a, b, c, d] = r.json.results;
+    assert.ok(a.die >= 1 && b.dice.length === 3 && b.margin === 12 - b.total);
+    // 2d+1 is 3 at the least (two 1s): `>= 4` failed one run in 36
+    assert.ok(c.dice.length === 2 && c.type === 'imp' && c.total >= 3 && c.total === c.dice.reduce((x, y) => x + y, 0) + 1, JSON.stringify(c));
+    assert.ok(d.needed === 25 && d.asked.bonus === 0);
+    const bad = await post(run, '/api/roll', { rolls: [{ sides: 6 }, { foo: 1 }] });
+    assert.strictEqual(bad.status, 400);
+    assert.match(bad.json.error, /against.*d100.*damage/);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: [{ damage: '2d6x' }] })).status, 400);
+    const core = await post(run, '/api/roll', { rolls: [{ damage: 'd6+2', type: 'cr' }, { damage: '2d6-1d4' }, { damage: 'd%' }] });
+    assert.strictEqual(core.status, 200);
+    assert.ok(core.json.results[0].dice.length === 1 && core.json.results[0].total >= 3 && core.json.results[0].total <= 8);
+    assert.strictEqual(core.json.results[1].dice.length, 3);
+    assert.match((await post(run, '/api/roll', { rolls: [{ damage: 'd' }] })).json.error, /d% or GURPS's 2d\+1/);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: [{ against: 100 }] })).status, 400);
+  });
+
   it('roll refuses 65 rolls, a d7, a foreign Origin', async () => {
     const run = await start(copyOf());
     assert.strictEqual((await post(run, '/api/roll', { rolls: Array.from({ length: 65 }, () => ({ sides: 4 })) })).status, 400);

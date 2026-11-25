@@ -17,7 +17,7 @@
 //
 // The seam (`window.RunSheetPage`): `dispatch`, `model()`, `state()`, `derived()`, `ui`, `render()`
 // and `parts`, an array of { beatButtons(beat) -> html, side() -> html|null, click(event) -> bool,
-// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, focusAttrs: [attribute],
+// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, sectionButtons(id) -> html, focusAttrs: [attribute],
 // pane(derived) -> { title, beat, cut } | null }. A part's `pane` makes `#sheet` the fight's right pane
 // (plan 6a Task 10): the cut, the whole beat or the whole sheet under a bar, in its own scroll.
 // Scripts loaded after this one push parts in (the fight view, gm-fight.js); the page calls them on
@@ -82,7 +82,9 @@
     pending: [], answered: [], inflight: false, clientId: randomId(), seq: 0, switching: false,
     down: false, putFailing: false, saveFailed: false, putRev: 0, savedRev: 0, heardRev: 0,
     retry: null, resyncTimer: null, notes: [], drafts: {},
-    ui: { focus: null, focusGroup: null, armed: null, record: '', copyMsg: '', hits: {} },
+    // badVital: an end-panel figure refused (`rowId|field` -> { text, why, saved }), kept as typed and never saved, until
+    // the saved figure changes by another route
+    ui: { focus: null, focusGroup: null, armed: null, record: '', copyMsg: '', hits: {}, badVital: {} },
     modelAt: 0,
     view: null, viewTicket: 0, drawerNote: null,
   };
@@ -598,7 +600,7 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
+    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
     for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
@@ -607,7 +609,7 @@
   }
   // An end-panel box saves on `change`, which a redraw would swallow: the box is replaced, its words put
   // back, and leaving it then fires nothing. So a box whose words differ from the saved ones commits first.
-  const COMMIT_ON_CHANGE = '#sheet [data-where], #sheet [data-vhp], #sheet [data-vcond], #sheet #advance';
+  const COMMIT_ON_CHANGE = '#sheet [data-where], #sheet [data-vhp], #sheet [data-vkey], #sheet [data-vcond], #sheet #advance';
   let committing = false;
   let renders = 0;
 
@@ -624,6 +626,9 @@
     clearTimeout(press.timer);
     press.on = false;
     if (press.owed) { press.owed = false; update(); }
+    // what a part owes the release, after the click has landed and the redraw has come (Task 23, D3c: the fight's held
+    // rows are placed now, never on the press, so nothing moves under the pointer)
+    for (const p of parts) if (p.afterPress) p.afterPress();
   }
   const endHoldOf = (n) => () => { if (press.n === n) endHold(); };
   document.addEventListener('pointerdown', (ev) => {
@@ -631,6 +636,8 @@
     press.on = true;
     press.n++;
     clearTimeout(press.timer);
+    // A release that never comes is cut off after 2 s. A press held that long ends its hold here, mid-press: the
+    // redraw owed comes, and afterPress may place the fight's held rows (Task 23) while the button is still down.
     press.timer = setTimeout(endHoldOf(press.n), 2000);
   }, true);
   // the click's own handlers redraw as usual (capture, before them); a redraw still owed comes after them
@@ -656,11 +663,24 @@
   document.addEventListener('focusin', (ev) => { if (wantFocus && ev.target.getAttribute && focusKey(ev.target) !== wantFocus) wantFocus = null; });
 
   // Every change: redraw, then put focus, caret and half-typed words back.
+  // A refused end-panel figure stands until the saved one changes by another route (another window, a long rest): then
+  // the box shows what is saved. Pruned here, where the figure changes, not while the panel is drawn.
+  function pruneBadVitals() {
+    const keys = Object.keys(G.ui.badVital);
+    if (!keys.length || !G.model || !G.state) return;
+    const rows = D().vitals;
+    for (const key of keys) {
+      const at = key.lastIndexOf('|');
+      const v = rows.find((x) => x.rowId === key.slice(0, at));
+      if (!v || String(G.ui.badVital[key].saved ?? '') !== String(v[key.slice(at + 1)] ?? '')) delete G.ui.badVital[key];
+    }
+  }
   function update() {
     if (press.on) { press.owed = true; return; }
     // called from inside a redraw (a box the redraw removes fires blur and change): once it is done
     if (drawing) { drawAgain = true; return; }
     press.owed = false;
+    pruneBadVitals();
     let a = document.activeElement;
     if ((!a || a === document.body) && wantFocus) a = document.querySelector(wantFocus) || a;
     if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
@@ -724,7 +744,7 @@
     renderSide(d);
     if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
     document.querySelectorAll('[data-keepscroll]').forEach((el) => { if (kept[el.dataset.keepscroll]) el.scrollTop = kept[el.dataset.keepscroll]; });
-    G.om = G.pane ? orderMin() : ORDER_FLOOR;
+    G.om = G.pane ? orderMin(d) : ORDER_FLOOR;
     applyLayout();
     document.querySelectorAll('[data-mhits]').forEach(placeMoveList);
     drawerShow();
@@ -781,7 +801,11 @@
 
   // What a part puts above a beat (the After the fight box).
   const beforeBeat = (b) => parts.map((p) => (p.beforeBeat && p.beforeBeat(b)) || '').join('');
-  const sec = (id, title, body) => `<section class="s" id="${id}"><h2>${title}</h2>${body}</section>`;
+  // A section's buttons from the parts (`sectionButtons(id)`: the GURPS to-hit calculator's on the PCs) sit on its bar.
+  const sec = (id, title, body) => {
+    const btns = parts.map((p) => (p.sectionButtons && p.sectionButtons(id)) || '').join('');
+    return `<section class="s" id="${id}">${btns ? `<div class="sbar"><h2>${title}</h2>${btns}</div>` : `<h2>${title}</h2>`}${body}</section>`;
+  };
   const BRIEF_LABELS = { overview: 'Overview', world: 'World', stops: 'Good places to stop' };
 
   // The right pane in a fight: a strip for when it is folded, a bar (the fight's title, the way back, Fold ⟩), then
@@ -845,7 +869,8 @@
       if (o.kind === 'vitals') {
         const v = o.value;
         const hp = v.hp !== null ? `HP ${v.hp}${v.max !== null ? `/${v.max}` : ''}` : v.max !== null ? `HP max ${v.max}` : '';
-        return `Vitals for ${esc(nameOf(o.note))}${o.copy > 1 ? ` ${o.copy}` : ''}: ${esc([hp, v.conditions].filter(Boolean).join(', '))} (no longer on the end panel)`;
+        const pools = RS.poolWords(G.model, v);
+        return `Vitals for ${esc(nameOf(o.note))}${o.copy > 1 ? ` ${o.copy}` : ''}: ${esc([hp, ...pools, v.conditions].filter(Boolean).join(', '))} (no longer on the end panel)`;
       }
       return `Beat "${esc(o.text || o.key)}": ${esc([].concat(o.value).map((v) => String(v).replace(/^stood: (.*)$/, (x, p) => `${nameOf(p)} stood there`)).join(', '))}`;
     };
@@ -873,11 +898,25 @@
     }).join('')}</ul>`;
   }
 
+  // The rules of the system, as the end panel and the PCs table read them
+  const endRules = () => {
+    const r = (G.model && G.model.rules) || {};
+    // a model with no rules is D&D's, as gm-fight.js reads it
+    return { toggles: r.toggles || { longRest: true }, words: { longRest: FM.DND_LONG_REST, ...(r.words || {}) } };
+  };
+  // A PC's figures in the system's own words (rules.words.pcLine): `HP 11/11 · MP 12`; a missing figure is `?`
+  function pcLine(p) {
+    const fig = (v, signed) => (v === null || v === undefined || v === '' ? '?' : (signed && Number(v) >= 0 ? '+' : '') + v);
+    return (endRules().words.pcLine || []).map((c) => `${esc(c.word)} ${esc(fig(p[c.now], c.signed))}${c.max ? `/${esc(fig(p[c.max]))}` : ''}`).join(' · ');
+  }
+
+  // a field the server rendered (present.js `fHtml`), else its words escaped
+  const md = (o, f) => (typeof o[`${f}Html`] === 'string' ? o[`${f}Html`] : esc(o[f]));
   function pcsHTML() {
     if (!pcs().length) return '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
     const src = { index: "the session's list", wrapup: "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
-    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · AC ${esc(p.ac ?? '?')} · HP ${esc(p.hpNow ?? '?')}/${esc(p.hpMax ?? '?')} · Init ${p.init == null ? '?' : (p.init >= 0 ? '+' : '') + esc(p.init)}</div></td>
-      <td>${p.moment ? `<b>Moment:</b> ${esc(p.moment)}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${esc(p.touch)}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${esc(p.arc)}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${esc(p.thread)}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
+      <td>${p.moment ? `<b>Moment:</b> ${md(p, 'moment')}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${md(p, 'touch')}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${md(p, 'arc')}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${md(p, 'thread')}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
@@ -1071,19 +1110,59 @@
     if (w.status === 'off') return 'off-screen';
     return w.title || '';
   };
+  // The vitals columns after Who: the system's, from the ontology (model.rules.vitals; the reader gives D&D's for a
+  // vault with no system of its own).
+  const vitalColumns = () => RS.vitalColumns(G.model);
   function endHTML(d) {
-    let h = '<p class="note">Prefilled from the sheet. Change anything after rests: only a row you change, or a long rest, goes into the record.</p>';
+    let h = `<p class="note">Prefilled from the sheet. Change anything after rests: only a row you change${endRules().toggles.longRest ? ', or a long rest,' : ''} goes into the record.</p>`;
     if (pcs().length) {
       h += `<h4 class="lab">Where everyone ended</h4><table class="where"><tbody>${d.whereEnded.map((w) => `<tr><td style="width:12rem">${face(w.pc)} ${esc(w.name)}</td><td><input data-where="${esc(w.pc)}" value="${esc(w.text || whereText(w))}" data-default="${esc(whereText(w))}" aria-label="Where ${esc(w.name)} ended"></td></tr>`).join('')}</tbody></table>`;
     }
     if (d.vitals.length) {
-      h += `<h4 class="lab">Vitals</h4><div class="tw"><table class="vt"><thead><tr><th>Who</th><th>HP</th><th>Max</th><th>Conditions</th><th></th></tr></thead><tbody>${d.vitals.map((v) => {
-        const recorded = v.set || v.rest;
-        return `<tr><td>${esc(v.name)}${v.ally ? ' <span class="note">ally</span>' : ''}</td><td><input data-vhp="${esc(v.rowId)}" value="${esc(v.hp ?? '')}" inputmode="numeric" aria-label="${esc(v.name)} HP now"></td><td>${esc(v.max ?? '?')}</td><td><input class="c" data-vcond="${esc(v.rowId)}" value="${esc(v.conditions || '')}" placeholder="conditions that carry" aria-label="${esc(v.name)} conditions"></td><td>${recorded ? '<span class="rec">recorded</span>' : ''}</td></tr>`;
-      }).join('')}</tbody></table></div>`;
-      h += `<p><button id="longRest" type="button" class="${G.state.end.longRest ? 'on' : ''}" aria-pressed="${!!G.state.end.longRest}">${G.state.end.longRest ? 'Long rest taken ✓ (click to undo)' : 'Long rest: everyone to full'}</button></p>`;
+      // the system's vitals columns (model.rules.vitals). D&D's (HP and Conditions) are one line a row, as before 6b: HP,
+      // Max, Conditions. A system with pools (CoC's MP, SAN and Luck, GURPS's FP) gives each row two lines, so the
+      // table fits the sheet's column at 1100 wide: the figures, each with its max beside it, then Conditions under them
+      const cols = vitalColumns();
+      const nums = cols.filter((c) => c.field !== 'conditions');
+      const hasCond = cols.some((c) => c.field === 'conditions');
+      const pooled = nums.some((c) => c.field !== 'hp');
+      // a refused figure stands until the saved one changes by another route (`pruneBadVitals`, on every update)
+      const bad = (v, field) => G.ui.badVital[`${v.rowId}|${field}`];
+      // a figure refused (over the sheet's max, or below 0): kept as typed, marked, never saved
+      const box = (v, field, attrs, label) => {
+        const b = bad(v, field);
+        const val = b ? b.text : (v[field] ?? '');
+        return `<input ${attrs} value="${esc(val)}" inputmode="numeric" aria-label="${esc(label)}"${b ? ` aria-invalid="true" title="${esc(b.why)}"` : ''}>`;
+      };
+      const numBox = (v, c) => (c.field === 'hp' ? box(v, 'hp', `data-vhp="${esc(v.rowId)}"`, `${v.name} HP now`)
+        : box(v, c.field, `data-vkey="${esc(`${v.rowId}|${c.field}`)}"`, `${v.name} ${c.column} now`));
+      const condBox = (v) => `<input class="c" data-vcond="${esc(v.rowId)}" value="${esc(v.conditions || '')}" placeholder="conditions that carry" aria-label="${esc(v.name)} conditions">`;
+      const who = (v) => `${esc(v.name)}${v.ally ? ' <span class="note">ally</span>' : ''}`;
+      const rec = (v) => (v.set || v.rest ? '<span class="rec">recorded</span>' : '');
+      let table;
+      if (!pooled) {
+        const head = cols.map((c) => (c.field === 'hp' ? `<th>${esc(c.column)}</th><th>Max</th>` : `<th>${esc(c.column)}</th>`)).join('');
+        table = `<table class="vt"><thead><tr><th>Who</th>${head}<th></th></tr></thead><tbody>${d.vitals.map((v) => `<tr><td>${who(v)}</td>${cols.map((c) => (c.field === 'hp'
+          ? `<td>${numBox(v, c)}</td><td>${esc(v.max ?? '?')}</td>` : `<td>${condBox(v)}</td>`)).join('')}<td>${rec(v)}</td></tr>`).join('')}</tbody></table>`;
+      } else {
+        const maxOf = (v, c) => (c.shape === 'current/max' && c.max ? v[c.max] : null);
+        const cell = (v, c) => {
+          // Luck is a PC's alone
+          if (c.pcs_only && v.ally) return '<td></td>';
+          const max = maxOf(v, c);
+          return `<td>${numBox(v, c)}${max !== null && max !== undefined ? `<span class="of">/ ${esc(max)}</span>` : ''}</td>`;
+        };
+        table = `<table class="vt pools"><thead><tr><th>Who</th>${nums.map((c) => `<th>${esc(c.column)}</th>`).join('')}</tr></thead><tbody>${d.vitals.map((v) => {
+          const why = nums.filter((c) => bad(v, c.field)).map((c) => `<span class="badnum">${esc(c.column)} ${esc(bad(v, c.field).text)}: ${esc(bad(v, c.field).why)}</span>`).join('');
+          return `<tr class="vn"><td${hasCond ? ' rowspan="2"' : ''}>${who(v)}${rec(v) ? `<br>${rec(v)}` : ''}</td>${nums.map((c) => cell(v, c)).join('')}</tr>`
+            + (hasCond ? `<tr class="vc"><td colspan="${nums.length}">${why}${condBox(v)}</td></tr>` : '');
+        }).join('')}</tbody></table>`;
+      }
+      h += `<h4 class="lab">Vitals</h4><div class="tw">${table}</div>`;
+      // the rest button is a D&D thing: only a system whose toggles have it, in its own words
+      if (endRules().toggles.longRest) h += `<p><button id="longRest" type="button" class="${G.state.end.longRest ? 'on' : ''}" aria-pressed="${!!G.state.end.longRest}">${G.state.end.longRest ? 'Long rest taken ✓ (click to undo)' : esc(endRules().words.longRest)}</button></p>`;
     }
-    h += `<h4 class="lab"><label for="advance">Advancement</label></h4><textarea id="advance" placeholder="One line each, e.g. level 6 for the dragon (milestone)">${esc(G.state.end.advancement || '')}</textarea>`;
+    h += `<h4 class="lab"><label for="advance">Advancement</label></h4><textarea id="advance" placeholder="${esc(endRules().words.advancement || '')}">${esc(G.state.end.advancement || '')}</textarea>`;
     h += `<p><button id="copyRecord" class="primary" type="button">Copy the Table Log</button> <span class="note" id="copyMsg">${esc(G.ui.copyMsg)}</span></p>`;
     if (G.ui.record) h += `<pre class="notes" id="recordText">${esc(G.ui.record)}</pre>`;
     return h;
@@ -1366,21 +1445,34 @@
   const fightLayout = () => Boolean(G.pane) && window.innerWidth > NARROW;
   // The order's least width: its widest row with every item as tight as it goes (a chip at its 2.4 rem, the name
   // whole up to 14 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
-  function orderMin() {
+  function orderMin(d) {
     const ol = document.querySelector('#side ol.to');
     const fo = ol && ol.closest('.fo');
     if (!ol || !fo) return ORDER_FLOOR;
     ol.classList.add('measure');
+    // the rows a part measures with as well (gm-fight.js measureRows: a row with every figure), taken out again below
+    const extra = [];
+    for (const part of parts) {
+      for (const html of (part.measureRows && part.measureRows(d)) || []) {
+        const t = document.createElement('template');
+        t.innerHTML = String(html).trim();
+        const li = t.content.firstElementChild;
+        if (li) { li.setAttribute('aria-hidden', 'true'); ol.appendChild(li); extra.push(li); }
+      }
+    }
     let row = 0;
     // a row's second line (statuses that do not fit, a box's words) is never measured: it wraps
     // a name longer than its 6 rem least keeps its whole width (up to 14 rem) as its least, so a font wider than a
     // Mac's never cuts it: the row's other items shrink first
-    const cap = 14 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
+    // (a part may set its own: CoC's 11 rem, Task 38 fix round)
+    const rem = parts.map((part) => part.nameCap && part.nameCap(d)).find((x) => typeof x === 'number' && x > 0) || 14;
+    const cap = rem * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
     for (const nm of ol.querySelectorAll(':scope > li > .nm')) {
       nm.style.minWidth = '';
       if (nm.scrollWidth > nm.clientWidth + 1) nm.style.minWidth = `${Math.ceil(Math.min(nm.scrollWidth, cap))}px`;
     }
     for (const li of ol.children) if (li.dataset.row2 === undefined) row = Math.max(row, li.scrollWidth + li.offsetWidth - li.clientWidth);
+    for (const li of extra) li.remove();
     ol.classList.remove('measure');
     const side = $('#side');
     const round = fo.offsetWidth - ol.clientWidth + (side.offsetWidth - side.clientWidth);
@@ -1853,7 +1945,9 @@
       }
     }
     if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
-    if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
+    // the hit location list (GURPS, Task 25) is picked by its letters (J for Jaw): J stays in it
+    const picking = t.matches && t.matches('select[data-fhlocsel]');
+    if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
     // a letter on a closed status list never picks a status by the browser's type-ahead: a status is chosen, not typed
     if (t.matches && t.matches('select[data-fstatus]') && ev.key.length === 1 && ev.key !== ' ' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
@@ -1932,10 +2026,25 @@
       act({ type: 'endSet', where: { [d.where]: v === d.default ? '' : v } });
       return;
     }
-    if (d.vhp) {
-      const v = t.value.trim();
+    if (d.vhp || d.vkey) {
+      const at = d.vkey ? d.vkey.lastIndexOf('|') : -1;
+      const row = d.vhp || d.vkey.slice(0, at);
+      const field = d.vhp ? 'hp' : d.vkey.slice(at + 1);
+      // a typed minus sign (U+2212) is the number's minus
+      const v = t.value.trim().replace(/\u2212/g, '-');
       const n = Number(v);
-      act({ type: 'endSet', vitals: { [d.vhp]: { hp: v === '' ? undefined : (Number.isFinite(n) ? n : v) } } });
+      // a blank is null, which the request keeps and endSet takes as clearing the figure
+      const value = v === '' ? null : (Number.isFinite(n) ? n : v);
+      const key = `${row}|${field}`;
+      const why = RS.endFigureProblem(G.model, row, field, value);
+      if (why) {
+        const now = D().vitals.find((x) => x.rowId === row);
+        G.ui.badVital[key] = { text: t.value, why, saved: now ? now[field] : undefined };
+        update();
+        return;
+      }
+      delete G.ui.badVital[key];
+      act({ type: 'endSet', vitals: { [row]: { [field]: value } } });
       return;
     }
     if (d.vcond) { act({ type: 'endSet', vitals: { [d.vcond]: { conditions: t.value.trim() } } }); return; }
@@ -1966,7 +2075,11 @@
       jots: Array.from(document.querySelectorAll('#sheet ul.jots li > span:not(.tm)'), (el) => el.textContent),
       requests: { ...requests }, view: G.view, focusGroup: G.state ? focusedGroup() : null,
     };
-    for (const part of parts) if (part.probe) Object.assign(out, part.probe());
+    // one part's probe throwing must not freeze the rest: its message goes to dataset.probeError (tests only)
+    for (const part of parts) {
+      if (!part.probe) continue;
+      try { Object.assign(out, part.probe()); } catch (e) { document.body.dataset.probeError = String((e && e.stack) || e).slice(0, 600); }
+    }
     document.body.dataset.probe = JSON.stringify(out);
   }
 
@@ -1982,6 +2095,8 @@
     ui: G.ui,
     render: update,
     drawing: () => drawing,
+    // a press of the main button is held (its redraws wait for the release): the one press state parts read
+    pressing: () => press.on,
     focusTo,
     parts,
     // helpers the parts share with the page
@@ -2009,6 +2124,12 @@
     loadKept();
     applySides();
     render();
+    // focus on a live control after a load, never the page (RF1, PRENTICE review M4): a part's (a running fight's
+    // entry box), else the header's Jot
+    if (!document.activeElement || document.activeElement === document.body) {
+      const k = parts.map((part) => part.bootFocus && part.bootFocus()).find(Boolean) || '#hjot';
+      if (document.querySelector(k)) focusTo(k);
+    }
     listen();
     loadView();
   }

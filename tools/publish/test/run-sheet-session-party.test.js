@@ -69,6 +69,58 @@ describe('the session party', () => {
   });
 
   // final review O3: nobody is dropped without a word
+  // Task 28 proof (Dead Air): the roster's bold subject is a nickname and its player, the sheet a link at the end.
+  it('a roster bullet led by a nickname takes the PC its Sheet link names', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Bo (Sam):** arc; next beat: the cart. Sheet: [[Ben Hart]].\n'
+      + '- **Ada (Jay):** arc, with [[Vic Vane]] close by. Sheet: [[Ada Moss]].\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r, { party: [BEN, ADA], from: 'plan', warnings: [] });
+  });
+
+  it('a nickname bullet with no Sheet link maps to no one, however many PCs it mentions', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Ada (Jay):** arc. Sheet: [[Ada Moss]].\n- **Cy (Tom):** arc with [[Ben Hart]].\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r.party, [ADA], 'Cy is not mapped to Ben');
+  });
+
+  // Task 32 (Task 29 re-review): the Sheet link is the signal, written `**Sheet:** [[PC]]` too, after a bold subject
+  // with no player in brackets
+  it('a roster bullet takes its PC from **Sheet:** with the colon inside the bold, and after a subject with no player', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Bo (Sam):** arc; next beat: the cart. **Sheet:** [[Ben Hart]]\n'
+      + '- **Wen:** arc, with [[Vic Vane]] close by. Sheet: [[Ada Moss]].\n'
+      + '- **Tam:** arc. **Sheet**: [[Cy Doe]]\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r, { party: [BEN, ADA, CY], from: 'plan', warnings: [] });
+    const crlf = sessionParty({ index, sessionPath: SESSION, planBody: plan.replace(/\n/g, '\r\n'), given: [] });
+    assert.deepStrictEqual(crlf.party, [BEN, ADA, CY], 'CRLF');
+  });
+
+  it('a bare bold subject before the PC headings takes its Sheet link; one under a heading is a label (fix round)', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Wen:** Sheet: [[Ada Moss]]\n### [[Ben Hart]]\n- **Note:** Sheet: [[Cy Doe]]\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    // headings are read before bullets, as before this task: the order is the reader's, the set is the point
+    assert.deepStrictEqual([...r.party].sort(), [ADA, BEN].sort());
+    assert.ok(!r.party.includes(CY), 'Cy is not added');
+  });
+
+  it('a bold-subject bullet with no Sheet link takes nothing, whatever it mentions', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Wen:** arc. Sheet: [[Ada Moss]].\n- **Tam:** arc with [[Ben Hart]] and [[Cy Doe]].\n- **Arc theme:** loyalty, see [[Ben Hart]]\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r.party, [ADA]);
+  });
+
+  it('a label sub-bullet under a PC heading never adds the PC it mentions', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n### [[Ada Moss]]\n- **State:** standing over [[Ben Hart]]\'s body\n- **Next beat:** Sheet: [[Ben Hart]]\n- **Note:** **Sheet:** [[Ben Hart]]\n- **Note:** Jay plays [[Ben Hart]]\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r.party, [ADA], 'Ben is not added');
+  });
+
   it('a stale roster link gives a warning and the other PCs', () => {
     const index = vault({});
     const plan = '## PC Roster & Arcs\n\n- **[[Ben Hart]]** (Bo): arc\n- **[[Ada Mossy]]** (Jay): arc\n- **Arc theme:** not a PC\n';

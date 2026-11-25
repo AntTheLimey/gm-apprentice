@@ -171,7 +171,7 @@ reminders for Keepers:
 - **Avoidance**: Reward players who find non-combat solutions.
 - **Duration**: Most CoC combats should resolve in 2-4 rounds.
 - **Consequences**: Injuries linger. Major wounds require
-  First Aid within one round and extended medical care.
+  First Aid within the hour (p.120) and extended medical care.
 
 ## Typical CoC Session Flow
 

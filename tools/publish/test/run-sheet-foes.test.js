@@ -8,7 +8,8 @@ const { spawnSync } = require('node:child_process');
 const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
-const { foesOf, foesFor } = require('../lib/run-sheet/foes');
+const { foesOf, foesFor, beatCanFight } = require('../lib/run-sheet/foes');
+const { systemFor } = require('../lib/run-sheet/systems');
 
 // Every scratch dir is removed when the file's tests finish.
 const made = [];
@@ -19,9 +20,13 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
 const GMA = path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'scripts', 'gma.py');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
 
-function setup(edit) {
+function setup(edit, files = {}) {
   const dir = mkTmp('rs-');
   fs.cpSync(FIXTURE, dir, { recursive: true });
+  for (const [f, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+    fs.writeFileSync(path.join(dir, f), text);
+  }
   if (edit) {
     const p = path.join(dir, PLAN);
     fs.writeFileSync(p, edit(readText(p)));
@@ -46,6 +51,14 @@ describe('run sheet foes', () => {
     // nothing carried: both null
     const [b] = foesOf(lucan, index, 1, 'b-test').foes;
     assert.deepStrictEqual([b.hpNow, b.carriedFrom], [null, null]);
+  });
+
+  it('every copy of a counted foe carries the block\'s hpStart', () => {
+    const { index } = setup();
+    const note = 'Characters/NPCs/Hurt Sexton.md';
+    const withBlock = { has: (p) => p === note, read: () => ({ fm: { name: 'Hurt Sexton', type: 'npc' }, body: '## Stats\n\n**HP** 10 (currently 4) \u00b7 **AC** 11\n' }), gmSection: () => '', resolve: index.resolve, itemOf: index.itemOf };
+    const { foes } = foesOf(note, withBlock, 3, 'b-test');
+    assert.deepStrictEqual(foes.map((f) => [f.name, f.hp, f.hpStart]), [['Hurt Sexton 1', 10, 4], ['Hurt Sexton 2', 10, 4], ['Hurt Sexton 3', 10, 4]]);
   });
 
   it('tuned hit points beat the stock figure', () => {
@@ -124,6 +137,108 @@ describe('run sheet foes', () => {
     const { beats, index: ix } = setup((t) => t.replace('- **[[Missing Person]]:** watching from the trees', '- **[[Hollow Stalker]]:** watching from the trees'));
     const c = beats.find((b) => b.contingency);
     assert.ok(foesFor(c, ix).warnings.some((w) => w.kind === 'no-stats' && w.note === 'Creatures/Hollow Stalker.md'));
+    // S6-D7: the warning says what to do, and no row is dropped
+    assert.ok(foesFor(c, ix).warnings.some((w) => w.text === 'Hollow Stalker: no numbers in the vault: type them in the fight, or fill them in prep'));
+  });
+
+  // S6-D7: a beat that can fight gives blank rows to type into: a creature or counted entry with no stats, a counted
+  // line with no note, a counted link to a group note; a single statless NPC is a benched blank row (D4).
+  describe('blank rows in a fight beat', () => {
+    const WARDENS = { 'Factions/Gate Wardens.md': '---\nname: Gate Wardens\ntype: faction\n---\n\nThe gate\'s keepers.\n' };
+    const withLines = (lines) => (t) => t.replace('- **[[Lucan Grey]] (Lucan):** helps\n', `- **[[Lucan Grey]] (Lucan):** helps\n${lines}\n`);
+    const gate = (beats) => beats.find((b) => b.title === 'The Gate');
+    const foesOfGate = (lines, files) => { const { index, beats } = setup(withLines(lines), files); return foesFor(gate(beats), index); };
+    const NO_NUMBERS = (n) => `${n}: no numbers in the vault: type them in the fight, or fill them in prep`;
+
+    it('a no-note counted line gives four numbered rows', () => {
+      const r = foesOfGate('- **Tarred dockhands \u00d74:** rifles');
+      const rows = r.foes.filter((f) => /^Tarred/.test(f.name));
+      assert.deepStrictEqual(rows.map((f) => [f.name, f.note, f.hp]), [1, 2, 3, 4].map((i) => [`Tarred dockhands ${i}`, null, null]));
+      assert.strictEqual(new Set(rows.map((f) => f.key)).size, 4);
+      assert.ok(r.warnings.some((w) => w.text === NO_NUMBERS('Tarred dockhands')));
+    });
+
+    it('"four guards" counts', () => {
+      const r = foesOfGate('- **four guards:** rifles');
+      assert.deepStrictEqual(r.foes.filter((f) => /^guards/.test(f.name)).map((f) => f.name), ['guards 1', 'guards 2', 'guards 3', 'guards 4']);
+    });
+
+    it('a counted faction link gives four rows carrying the faction note', () => {
+      const r = foesOfGate('- **[[Gate Wardens|Warden guards]] \u00d74:** hold the door', WARDENS);
+      const rows = r.foes.filter((f) => f.note === 'Factions/Gate Wardens.md');
+      assert.deepStrictEqual(rows.map((f) => f.name), [1, 2, 3, 4].map((i) => `Warden guards ${i}`));
+      assert.ok(rows.every((f) => f.ally === false && !f.benched));
+    });
+
+    it('a single statless NPC is a benched blank row', () => {
+      const r = foesOfGate('- **[[Sister Fen]]:** hides');
+      const fen = r.foes.find((f) => f.note === 'Characters/NPCs/Sister Fen.md');
+      assert.deepStrictEqual([fen.name, fen.benched, fen.hp, fen.ac], ['Sister Fen', true, null, null]);
+    });
+
+    it('a single no-note line is one benched blank row with no warning', () => {
+      const r = foesOfGate('- **The shikarri:** wants a clean drive');
+      const row = r.foes.filter((f) => f.name === 'The shikarri');
+      assert.deepStrictEqual(row.map((f) => [f.note, f.benched, f.hp]), [[null, true, null]]);
+      assert.ok(!r.warnings.some((w) => /shikarri/.test(w.text)));
+    });
+
+    it('a capitalised number word stays a name: one benched row, not four', () => {
+      const r = foesOfGate('- **Four Guards:** rifles');
+      assert.deepStrictEqual(r.foes.filter((f) => /Guards/.test(f.name)).map((f) => [f.name, f.benched]), [['Four Guards', true]]);
+    });
+
+    it('a dead creature in a fight beat raises no warning: there is no row to type into', () => {
+      const dead = { 'Creatures/Old Bones.md': '---\nname: Old Bones\ntype: creature\nstatus: dead\n---\n\nGone.\n' };
+      const r = foesOfGate('- **[[Old Bones]]:** lies there', dead);
+      assert.ok(!r.foes.some((f) => f.name === 'Old Bones'));
+      assert.ok(!r.warnings.some((w) => /Old Bones/.test(w.text)));
+    });
+
+    // S6-D7: a beat with no Type at all can fight, so this one is typed social to stay a beat that cannot
+    it('a social beat (typed social, nobody counted) gives no rows for statless people', () => {
+      const { index, beats } = setup((t) => t.replace('**Starts it:** The bell has rung and the wolves are quiet.\n', '**Starts it:** The bell has rung and the wolves are quiet.\n**Type:** social\n**NPCs**\n- **[[Sister Fen]]:** watching\n'));
+      const social = beats.filter((b) => b.title === 'The Gate')[1];
+      assert.deepStrictEqual(social.who.map((w) => w.name), ['Sister Fen']);
+      assert.deepStrictEqual(foesFor(social, index), { foes: [], treasure: [], warnings: [] });
+    });
+
+    it('a dead counted creature gives no rows and no warning', () => {
+      const dead = { 'Creatures/Old Bones.md': '---\nname: Old Bones\ntype: creature\nstatus: dead\n---\n\nGone.\n' };
+      const r = foesOfGate('- **[[Old Bones]] \u00d73:** lie there', dead);
+      assert.ok(!r.foes.some((f) => /Old Bones/.test(f.name)));
+      assert.ok(!r.warnings.some((w) => /Old Bones/.test(w.text)));
+    });
+
+    // Task 23b B3: a blank row's figures are all null in every system, never undefined
+    for (const [id, keys] of [['coc-7e', ['init', 'dex']], ['gurps-4e', ['init', 'speed']]]) {
+      it(`a blank ${id} row carries null for its initiative figures`, () => {
+        const { index, beats } = setup(withLines('- **Four Guards:** rifles'));
+        const r = foesFor(gate(beats), index, new Set(), null, null, systemFor(id));
+        const blank = r.foes.find((f) => /Guards/.test(f.name));
+        assert.ok(blank, 'the blank row');
+        for (const k of ['ac', 'hp', ...keys]) assert.strictEqual(blank[k], null, k);
+      });
+    }
+
+    // CodeRabbit on #887: a dead one with a stat block is a body too, no fighter
+    it('a dead creature with a stat block in a fight beat gets no row', () => {
+      const dead = { 'Creatures/Old Bones.md': '---\nname: Old Bones\ntype: creature\nstatus: dead\n---\n\n### Stats\n\n**AC** 12 | **HP** 9\n' };
+      const r = foesOfGate('- **[[Old Bones]]:** lies there', dead);
+      assert.ok(!r.foes.some((f) => f.name === 'Old Bones'), JSON.stringify(r.foes.map((f) => f.name)));
+    });
+
+    it('a dead person in a fight beat gets no blank row', () => {
+      const dead = { 'Characters/NPCs/Quiet Dead.md': '---\nname: Quiet Dead\ntype: npc\nstatus: dead\n---\n\nGone.\n' };
+      const r = foesOfGate('- **[[Quiet Dead]]:** lies there', dead);
+      assert.ok(!r.foes.some((f) => f.name === 'Quiet Dead'));
+    });
+
+    it('the warning names only ticked rows', () => {
+      const r = foesOfGate('- **[[Sister Fen]]:** hides\n- **Tarred dockhands \u00d74:** rifles');
+      const no = r.warnings.filter((w) => /no numbers in the vault: type them in the fight/.test(w.text)).map((w) => w.text);
+      assert.deepStrictEqual(no, [NO_NUMBERS('Tarred dockhands')], 'the benched person raises none');
+    });
   });
 
   it('Armor Class reads as AC, and each missing figure warns on its own', () => {
@@ -189,7 +304,8 @@ describe('run sheet foes', () => {
     const { index, beats } = setup();
     const c = beats.find((b) => b.contingency);
     const { foes } = foesFor(c, index);
-    assert.deepStrictEqual(foes.map((f) => f.name), ['Frost Wolf 1', 'Frost Wolf 2']);
+    // S6-D7 (single no-note line): the person whose link matches no note is one benched blank row, after the wolves
+    assert.deepStrictEqual(foes.map((f) => [f.name, !!f.benched]), [['Frost Wolf 1', false], ['Frost Wolf 2', false], ['Missing Person', true]]);
   });
 
   it('a foe note\'s treasure joins the beat once', () => {
@@ -379,5 +495,86 @@ describe('run sheet foes: recharge forms and lair actions (5b)', () => {
     const nested = noteWith('AC 11 HP 9 Initiative +1\n\n- ***Lair Actions*** (on initiative 20):\n    - Icefall.\n      - A sub-point.\n    - Fog.');
     assert.strictEqual(nested.lairActions, '- Icefall.\n  - A sub-point.\n- Fog.');
     assert.strictEqual(noteWith('AC 11 HP 9 Initiative +1\n\nLair actions work here, recast.\n\n- ***Lair Actions*** (on 20):\n  - Fog.').lairActions, '- Fog.', 'a prose mention before the real line');
+  });
+});
+
+// Task 9: rows from a contingency's Then links and from an older Plan's Entities line.
+describe('run sheet foes: Then links and Entities lines', () => {
+  const note = (name, type, extra = '') => `---\nname: ${name}\ntype: ${type}\n---\n\n${extra}`;
+  const STATS = '## Stats\n\nAC 12, Hit Points 9, Initiative +1\n';
+  const FILES = {
+    'Characters/NPCs/Arriver One.md': note('Arriver One', 'npc', STATS),
+    'Characters/NPCs/Arriver Bare.md': note('Arriver Bare', 'npc'),
+    'Creatures/Arriver Beast.md': note('Arriver Beast', 'creature', STATS),
+    'Locations/Arriver Hall.md': note('Arriver Hall', 'location'),
+    'Items/Arriver Lamp.md': note('Arriver Lamp', 'item'),
+    'Chapters/Scene Note.md': note('Scene Note', 'scene'),
+  };
+  const P = (n) => `Characters/NPCs/${n}.md`;
+  const beat = (extra) => ({ key: 'b-x', title: 'The arrival', type: '', contingency: false, who: [], then: '', entities: [], ...extra });
+  const rowsOf = (b, others = []) => { const { index } = setup(null, FILES); return foesFor(b, index, new Set(), null, null, undefined, others); };
+
+  it('Then links give ticked rows', () => {
+    const r = rowsOf(beat({ contingency: true, then: 'The [[Arriver One]], [[Arriver Beast]] and [[Arriver Bare]] come in. See [[Arriver Hall]].' }));
+    assert.deepStrictEqual(r.foes.map((f) => [f.name, !f.benched, f.hp]), [['Arriver One', true, 9], ['Arriver Beast', true, 9], ['Arriver Bare', true, null]]);
+    assert.ok(r.warnings.some((w) => w.kind === 'who-from-then' && w.text === 'The arrival: no NPCs block; its rows come from the people its Then lines link'));
+    assert.ok(r.warnings.some((w) => w.text === 'Arriver Bare: no numbers in the vault: type them in the fight, or fill them in prep'));
+    assert.ok(!r.warnings.some((w) => /Arriver One:/.test(w.text)));
+  });
+
+  it('a person already in the fight it joins is skipped', () => {
+    const planned = beat({ who: [{ note: P('Arriver One'), count: 1 }] });
+    const c = beat({ contingency: true, then: '[[Arriver One]] and [[Arriver Beast]] come in.' });
+    assert.deepStrictEqual(rowsOf(c, [planned, c]).foes.map((f) => f.name), ['Arriver Beast']);
+  });
+
+  it('a contingency with an NPCs block ignores its Then links', () => {
+    const c = beat({ contingency: true, who: [{ note: P('Arriver One'), count: 1 }], then: '[[Arriver Beast]] comes in.' });
+    const r = rowsOf(c);
+    assert.deepStrictEqual(r.foes.map((f) => f.name), ['Arriver One']);
+    assert.ok(!r.warnings.some((w) => w.kind === 'who-from-then'));
+  });
+
+  it('Entities give rows: creature ticked, NPC benched', () => {
+    const r = rowsOf(beat({ type: 'combat', sceneNote: 'Chapters/Scene Note.md', entities: ['Creatures/Arriver Beast.md', P('Arriver One')] }));
+    assert.deepStrictEqual(r.foes.map((f) => [f.name, !!f.benched]), [['Arriver Beast', false], ['Arriver One', true]]);
+    assert.ok(r.warnings.some((w) => w.kind === 'who-from-entities' && w.note === 'Chapters/Scene Note.md'));
+  });
+
+  it('an untyped beat\'s Entities give rows, NPCs benched', () => {
+    const r = rowsOf(beat({ type: '', entities: [P('Arriver One'), P('Arriver Bare'), 'Creatures/Arriver Beast.md'] }));
+    assert.deepStrictEqual(r.foes.map((f) => [f.name, !!f.benched]), [['Arriver One', true], ['Arriver Bare', true], ['Arriver Beast', false]]);
+    assert.ok(!r.warnings.some((w) => /Arriver (One|Bare):/.test(w.text)));
+  });
+
+  it('a dead creature in the Entities gives no row and no warning', () => {
+    const { index } = setup(null, { ...FILES, 'Creatures/Arriver Husk.md': note('Arriver Husk', 'creature', STATS).replace('type: creature', 'type: creature\nstatus: dead') });
+    const r = foesFor(beat({ type: 'combat', entities: ['Creatures/Arriver Husk.md', P('Arriver One')] }), index);
+    assert.deepStrictEqual([r.foes.map((f) => f.name), r.warnings.filter((w) => /Husk/.test(w.text))], [['Arriver One'], []]);
+  });
+
+  it('a dead statless NPC linked from a Then line gives no row and no warning', () => {
+    const { index } = setup(null, { ...FILES, 'Characters/NPCs/Arriver Gone.md': note('Arriver Gone', 'npc').replace('type: npc', 'type: npc\nstatus: dead') });
+    const r = foesFor(beat({ contingency: true, then: '[[Arriver Gone]] and [[Arriver One]] come in.' }), index);
+    assert.deepStrictEqual([r.foes.map((f) => f.name), r.warnings.filter((w) => /Gone/.test(w.text))], [['Arriver One'], []]);
+  });
+
+  it('a social beat\'s Entities give none', () => {
+    const r = rowsOf(beat({ type: 'social', entities: [P('Arriver One'), 'Creatures/Arriver Beast.md'] }));
+    assert.deepStrictEqual([r.foes, r.warnings], [[], []]);
+  });
+
+  it('a place, an item and the scene note among the Entities give no row', () => {
+    const r = rowsOf(beat({ type: 'combat', entities: ['Locations/Arriver Hall.md', 'Items/Arriver Lamp.md', 'Chapters/Scene Note.md', P('Arriver One')] }));
+    assert.deepStrictEqual(r.foes.map((f) => f.name), ['Arriver One']);
+  });
+});
+
+describe('beatCanFight with no type', () => {
+  it('an empty, blank or missing type can fight; a social type cannot', () => {
+    const { index } = setup();
+    const b = (type) => ({ contingency: false, who: [], ...(type === undefined ? {} : { type }) });
+    assert.deepStrictEqual([undefined, '', '  ', null].map((t) => beatCanFight(b(t), index)), [true, true, true, true]);
+    assert.strictEqual(beatCanFight(b('social'), index), false);
   });
 });
