@@ -47,11 +47,11 @@ describe('the generated tables', () => {
     for (const l of LOCATIONS) assert.ok(rows.some((r) => cells(r)[0] === l.name && cells(r)[2] === l.cite), l.key);
     assert.ok(!/x4|crippled|knockdown|miss by 1/.test(rows.join('\n')), 'no rule in the rows');
   });
-  it('the words above the table point to the run sheet and the rules server', () => {
+  it('the words above the table point to the run sheet and the page in the book', () => {
     const text = lf(fs.readFileSync(FILES[0].file, 'utf8'));
     const above = text.slice(text.indexOf('## Hit Locations'), text.indexOf('<!-- generated: hit-locations -->'));
     assert.match(above, /run sheet's damage helper/);
-    assert.match(above, /rules server/);
+    assert.match(above, /page in your own book/);
   });
   it('a missing marker is an error, never a quiet skip', () => {
     assert.throws(() => render('# no markers\n', FILES[0].blocks), /no <!-- generated: hit-locations -->/);

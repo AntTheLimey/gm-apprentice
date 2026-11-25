@@ -106,8 +106,8 @@ it. Useful when your back is to a wall.
 Every location the Basic Set (B398, B552) and Martial Arts
 (MA137) give a humanoid, mildest penalty first, with its page.
 The run sheet's damage helper works out each place's DR,
-wounding, crippling and knockdown; for the rule itself, ask the
-GURPS rules server or read the page.
+wounding, crippling and knockdown; for the rule itself, read the
+page in your own book.
 
 <!-- The table between the markers is written by
 `node tools/publish/scripts/gen-combat-reference.js --write`
