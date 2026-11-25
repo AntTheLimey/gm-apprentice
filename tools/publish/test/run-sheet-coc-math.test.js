@@ -200,6 +200,9 @@ describe('coc-math: damage (Task 17)', () => {
     assert.equal(C.damageRoll(e, { db: -2 }, 'half').notation, '1D6-1');
     assert.equal(C.damageRoll(e, { db: '-1' }, 'half').notation, '1D6');
     assert.equal(C.damageRoll(e, { db: '+2D6' }, 'none').notation, '1D6');
+    // No DB never asks what the DB is: a DB the sheet cannot read does not hold it up (CodeRabbit on #887)
+    assert.deepEqual(C.damageRoll(e, { db: 'see notes' }, 'none'), { notation: '1D6', weapon: '1D6', db: '' });
+    assert.deepEqual(C.damageRoll(e, { db: 'see notes' }, 'full'), { error: 'db', db: 'see notes' });
   });
   it('an exchange\'s kind sets the DB: melee full, thrown half, shot none', () => {
     assert.deepEqual(['melee', 'thrown', 'shot', undefined].map(C.dbModeOf), ['full', 'half', 'none', 'full']);

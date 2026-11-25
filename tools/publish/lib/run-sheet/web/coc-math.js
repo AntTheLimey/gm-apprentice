@@ -218,7 +218,8 @@
   function damageRoll(e, attacker, mode = 'full') {
     if (!e || typeof e.dice !== 'string' || !e.dice) return null;
     const weapon = e.dice.toUpperCase();
-    if (!e.db) return { notation: weapon, weapon, db: '' };
+    // No DB: the weapon's dice alone, whatever the attacker's DB says (CodeRabbit on #887)
+    if (!e.db || mode === 'none') return { notation: weapon, weapon, db: '' };
     if (!attacker) return { error: 'attacker' };
     const term = dbTerm(attacker.db);
     if (term === null) return { error: 'db', db: attacker.db };
