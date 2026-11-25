@@ -290,7 +290,11 @@
         const was = old.at && typeof old.at === 'object' ? old.at : (old.at ? { hp: old.at, max: old.at, conditions: old.at } : {});
         const stamp = { ...was };
         for (const k of Object.keys(v)) stamp[k] = at;
-        s.end.vitals[id] = { ...old, ...v, at: stamp };
+        const next = { ...old, ...v, at: stamp };
+        // a figure sent as null was blanked: it goes, as one never set (CodeRabbit on #887: undefined never reached
+        // the server, so a blanked figure came back)
+        for (const [k, x] of Object.entries(v)) if (x === null && k !== 'conditions') { delete next[k]; delete next.at[k]; }
+        s.end.vitals[id] = next;
       }
       for (const [pc, text] of Object.entries(a.where || {})) { if (String(text || '').trim()) s.end.where[pc] = String(text); else delete s.end.where[pc]; }
       if (typeof a.advancement === 'string') s.end.advancement = a.advancement;

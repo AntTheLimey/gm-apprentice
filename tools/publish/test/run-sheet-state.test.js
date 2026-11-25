@@ -72,6 +72,15 @@ describe('run sheet state', () => {
     assert.strictEqual(d.vitals.find((v) => v.rowId === BEN).hp, 20);
   });
 
+  // CodeRabbit on #887: a figure blanked in the end panel goes as null (JSON keeps it; undefined it drops) and clears
+  it('a blank end-panel figure, sent as null through JSON, clears the saved one', () => {
+    const sent = JSON.parse(JSON.stringify({ type: 'endSet', vitals: { [ADA]: { hp: null } } }));
+    let s = run([{ type: 'endSet', vitals: { [ADA]: { hp: 15 } } }, sent]);
+    assert.strictEqual('hp' in s.end.vitals[ADA], false);
+    const d = RS.derive(model, s);
+    assert.strictEqual(d.vitals.find((v) => v.rowId === ADA).hp, 22);
+  });
+
   it("rowIds: a PC's path, an ally's path, #2 for its second copy", () => {
     const d = RS.derive(allyModel(), fresh());
     const G = 'Characters/NPCs/Guard.md';

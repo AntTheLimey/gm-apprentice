@@ -2033,7 +2033,8 @@
       // a typed minus sign (U+2212) is the number's minus
       const v = t.value.trim().replace(/\u2212/g, '-');
       const n = Number(v);
-      const value = v === '' ? undefined : (Number.isFinite(n) ? n : v);
+      // a blank is null, which the request keeps and endSet takes as clearing the figure
+      const value = v === '' ? null : (Number.isFinite(n) ? n : v);
       const key = `${row}|${field}`;
       const why = RS.endFigureProblem(G.model, row, field, value);
       if (why) {
