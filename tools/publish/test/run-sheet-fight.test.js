@@ -365,6 +365,9 @@ describe('the fight in the state', () => {
     assert.ok(benched.length, 'the spot brings a benched person');
     s = RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: benched, tick: [], groups: [], thresholds: [], label: 'Sister Fen' }, now());
     assert.equal(texts(s).length, before, 'no line for nobody coming in');
+    // and no Undo mark on the line before it, nor on its rows (CodeRabbit on #887)
+    assert.ok(!s.events.some((e) => e.join === id), 'no line marked with this join');
+    assert.ok(!s.fight.rows.some((r) => r.joinId === id), 'no row marked with this join');
   });
 
   it('changed means differs from the start', () => {

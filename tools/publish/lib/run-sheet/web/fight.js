@@ -719,7 +719,7 @@
       if (label && who.length) say(s, f, at, `${label} ${who.length > 1 ? 'join' : 'joins'} the fight.`);
       // a join that only added rows can be taken back: its line and its rows carry the join's id, for Undo. A group
       // or beat join (it ticks, adds groups or thresholds) carries none, so `undoable` says no to it.
-      if (label && fresh.length && a.id != null && !ticked.length && !groups.length && !newThresholds) {
+      if (label && who.length && fresh.length && a.id != null && !ticked.length && !groups.length && !newThresholds) {
         s.events[s.events.length - 1].join = a.id;
         for (const r of fresh) r.joinId = a.id;
       }
