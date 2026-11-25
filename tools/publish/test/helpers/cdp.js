@@ -266,9 +266,10 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
           },
           // Chooses the option of a native <select> whose text starts with `text`, by real input only. A held click
           // focuses the select; `text` is typed as real key events, quickly (the browser's type-to-select match resets
-          // after a pause), and the select's value is read. If it did not change to the wanted option, ArrowDown (which
-          // changes a closed select on Windows and Linux) steps on, reading again, until the option is chosen or the
-          // list ends. Letters pick the first option that starts with them, so type far enough to be unique ("All"
+          // after a pause), and the select's value is read. Linux's Chrome opens the list on the click, and letters only
+          // move its highlight: Enter takes it, and the value is read again. If it still did not change to the wanted
+          // option, ArrowDown (which changes a closed select on Windows and Linux) steps on, reading again, until the
+          // option is chosen or the list ends. Letters pick the first option that starts with them, so type far enough to be unique ("All"
           // for All-Out Attack (Determined), "(Do" for All-Out Attack (Double)). Fails naming the system when
           // neither route moved it. Returns the chosen option's text.
           async choose(selector, text) {
@@ -296,6 +297,13 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             await sleep(150);
             let now = await read();
             let route = 'letters';
+            // an open list (Linux): the letters moved its highlight; Enter takes it and closes the list
+            if (!now.wanted) {
+              await page.key('Enter');
+              await sleep(150);
+              now = await read();
+              route = 'letters and Enter';
+            }
             if (!now.wanted) {
               route = 'arrow';
               const count = await evaluate(`document.querySelector(${sel}).options.length`);
@@ -308,9 +316,13 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
               }
             }
             if (!now.wanted) throw new Error(`could not choose "${text}" on ${selector} on ${process.platform}: the letters and ArrowDown both left it on "${now.text}"`);
-            // an open list takes the choice on Enter; a closed select has nothing to take, and Enter does no harm
-            await page.key('Enter');
-            await sleep(100);
+            // an open list takes the choice on Enter; a closed select has nothing to take, and Enter does no harm on the
+            // Mac. Not after the Enter above, nor after arrows: on Linux an Enter on the closed select opens its list
+            // again, and the next Escape then shuts the list, not the dialog it sits in
+            if (route === 'letters') {
+              await page.key('Enter');
+              await sleep(100);
+            }
             const done = await read();
             if (!done.wanted) throw new Error(`could not choose "${text}" on ${selector} on ${process.platform}: Enter left it on "${done.text}" (route ${route})`);
             return done.text;
