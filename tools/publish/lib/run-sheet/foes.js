@@ -181,7 +181,8 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
     const e = w.note ? entry(w.note, index, w.count, add, canFight, sides, wants, system, blank)
       : canFight && !w.dead ? noteless(w, wants, sides, add) : null;
     if (!e) continue;
-    entries.push(e);
+    // a dead one is a body, never a fighter, stat block or none (CodeRabbit on #887); its treasure still counts
+    if (!w.dead) entries.push(e);
     if (doneNotes.has(w.note)) continue;
     doneNotes.add(w.note);
     for (const b of bullets(e.info.treasure)) texts.push({ text: b.text, box: b.box });

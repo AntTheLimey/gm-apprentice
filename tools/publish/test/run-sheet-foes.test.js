@@ -221,6 +221,13 @@ describe('run sheet foes', () => {
       });
     }
 
+    // CodeRabbit on #887: a dead one with a stat block is a body too, no fighter
+    it('a dead creature with a stat block in a fight beat gets no row', () => {
+      const dead = { 'Creatures/Old Bones.md': '---\nname: Old Bones\ntype: creature\nstatus: dead\n---\n\n### Stats\n\n**AC** 12 | **HP** 9\n' };
+      const r = foesOfGate('- **[[Old Bones]]:** lies there', dead);
+      assert.ok(!r.foes.some((f) => f.name === 'Old Bones'), JSON.stringify(r.foes.map((f) => f.name)));
+    });
+
     it('a dead person in a fight beat gets no blank row', () => {
       const dead = { 'Characters/NPCs/Quiet Dead.md': '---\nname: Quiet Dead\ntype: npc\nstatus: dead\n---\n\nGone.\n' };
       const r = foesOfGate('- **[[Quiet Dead]]:** lies there', dead);
