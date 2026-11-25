@@ -3455,7 +3455,7 @@ describe('the entry box and the HP figure never overlap (step 6b Task 37 fix rou
 
 // Task 38: a CoC row fits one line. The entry box's placeholder is short with the whole hint in its title and
 // description; the dice are one button that opens the stepper on the row's second line; the attacker's "atk" is one box
-// on its own row; a long name's reserved width stops at 11 rem. Real input only.
+// on its own row; a long name's reserved width stops at 10 rem (fix round 2: 11 left 1 px). Real input only.
 describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: browserSkip() }, () => {
   const LONG = 'Bartholomew Featherstonehaugh the Younger';
   for (const [w, h] of SIZES) {
@@ -3518,13 +3518,13 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
         assert.strictEqual(new Set(seen.map((x) => `${x[1]}|${x[2]}|${x[3]}|${x[4]}`)).size, 1, `${w}: the split moved ${JSON.stringify(seen)}`);
         if (w === 1449) assert.strictEqual(seen[0][3], false, '1449: the run list stays open');
         sane(p, `t38 ${w}`);
-        // a long name (Task 38 fix round): CoC's row name reserves at most 11 rem, cut with "…" past it, whole in its
+        // a long name (Task 38 fix round; 10 rem since fix round 2): CoC's row name reserves at most 10 rem, cut with "…" past it, whole in its
         // title; the folds stay as they were, so at 1449 the run list stays open
         const folds = [p.layout.railFolded, p.layout.folded];
         p = await addNew(page, LONG);
-        const nm = await page.evaluate(`(() => { const n = Array.from(document.querySelectorAll('#side ol.to > li > .nm')).find((x) => x.textContent === ${q(LONG)}); return [n.title.startsWith(${q(LONG)}), parseFloat(n.style.minWidth || '0'), 11 * parseFloat(getComputedStyle(document.documentElement).fontSize), getComputedStyle(n).textOverflow]; })()`);
+        const nm = await page.evaluate(`(() => { const n = Array.from(document.querySelectorAll('#side ol.to > li > .nm')).find((x) => x.textContent === ${q(LONG)}); return [n.title.startsWith(${q(LONG)}), parseFloat(n.style.minWidth || '0'), 10 * parseFloat(getComputedStyle(document.documentElement).fontSize), getComputedStyle(n).textOverflow]; })()`);
         assert.strictEqual(nm[0], true, 'the whole name in its title');
-        assert.ok(nm[1] > 0 && nm[1] <= nm[2], `its reserved width ${nm[1]} is at most 11 rem (${nm[2]})`);
+        assert.ok(nm[1] > 0 && nm[1] <= nm[2], `its reserved width ${nm[1]} is at most 10 rem (${nm[2]})`);
         assert.strictEqual(nm[3], 'ellipsis');
         p = await settled(page);
         assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], folds, `${w}: the long name moved the folds`);
@@ -3569,6 +3569,52 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
       await page.waitFor(`document.querySelector('[data-fmdice="${c2}|1"]')`, 3000);
       assert.deepStrictEqual(await page.evaluate(`[document.querySelector('[data-fmdice="${c2}|1"]').disabled, document.querySelector('[data-fmdice="${c2}|-1"]').disabled]`), [true, true]);
       await page.waitFor(`document.activeElement === document.querySelector('[data-fmdopen="${c2}"]')`, 3000);
+    });
+  });
+
+  // fix round 2 (m6): the attacker picked anew between the def's Enter and the atk's: the remembered row is the old
+  // attacker's, so the new attacker's Enter sends nothing and says what to do
+  it('NPC against NPC: Enter in def, then another attacker picked; its atk\'s Enter sends nothing', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      await tap(page, '#fNext');
+      p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0');
+      const c1 = named(p, 'Dock Cultist 1').id;
+      const c2 = named(p, 'Dock Cultist 2').id;
+      const before = (await logOf(run)).length;
+      await typeInto(page, `[data-ftyped="mdef|${c2}"]`, '22', { settle: false });
+      await page.waitFor(`document.activeElement === document.querySelector('[data-ftyped="matk|${c1}"]')`, 3000);
+      // Dock Cultist 2 picked: it is the attacker now, its atk on its row
+      p = await peek(page, p, 'Dock Cultist 2');
+      await typeInto(page, `[data-ftyped="matk|${c2}"]`, '31', { settle: false });
+      await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote span")).some((n) => n.textContent === "31: tap the row it attacks.")', 3000);
+      p = await settled(page);
+      assert.strictEqual(p.fight.melee, null);
+      assert.strictEqual((await logOf(run)).length, before, 'nothing logged');
+    });
+  });
+
+  // fix round 2 (m5): a long-named NPC made an ally gains SAN on its row and loses its seen and Out buttons; at 1449 the
+  // run list stays open and the split holds
+  it('1449: a long-named NPC tapped to ally keeps the run list open and the split still', async () => {
+    const LONGN = 'Bartholomew Featherstonehaugh the Younger';
+    const run = await start('coc', {}, (vault) => {
+      const f = path.join(vault, 'Characters/NPCs/Tobias Reed.md');
+      fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('name: Tobias Reed', `name: ${LONGN}`));
+    });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 0);
+      const edge = (x) => [x.layout.paneBox.left, x.layout.folded, x.layout.railFolded, x.layout.orderMin];
+      const was = edge(p);
+      assert.strictEqual(p.layout.railFolded, false, 'the run list is open');
+      p = await peek(page, p, LONGN);
+      const id = named(p, LONGN).id;
+      await tap(page, `#acting [data-fside="ally"][data-fsiderow="${id}"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(id)}).side === "ally" && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await text(page, `li[data-frow="${id}"] .pools`), 'SAN 45');
+      assert.deepStrictEqual(edge(p), was, 'the split and the folds hold');
+      sane(p, 'long ally 1449');
     });
   });
 });
