@@ -3236,6 +3236,48 @@ describe('Typed rolls, fix round (step 6b Task 37), by real input', { skip: brow
 
   // PRENTICE review I1: one typed number per foe. The row's box and the panel's show the same number; a defence tapped
   // on either takes it, logged typed, counted once, and both boxes empty. Dice fixed at 4 (a server roll is 12).
+  // PRENTICE review M1: cards left waiting fold to one line each (name, what is due, ✕), the newest open; with five on
+  // one foe at 1449x762 its panel's Defend row stays in view. A folded card opens on a tap; ✕ still dismisses at once.
+  it('GURPS 1449: five ignored cards on Bouncer 2 fold to lines and its Defend row stays in view; a tap opens one, ✕ dismisses one', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      for (const hit of ['12 imp vitals', '7 cr', '30 cut neck', '9 imp vitals', '8 cr skull']) {
+        const n = named(p, 'Bouncer 2').cards.length;
+        p = await typeInto(page, `[data-fhp="${b2}"]`, hit);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards.length > ${n} && p.saved === "Saved" && p.pending === 0`);
+      }
+      assert.strictEqual(named(p, 'Bouncer 2').cards.length, 5);
+      p = await peek(page, p, 'Bouncer 2');
+      const look = await page.evaluate(`(() => {
+        const a = document.querySelector('#acting').getBoundingClientRect();
+        const d = document.querySelector('#acting .pdefs').getBoundingClientRect();
+        const cards = Array.from(document.querySelectorAll('#acting .fcard'));
+        return { a: [Math.round(a.top), Math.round(a.bottom)], d: [Math.round(d.top), Math.round(d.bottom)], st: document.querySelector('#acting').scrollTop, sh: document.querySelector('#acting').scrollHeight,
+          strip: Math.round(document.querySelector('#acting .fcards').getBoundingClientRect().height), inView: d.top >= Math.max(a.top, 0) - 1 && d.bottom <= Math.min(a.bottom, innerHeight) + 1,
+          folded: cards.filter((c) => c.classList.contains('fold')).length, open: cards.filter((c) => !c.classList.contains('fold')).length,
+          lineH: Math.max(...cards.filter((c) => c.classList.contains('fold')).map((c) => Math.round(c.getBoundingClientRect().height))) };
+      })()`);
+      assert.deepStrictEqual([look.folded, look.open], [4, 1], JSON.stringify(look));
+      assert.ok(look.lineH <= 34, `a folded card is one line (${look.lineH} px)`);
+      assert.ok(look.inView, `the Defend row is in view: ${JSON.stringify(look)}`);
+      // a folded card says what is due and opens on a tap
+      const folded = '#acting .fcard.fold';
+      assert.match(await text(page, `${folded} [data-fcardopen]`), /\S/);
+      const id = await page.evaluate(`document.querySelector(${q(folded)}).dataset.fcard`);
+      await tap(page, `${folded} [data-fcardopen]`);
+      await page.waitFor(`!document.querySelector('#acting .fcard[data-fcard="${id}"]').classList.contains('fold')`, 3000);
+      // ✕ on a folded card dismisses it in one tap, as on an open one
+      const other = await page.evaluate(`document.querySelector(${q(folded)}).dataset.fcard`);
+      await tap(page, `#acting .fcard.fold[data-fcard="${other}"] .x`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards.length === 4 && p.saved === "Saved" && p.pending === 0`);
+      assert.ok(!named(p, 'Bouncer 2').cards.some((c) => c.id === other));
+      sane(p, 'folded cards 1449');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
   it('GURPS: 7 typed in the panel\'s box, the row\'s Parry tapped: typed, one parry, both boxes empty; and the reverse with Dodge', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {

@@ -66,6 +66,8 @@
     mdice: {}, melee: null, meleeTurn: null,
     // the rows whose dice stepper is open on their second line (Task 38), shut when the turn moves
     mdOpen: {},
+    // the waiting cards the GM opened by a tap on their folded line (PRENTICE review M1); the newest is always open
+    cardOpen: {},
     // the row whose "def" Enter sent focus to the attacker's empty "atk", and that attacker ({ target, attacker }, Task 38):
     // Enter there goes on with that row while the attacker still acts and the row's "def" still holds a number
     atkFor: null,
@@ -1626,7 +1628,10 @@
     const n = (c) => { const m = /^k(\d+)$/.exec(String(c.id)); return m ? Number(m[1]) : -1; };
     const all = [];
     for (const r of f.view.rows) for (const c of r.cards || []) all.push([r, c]);
-    const out = all.map((x, i) => [x, i]).sort((a, b) => n(b[0][1]) - n(a[0][1]) || a[1] - b[1]).map(([[r, c]]) => cardHTML(r, c, K));
+    // the newest card open, the rest folded to a line each unless the GM opened one (PRENTICE review M1: cards left
+    // waiting never bury the panel)
+    const out = all.map((x, i) => [x, i]).sort((a, b) => n(b[0][1]) - n(a[0][1]) || a[1] - b[1])
+      .map(([[r, c]], i) => cardHTML(r, c, K, i === 0 || Boolean(ui.cardOpen[c.id])));
     return out.length ? `<div class="fcards">${out.join('')}</div>` : '';
   }
   // A card's buttons each carry `data-fcbtn` "row|card|line|take" (take: an offer, `out`, `dismiss`, `roll`, or a PC's
@@ -1644,11 +1649,20 @@
     return !isNum(r.ht) && c.lines.some((l) => l.kind !== 'dead' && !l.noRoll) ? 'ht' : null;
   }
   const statLabel = (K, k) => (K.coc ? ((K.C.stats || {})[k] || k.toUpperCase()) : 'HT');
-  function cardHTML(r, c, K) {
+  function cardHTML(r, c, K, open = true) {
     const C = K.C;
     const next = GMath.nextLine(c, C);
     const want = cardWants(r, c, K, next);
     const what = c.what || CARD_WHAT[c.kind] || (c.kind === 'hit' ? 'hit' : '');
+    if (!open) {
+      // folded: its row's name, what it is and what is due, one tap to open it; ✕ dismisses it as ever
+      const pend = c.lines.find((l) => GMath.pending(l));
+      const due = next >= 0 ? K.M.lineName(c.lines[next], C) : pend ? `${K.M.lineName(pend, C)}: offer waiting` : '';
+      return `<div class="fcard fold" data-fcard="${esc(c.id)}" data-fcrow="${esc(r.id)}"><div class="fch">`
+        + `<button type="button" class="nm" data-fcardpick="${esc(r.id)}" title="Show ${esc(r.gmName)}'s panel">${esc(r.gmName)}</button>`
+        + `<button type="button" class="due" data-fcardopen="${esc(c.id)}" aria-expanded="false" title="Open this card">${esc([what, due].filter(Boolean).join(' \u00b7 '))} \u25b8</button>`
+        + `<span class="sp"></span><button type="button" class="x" ${cardBtn(r, c, '', 'dismiss')} title="Dismiss: nothing applied, nothing logged" aria-label="Dismiss this card">\u2715</button></div></div>`;
+    }
     const note = K.coc && C.notes && C.notes[c.kind] ? `<span class="cite">${esc(C.notes[c.kind])}</span>` : '';
     const standing = (c.standing || []).map((o) => `<button type="button" class="tg stand" ${cardBtn(r, c, '', o)}>${esc((GMath.offerOf(C, o) || {}).label || o)}</button>`).join('');
     let h = `<div class="fcard" data-fcard="${esc(c.id)}" data-fcrow="${esc(r.id)}"><div class="fch">`
@@ -2090,7 +2104,7 @@
     focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-ffpmax', 'data-fother', 'data-fstatus', 'data-ftick', 'data-fsel',
       'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fgun', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
-      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardstat', 'data-fshock',
+      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardopen', 'data-fcardstat', 'data-fshock',
       'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow',
       'data-fmelee', 'data-fmdice', 'data-fmdopen', 'data-fmlvl', 'data-fmx', 'data-fmout', 'data-fdmgdb', 'data-fdmgimp', 'data-fdmgx', 'data-fdmgclose',
       'data-fdmgpick', 'data-fshoot', 'data-fshr', 'data-fshc', 'data-fshgun', 'data-fshdive', 'data-fshdv', 'data-fshroll', 'data-fshlvl', 'data-fshx',
@@ -2183,6 +2197,13 @@
     afterLayout() {
       fitChips();
       showNewCards();
+      // a row picked by its name: its panel's Defend row (else the panel's top) comes into view below any cards waiting
+      // above it, so cards left waiting never bury the panel (PRENTICE review M1); the cards stay a scroll up
+      if (ui.showPanel) {
+        ui.showPanel = false;
+        const to = document.querySelector('#acting .pdefs') || document.querySelector('#acting .ahead, #acting h3');
+        if (to) to.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
       // a damage box this page's exchange opened takes focus, after the redraw has put focus back where it was
       if (ui.dmgFocus) { const id = ui.dmgFocus; ui.dmgFocus = null; setTimeout(() => RP.focusTo(attr('data-fhp', id)), 0); }
       // an untouched box that shut keeps focus but not its remembered entry (the redraw puts typed words back)
@@ -2323,11 +2344,12 @@
       // Any row's second click keeps it picked (Task 34): another row's name, or the turn moving on, moves the panel.
       if (panelBoxes().length && noNumbers(rowById(d.fpeek))) { pickRow(d.fpeek); return true; }
       ui.peek = d.fpeek;
+      ui.showPanel = true;
       RP.render();
       return true;
     }
     if (d.fhtype) { const [rid, v] = split(d.fhtype); tapHitChip(rid, v); return true; }
-    if (d.fcardpick) { ui.peek = d.fcardpick; RP.render(); return true; }
+    if (d.fcardpick) { ui.peek = d.fcardpick; ui.showPanel = true; RP.render(); return true; }
     if (d.fcbtn) {
       const parts = d.fcbtn.split('|');
       const take = parts.pop();
@@ -2348,6 +2370,14 @@
     if (d.fretreat) { const x = rowById(d.fretreat); if (x) F({ type: 'retreat', row: x.id, on: !x.retreat }); return true; }
     if (d.fmelee) { const [rid, k] = split(d.fmelee); meleeStart(rid, k); return true; }
     if (d.fmdice) { const [rid, n] = split(d.fmdice); meleeDice(rid, Number(n)); return true; }
+    // a folded card opened: its next step takes focus, as a new card's does
+    if (d.fcardopen) {
+      ui.cardOpen[d.fcardopen] = true;
+      RP.render();
+      const el = document.querySelector(`#acting .fcard[data-fcard="${CSS.escape(d.fcardopen)}"]`);
+      if (el) focusCard(el.dataset.fcrow, d.fcardopen);
+      return true;
+    }
     // the dice button (Task 38): opens the stepper with focus on its +, so a bonus die is two taps; shuts it again
     if (d.fmdopen) {
       const id = d.fmdopen;

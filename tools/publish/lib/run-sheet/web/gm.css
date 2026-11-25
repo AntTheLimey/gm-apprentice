@@ -409,6 +409,10 @@ ol.to .defres.failed { color: var(--bad); }
 .act .fcard .clines .took { color: var(--bad); }
 .act .fcard .clines .decline { font-size: .7rem; padding: 0 5px; }
 .act .fcard .roll { font-size: .8rem; padding: 2px 14px; }
+/* a waiting card folded to one line (PRENTICE review M1): its name, what is due, ✕ */
+.act .fcard.fold { padding: 2px 8px; }
+.act .fcard.fold .fch { flex-wrap: nowrap; min-width: 0; }
+.act .fcard.fold .due { font: 500 .72rem var(--mono); background: none; border: 0; padding: 0 2px; color: var(--muted); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* CoC (Task 18): a PC's line is the player's roll, Passed or Failed tapped; the bout tables' page; Stabilised standing */
 .act .fcard .taps { display: inline-flex; gap: 6px; }
 .act .fcard .taps button { font-size: .8rem; padding: 2px 12px; }
