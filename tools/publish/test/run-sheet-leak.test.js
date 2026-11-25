@@ -1441,12 +1441,13 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       assert.ok(walker.hit && walker.hit.line, 'a working line on the row');
       await t.arm('a damage working line', walker.hit.line);
       await t.look('Iris\'s damage worked out');
-      // the walker hits back at Iris: its d100 against the PC's tapped dodge; its damage bonus and Iris's HP
+      // the walker hits back at Iris: its d100 against the PC's tapped dodge; its damage bonus (+1D6 since the fixture's
+      // figures were made its own, PRENTICE review) and Iris's HP
       auto = CM.attackDice(rowNamed(s, 'Iris Calder'), COC.coc);
       s = await t.send([{ type: 'melee', fight: s.fight.id, attacker: walker.id, defender: rowNamed(s, 'Iris Calder').id, response: 'dodge', dice: CM.diceOfNet(auto.net, COC.coc), auto, attack: d100(93, CM.skillOf(walker, 'attack'), 'regular'), defence: { level: 'fail' } }]);
       assert.ok(s.fight.melee && s.fight.melee.side === 'attacker', 'the walker hit Iris');
       await t.arm('a dodge tapped', eventsOf(s).slice(-1)[0]);
-      s = await act(t, 'hp', 'Iris Calder', { entry: '1D6+DB', by: walker.id, mode: 'full', roll: dmg('1D6+1D4', 2, 2), exchange: s.fight.melee.n });
+      s = await act(t, 'hp', 'Iris Calder', { entry: '1D6+DB', by: walker.id, mode: 'full', roll: dmg('1D6+1D6', 2, 2), exchange: s.fight.melee.n });
       const iris = rowNamed(s, 'Iris Calder');
       assert.ok(iris.hit && iris.hp < 9, `Iris is hurt: ${iris.hp}`);
       await t.arm('a hit on a PC, worked out', iris.hit.line);

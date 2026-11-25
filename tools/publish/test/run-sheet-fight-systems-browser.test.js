@@ -127,9 +127,15 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       // sorted at Fight, no Sort press: DEX high to low, the rows with no DEX last
       assert.strictEqual(p.fight.started, false);
       assert.deepStrictEqual(order(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
-      assert.deepStrictEqual(p.fight.rows.filter((r) => r.in).map((r) => r.ini), [60, 55, 50, 50, 50, 45, null, null]);
+      // the Brine Walkers' DEX 48 (their figures made the fixture's own in the PRENTICE review)
+      assert.deepStrictEqual(p.fight.rows.filter((r) => r.in).map((r) => r.ini), [60, 55, 50, 48, 48, 45, null, null]);
       // nothing of D&D's on the row: no Roll, no AC, no ½, no Res
       assert.strictEqual(await page.evaluate('Boolean(document.querySelector("#fRoll, [data-fac], [data-fhalf], [data-fres]"))'), false);
+      // the walkers' DEX typed up to Hale's 50 in their panels, for a three-way tie
+      for (const name of ['Brine Walker 1', 'Brine Walker 2']) {
+        p = await peek(page, p, name);
+        p = await typeInto(page, box(p, name, 'dex'), 50);
+      }
       // the DEX tie goes by the higher combat skill once each row has one (typed in its panel), then Sort
       for (const [name, v] of [['Warden Hale', 45], ['Brine Walker 1', 60], ['Brine Walker 2', 55]]) {
         p = await peek(page, p, name);
@@ -3103,16 +3109,17 @@ describe('CoC rows ticked in or added later are placed by DEX (step 6b Task 33),
       await tap(page, '[data-faddpick]');
       p = await until(page, 'p.fight.rows.some((r) => r.name === "Dock Cultist" && r.in) && p.saved === "Saved" && p.pending === 0');
       assert.strictEqual(named(p, 'Dock Cultist').ini, 50);
-      // DEX 50 ties: the higher combat skill first (Warden Hale 55, the Brine Walkers 45), so the Cultist's 40 comes after them
+      // DEX 50 ties: the higher combat skill first (Warden Hale 55), so the Cultist's 40 comes after him, and before the
+      // Brine Walkers' DEX 48 (their figures made the fixture's own in the PRENTICE review)
       assert.deepStrictEqual(before, ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
-      assert.deepStrictEqual(names(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Dock Cultist', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
+      assert.deepStrictEqual(names(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Dock Cultist', 'Brine Walker 1', 'Brine Walker 2', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
       assert.deepStrictEqual([p.fight.turn, p.fight.round], turn, 'the turn did not move');
       // a blank row from "+ New", then its DEX typed
       p = await addNew(page, 'Quill');
       assert.strictEqual(names(p).at(-1), 'Quill', 'a row with no DEX stays last');
       p = await typeInto(page, box(p, 'Quill', 'dex'), 50);
       // no combat skill: last of the DEX 50s
-      assert.deepStrictEqual(names(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Dock Cultist', 'Quill', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
+      assert.deepStrictEqual(names(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Dock Cultist', 'Quill', 'Brine Walker 1', 'Brine Walker 2', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
       assert.deepStrictEqual([p.fight.turn, p.fight.round], turn);
       assert.deepStrictEqual(p.errors, []);
     });

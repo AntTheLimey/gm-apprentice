@@ -18,14 +18,14 @@ Wet footprints on the quay steps.
 
 | STR | CON | SIZ | DEX | INT | POW |
 |-----|-----|-----|-----|-----|-----|
-| 75  | 65  | 80  | 50  | 40  | 45  |
+| 80  | 60  | 85  | 48  | 40  | 45  |
 
-**HP** 14 · **MP** 9 · **Damage Bonus** +1D4 · **Build** 1 · **Move** 7 / Swim 10
-**Armour** 1-point scales · **Attacks per round** 1
+**HP** 14 · **MP** 9 · **Damage Bonus** +1D6 · **Build** 2 · **Move** 7 / Swim 10
+**Armour** 1 (barnacled hide) · **Attacks per round** 1
 
 **Fighting**
-- Claw 45% (22/9), damage 1D6+DB
-- Dodge 25% (12/5)
+- Grasp 42% (21/8), damage 1D8+DB
+- Dodge 24% (12/4)
 
 **Sanity loss:** 0/1D4 to see one
 
