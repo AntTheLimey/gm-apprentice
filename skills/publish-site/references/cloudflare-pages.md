@@ -377,7 +377,9 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
 > https://dash.cloudflare.com/profile/api-tokens, edit the token, type
 > `Workers KV` in the permission search box, tick **Edit** on the **Workers KV
 > Storage** row, and save. Editing keeps the same token value, so you
-> do not need to change `CLOUDFLARE_API_TOKEN`. Without this, `kv namespace
+> do not need to change `CLOUDFLARE_API_TOKEN`. A new token has a new value:
+> save it with the line from Step 2, in the GM's own terminal, before the
+> steps below. Without this, `kv namespace
 > create` fails with `Authentication error [code: 10000]`.
 
 1. **Create the KV namespace:**
