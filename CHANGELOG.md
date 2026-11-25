@@ -34,6 +34,8 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - Call of Cthulhu NPC figures are read from more block shapes (Skills and Weapons sections, tables, bold pairs), a Regency gun with no malfunction figure uses the book's 95, and a row added mid-fight takes its place by DEX.
 - The combat reference corrects GURPS wounding, stun and knockdown, and Call of Cthulhu's Dying, several shots and Prone (#874, #875).
 - Smaller fixes: Table Log figures select on click, Luck above 99 is refused, a Plan's roster reads more `Sheet:` shapes, cards, focus and the pane split hold still, and PCs' Parry lines, Threads and note names show as they should.
+- A GURPS roll of 17 fails at any target; a foe's pool written `4/12` starts at 4; a CoC weapon row whose Skill says Firearms is a gun, and two guns sharing a skill are both kept; a dead foe with a stat block gets no row.
+- Same for all keeps a spent pool spent and works Tired out again; No DB never waits on an unreadable DB; a blanked End of the night figure stays cleared; To-hit's level box no longer steps to 1 on a click; wrap-up never clears a CoC status the log does not name.
 
 ## [1.12.148] — 2026-11-25
 
