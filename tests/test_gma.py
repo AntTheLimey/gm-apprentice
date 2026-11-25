@@ -399,6 +399,22 @@ class WindowsJobTests(unittest.TestCase):
             gma._run_tool(tool, ["doctor"])
         ex.assert_called_once_with("node", ["node", "t.js", "doctor"])
 
+    def test_a_background_serve_runs_outside_the_job_on_windows(self):
+        # #883: the server node starts would stay in gma's kill-on-close job and die when gma returns.
+        tool = Path("t.js")
+        for args in (["serve", "--background"], ["serve", "--site", "gm", "--status"], ["serve", "--stop"]):
+            with mock.patch.object(gma.os, "name", "nt"), \
+                    mock.patch.object(gma, "_call_tied_to_gma") as tied, \
+                    mock.patch.object(gma.subprocess, "call", return_value=0) as plain:
+                self.assertEqual(gma._run_tool(tool, args), 0)
+            tied.assert_not_called()
+            plain.assert_called_once_with(["node", "t.js", *args])
+        # A serve in the terminal stays tied, so a killed gma takes it along (#609).
+        with mock.patch.object(gma.os, "name", "nt"), \
+                mock.patch.object(gma, "_call_tied_to_gma", return_value=0) as tied:
+            gma._run_tool(tool, ["serve", "--port", "4321"])
+        tied.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

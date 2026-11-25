@@ -349,7 +349,12 @@ test('a build step is run only by the steps module', () => {
   const everywhere = [...sources, ...files(SETTINGS)];
   const grepAll = (re) => everywhere.filter((f) => re.test(code(f))).map(rel).sort();
   assert.deepEqual(grepAll(/\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/),
-    ['lib/chrome.js', 'lib/image-optimize.js', 'lib/props/pages-cli.js', 'lib/run-command.js', 'lib/run-sheet/server.js', 'lib/run-sheet/table-cli.js', 'lib/settings/site-tool.js', 'lib/settings/steps.js']);
+    ['lib/chrome.js', 'lib/image-optimize.js', 'lib/props/pages-cli.js', 'lib/run-command.js', 'lib/run-sheet/server.js', 'lib/run-sheet/table-cli.js', 'lib/serve.js', 'lib/settings/site-tool.js', 'lib/settings/steps.js']);
+  // serve.js starts exactly one process, this tool's own `serve`, apart from the terminal (#883), with no shell.
+  const serveSrc = code(path.join(ROOT, 'lib', 'serve.js'));
+  assert.equal((serveSrc.match(/\bspawn(?:Sync)?\)?\(/g) || []).length, 1, 'serve.js: one call');
+  assert.match(serveSrc, /\(deps\.spawn \|\| spawn\)\(process\.execPath, args,/);
+  assert.match(serveSrc, /const args = \[bin, 'serve', '--site', site, '--port', String\(port\), '--config', path\.resolve\(configPath\)\];/);
   // server.js starts exactly one process, the --file-log command, with no shell.
   const serverSrc = code(path.join(ROOT, 'lib', 'run-sheet', 'server.js'));
   assert.equal((serverSrc.match(/\bspawnSync\(/g) || []).length, 1, 'server.js: one call');

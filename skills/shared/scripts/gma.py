@@ -416,14 +416,23 @@ def _call_tied_to_gma(cmd: list[str]) -> int:
             _close_job(job)
 
 
+def _runs_apart(args: list[str]) -> bool:
+    """True for `serve --background`, `--status` and `--stop`: they start or
+    find a server that belongs to no terminal (#883). On Windows a child of
+    gma's kill-on-close job stays in it, and so would the server node starts,
+    so these run outside the job; each one returns as soon as it is done."""
+    return bool(args) and args[0] == "serve" and any(
+        a in ("--background", "--status", "--stop") for a in args)
+
+
 def _run_tool(tool: Path, args: list[str]) -> int:
     cmd = ["node", str(tool), *args]
     try:
         if os.name != "nt":
-            # Replace this process, so a killed background `serve` takes
+            # Replace this process, so a killed `serve` in a terminal takes
             # Node with it instead of leaving it orphaned.
             os.execvp("node", cmd)
-        code = _call_tied_to_gma(cmd)
+        code = subprocess.call(cmd) if _runs_apart(args) else _call_tied_to_gma(cmd)
         # A signal death comes back negative; exit codes are 0..255.
         return code if 0 <= code <= 255 else 1
     except OSError:
