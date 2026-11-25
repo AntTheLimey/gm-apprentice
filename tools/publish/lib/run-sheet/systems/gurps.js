@@ -315,9 +315,9 @@ function sheetDefences(model) {
     // a label with no name: the next cell's first words (`Broadsword`; `Knife, off hand` is Knife), a figure dropped
     if (!name && p && p.source) name = String(p.source).split(/[,;(]/)[0].replace(/[\s\-\u2212\u2013]*\d+\s*$/, '').trim();
     // only words that look like a weapon's name (letters, spaces, apostrophes, hyphens, a slash between words as in
-    // Axe/Mace): a working such as `Skill/2 + 3` in the template's Source column names nothing (Task 34 Minor B; the
-    // slash, Task 38 fix round)
-    if (name && !/^\p{L}[\p{L}\s'\u2019-]*(?:\/\p{L}[\p{L}\s'\u2019-]*)*$/u.test(name)) name = '';
+    // Axe/Mace or Axe / Mace): a working such as `Skill/2 + 3` in the template's Source column names nothing (Task 34
+    // Minor B; the slash, Task 38 fix rounds)
+    if (name && !/^\p{L}[\p{L}\s'\u2019-]*(?:\s*\/\s*\p{L}[\p{L}\s'\u2019-]*)*$/u.test(name)) name = '';
     return fig === null ? null : `${name ? `${name[0].toUpperCase()}${name.slice(1)} ` : ''}${fig}`;
   }).filter(Boolean);
   if (lines.length > 1) out.parryLines = lines;

@@ -191,8 +191,8 @@ for (const crlf of [false, true]) {
       assert.deepEqual(systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: own }).numbers.parryLines, ['Broadsword 10', 'Knife 9']);
       // a third column holding a working, not a weapon (the template's Source, Task 34 Minor B): no name from it; a
       // weapon's hyphen and apostrophe are kept (the sheet reader curls the apostrophe)
-      const sums = sela.replace(/^---[\s\S]*?\n---\n/, '').replace('| Parry | 10 | Broadsword |', "| Parry | 10 | Skill/2 + 3 |\n| Parry | 9 | 3 + Skill |\n| Parry | 8 | Main-Gauche |\n| Parry | 7 | Bo'sun's Hook |\n| Parry | 6 | Two-Handed Axe/Mace |\n| Parry | 5 | Axe/2 |");
-      assert.deepEqual(systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: sums }).numbers.parryLines, ['10', '9', 'Main-Gauche 8', 'Bo\u2019sun\u2019s Hook 7', 'Two-Handed Axe/Mace 6', '5']);
+      const sums = sela.replace(/^---[\s\S]*?\n---\n/, '').replace('| Parry | 10 | Broadsword |', "| Parry | 10 | Skill/2 + 3 |\n| Parry | 9 | 3 + Skill |\n| Parry | 8 | Main-Gauche |\n| Parry | 7 | Bo'sun's Hook |\n| Parry | 6 | Two-Handed Axe/Mace |\n| Parry | 5 | Axe/2 |\n| Parry | 4 | Axe / Mace |");
+      assert.deepEqual(systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: sums }).numbers.parryLines, ['10', '9', 'Main-Gauche 8', 'Bo\u2019sun\u2019s Hook 7', 'Two-Handed Axe/Mace 6', '5', 'Axe / Mace 4']);
       // (Task 38 fix round, M4: a slash between words is a skill's name, as Axe/Mace; a digit or `+` is still a working)
       assert.equal(readPc('Sela Drake').numbers.parryLines, undefined);
     });
