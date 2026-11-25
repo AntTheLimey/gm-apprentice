@@ -34,25 +34,24 @@ describe('the generated tables', () => {
     assert.notEqual(edited, text);
     assert.equal(render(edited, blocks), text);
   });
-  it('the hit-location table is the book\'s shape: Location, Penalty, DR, Notes, Page, with no damage-type column', () => {
+  // Ant's pick on the PRENTICE review's C1 (2026-11-25): the doc's table is name, penalty and page only; the figures
+  // that are the rule stay in code
+  it('the hit-location table is Location, Penalty and Page only: no DR, notes or damage-type column', () => {
     const text = lf(fs.readFileSync(FILES[0].file, 'utf8'));
     const block = text.slice(text.indexOf('<!-- generated: hit-locations -->'), text.indexOf('<!-- /generated -->')).split('\n');
     const cells = (l) => l.split('|').slice(1, -1).map((c) => c.trim());
-    assert.deepEqual(cells(block[1]), ['Location', 'Penalty', 'DR', 'Notes', 'Page']);
+    assert.deepEqual(cells(block[1]), ['Location', 'Penalty', 'Page']);
     const rows = block.slice(3).filter((l) => l.startsWith('|'));
     assert.equal(rows.length, LOCATIONS.length);
-    for (const r of rows) assert.equal(cells(r).length, 5, r);
-    for (const t of TYPES) assert.ok(!cells(block[1]).includes(t), `a ${t} column`);
+    for (const r of rows) assert.equal(cells(r).length, 3, r);
+    for (const l of LOCATIONS) assert.ok(rows.some((r) => cells(r)[0] === l.name && cells(r)[2] === l.cite), l.key);
+    assert.ok(!/x4|crippled|knockdown|miss by 1/.test(rows.join('\n')), 'no rule in the rows');
   });
-  it('the notes name what differs from a torso hit, from the code', () => {
+  it('the words above the table point to the run sheet and the rules server', () => {
     const text = lf(fs.readFileSync(FILES[0].file, 'utf8'));
-    const row = (name) => text.split('\n').find((l) => l.startsWith(`| ${name} |`));
-    // the skull's extras skip toxic; the spine's crippling is automatic; a miss by 1 lands on the torso
-    assert.match(row('Skull'), /x4;.*none of this for tox/);
-    assert.match(row('Spine'), /crippling it knocks down and stuns outright/);
-    assert.match(row('Vitals'), /miss by 1 hits the torso/);
-    assert.match(row('Arm'), /imp, pi\+, pi\+\+ x1/);
-    assert.equal(row('Torso').split('|')[4].trim(), '--');
+    const above = text.slice(text.indexOf('## Hit Locations'), text.indexOf('<!-- generated: hit-locations -->'));
+    assert.match(above, /run sheet's damage helper/);
+    assert.match(above, /rules server/);
   });
   it('a missing marker is an error, never a quiet skip', () => {
     assert.throws(() => render('# no markers\n', FILES[0].blocks), /no <!-- generated: hit-locations -->/);
