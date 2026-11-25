@@ -270,11 +270,12 @@ const plain = (v) => String(v).replace(/[*_`]/g, '').trim();
 const noSpell = (v) => !v || NO_SPELL.test(v) || /^\{.*\}$/.test(v);
 const SPELL_LABEL = /^(?:\**[ \t]*spells?[ \t]*\**[ \t]*:\**|\|[ \t]*\**spells?\**[ \t]*\|)/i;
 // a section's line, as a spell or not
-function spellLine(raw) {
+function spellLine(raw, tomes = true) {
   const line = raw.replace(/^[ \t]*(?:[-*+]|\d+\.)[ \t]+/, '').trim();
   if (!line || /^\|?[\s:|-]+\|?$/.test(line)) return false;
   // a tome: its italic title first (`*Revelations of Glaaki*, read in 1925`), or a Tomes line
-  if (/^(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)/.test(line) || /^\**[ \t]*(?:mythos[ \t]+)?(?:tomes?|books?)\b/i.test(line)) return false;
+  // (only under a heading that names tomes too: under `Spells Known` an italic name is a spell's)
+  if ((tomes && /^(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)/.test(line)) || /^\**[ \t]*(?:mythos[ \t]+)?(?:tomes?|books?)\b/i.test(line)) return false;
   // a label or a table's cells: what follows it
   const cells = line.startsWith('|') ? line.split('|').map(plain).filter(Boolean) : null;
   if (cells) return cells.some((c, i) => !(i === 0 && /^spells?$/i.test(c)) && !noSpell(c));
@@ -295,7 +296,8 @@ function spellsIn(text) {
     // a table's header row is a heading, not a spell
     const lines = m[2].split('\n');
     const rows = lines.filter((l, i) => !(l.trim().startsWith('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && /-/.test(lines[i + 1])));
-    if (rows.some(spellLine)) return true;
+    const tomes = /\b(?:tomes?|books?)\b/i.test(head);
+    if (rows.some((l) => spellLine(l, tomes))) return true;
   }
   return false;
 }

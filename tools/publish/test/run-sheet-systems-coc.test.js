@@ -404,6 +404,10 @@ for (const crlf of [false, true]) {
         // a heading that starts with Spells counts as Spells does (fix round 2, I1)
         fs.writeFileSync(note, `${was}${nl}## Spells Known${nl}${nl}- Contact Ghoul${nl}`);
         assert.equal(readPc('Iris Calder').numbers.caster, true, 'Spells Known');
+        // an italic spell name under a spells-only heading is a spell; only beside tomes is italic a tome's title
+        // (CodeRabbit on #887)
+        fs.writeFileSync(note, `${was}${nl}## Spells Known${nl}${nl}- *Elder Sign*${nl}`);
+        assert.equal(readPc('Iris Calder').numbers.caster, true, 'an italic spell under Spells Known');
       } finally { fs.writeFileSync(note, was); }
     });
     it('a one-line sheet falls back to its line, current = max, with a quiet note', () => {
