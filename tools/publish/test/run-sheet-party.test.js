@@ -70,6 +70,14 @@ describe('run sheet handouts, party and people', () => {
     assert.strictEqual(r.warnings.length, 0);
   });
 
+  // final review M2: a reader's warning about a sheet (CoC's spells check failing) is a build warning line, by the PC
+  it('a reader\'s warning about a sheet is a warning line naming the PC', () => {
+    const { index, body } = setup();
+    const system = { readPc: () => ({ numbers: { hpNow: 1, hpMax: 1 }, warning: 'its spells could not be read (boom): MP shows on its fight row' }) };
+    const r = readPcs(body, index, [ADA], system);
+    assert.deepStrictEqual(r.warnings, [{ kind: 'pc-reader', note: ADA, text: 'Ada Moss: its spells could not be read (boom): MP shows on its fight row' }]);
+  });
+
   it('a typeset minus reads in a signed row', () => {
     const { dir, index: i0, body } = setup();
     const f = path.join(dir, ADA);

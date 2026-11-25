@@ -427,6 +427,9 @@ for (const crlf of [false, true]) {
       const r = systemFor('coc-7e').readPc({ notePath: 'x.md', index: null, fm: null, body: { toString() { throw new Error('boom\nsecond'); } } });
       assert.equal(r.numbers.hpMax, null);
       assert.match(r.note, /could not be read: .*boom$/);
+      // final review M2: the spells check failing too leans to showing MP, and says so as a build warning
+      assert.strictEqual(r.numbers.caster, true);
+      assert.strictEqual(r.warning, 'its spells could not be read (boom): MP shows on its fight row');
     });
   });
 }

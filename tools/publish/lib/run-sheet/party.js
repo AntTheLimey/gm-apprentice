@@ -101,6 +101,8 @@ function readPcs(planBody, index, party, system = systemFor(null)) {
     if (pcs.some((x) => x.note === note)) continue;
     const body = index.read(note).body;
     const read = system.readPc({ notePath: note, index, fm, body });
+    // a reader's word about the sheet for the GM's build warnings (CoC's spells check failing, final review M2)
+    if (typeof read.warning === 'string' && read.warning) warn('pc-reader', note, `${stemOf(note)}: ${read.warning}`);
     // a portrait that cannot be found is the index's warning, never a throw
     const portrait = index.portrait(note);
     pcs.push({

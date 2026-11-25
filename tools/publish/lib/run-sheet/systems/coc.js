@@ -368,9 +368,14 @@ const sheetChars = (model) => {
 
 function readPc({ body, fm }) {
   const r = readPcNumbers({ body, fm });
-  // a caster: the sheet names a spell (Task 38 fix round), only when it does
-  // (a body that cannot be read already gave its note: no caster, never a throw)
-  try { if (r.numbers && spellsIn(body)) r.numbers = { ...r.numbers, caster: true }; } catch (e) { /* not a caster */ }
+  // a caster: the sheet names a spell (Task 38 fix round), only when it does. A check that fails leans to showing MP,
+  // and says so as a build warning (final review M2): never a throw, never silence
+  try {
+    if (r.numbers && spellsIn(body)) r.numbers = { ...r.numbers, caster: true };
+  } catch (e) {
+    r.numbers = { ...(r.numbers || NONE), caster: true };
+    r.warning = `its spells could not be read (${firstLine(e)}): MP shows on its fight row`;
+  }
   return r;
 }
 function readPcNumbers({ body, fm }) {
