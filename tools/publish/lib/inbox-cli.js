@@ -52,13 +52,17 @@ const DEFAULT_HOURS = 5;
 const MIN_HOURS = 1;
 const MAX_HOURS = 12;
 const TIME_UP = 'WATCHER: session time is up';
-// One watcher per site (#884). The running one holds {pid, id, every, started} here; a second exits at once, so a
-// relaunch never doubles the polling. `inbox watch --stop` writes the holder's id to the stop file, and the watcher
-// ends before its next poll.
+// One watcher per site (#884). The running one holds {pid, id, every, started} here. A new one takes over: it asks
+// the holder to stop, so a relaunch never doubles the polling, and the newest launch, the one the loop is waiting
+// on, is the one that runs. `inbox watch --stop` asks the same way: it writes the holder's id to the stop file, and
+// the watcher ends before its next poll.
 const LOCK_FILE = '.watcher-lock.json';
 const STOP_FILE = '.watcher-stop';
 const STOPPED = 'WATCHER: stopped';
-const BUSY_EXIT = 3;
+// How long a watcher may go without finishing a poll and still count as running. A pull is one wrangler call per
+// request in the queue, each bounded at a minute, so a busy queue can take minutes; the bound only rules out a pid
+// the system has given to another program since the watcher died.
+const LIVE_MS = 15 * 60_000;
 const WATCH_FILES = [HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE, LOCK_FILE, STOP_FILE];
 const OPEN_USAGE = `Usage: inbox open <CODE> [--hours N]
   --hours N  hours the watcher runs from now (default ${DEFAULT_HOURS}, kept between ${MIN_HOURS} and ${MAX_HOURS})`;
@@ -82,10 +86,9 @@ prints nothing. An id shown before and still pending N seconds later prints
 After ${STREAK} failed polls in a row it prints "WATCHER: inbox pull failed N times in a row",
 and again every ${STREAK} more. Once the hours set by \`inbox open\` have passed it prints
 "${TIME_UP}" and exits 0. Without --exit-on-batch it otherwise runs until stopped.
-One watcher runs per site: while one is running, another prints "WATCHER: already watching"
-and exits ${BUSY_EXIT}, and the running one carries on.
-Exit codes: 0 batch, reminder, time up or stopped (or polls done), 1 failure line, 2 usage error,
-${BUSY_EXIT} already watching.`;
+One watcher runs per site: a new one stops the one running (which prints "${STOPPED}")
+and takes over.
+Exit codes: 0 batch, reminder, time up or stopped (or polls done), 1 failure line, 2 usage error.`;
 
 // The session opened by `inbox open`: {start, end} in ms, or null for no limit.
 function readSession(file) {
@@ -113,33 +116,33 @@ function readBeat(dir) {
 }
 
 // The watcher running for this site, as its lock with `last` (Unix seconds of its last poll, or of its start), or
-// null. A lock counts only while its process is alive and has polled lately: within its interval, the bound on one
-// pull and a minute. A pid the system has given to another program since the watcher died is never taken for it.
+// null. A lock counts only while its process is alive and has finished a poll within LIVE_MS.
 function liveWatcher(dir, nowMs, alive = pidAlive) {
   const lock = readJson(path.join(dir, LOCK_FILE));
   if (!lock || !Number.isInteger(lock.pid) || typeof lock.id !== 'string' || !alive(lock.pid)) return null;
   const last = Math.max(Number(lock.started) || 0, readBeat(dir) || 0);
   const every = Number.isFinite(lock.every) ? lock.every : DEFAULT_EVERY;
-  if (nowMs / 1000 - last > every + WRANGLER_TIMEOUT_MS / 1000 + 60) return null;
+  if (nowMs - last * 1000 > every * 1000 + LIVE_MS) return null;
   return { ...lock, last };
 }
 
-// Takes the site's lock, or returns the live watcher that holds it. A lock left by a watcher that ended without
-// letting go (a host that killed it at a time limit) is taken over.
-function claimLock(dir, lock, nowMs, alive) {
+// Takes the site's lock. A live holder is asked to stop first; a lock left by a watcher that ended without letting
+// go (a host that killed it at a time limit) is taken over. Returns the holder that would not stop, or null.
+async function claimLock(dir, lock, deps) {
   const file = path.join(dir, LOCK_FILE);
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const nowMs = (deps.now || Date.now)();
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       fs.writeFileSync(file, `${JSON.stringify(lock)}\n`, { flag: 'wx' });
       return null;
     } catch (err) {
       if (err.code !== 'EEXIST') throw err;
-      const live = liveWatcher(dir, nowMs, alive);
-      if (live) return live;
+      const live = liveWatcher(dir, nowMs, deps.pidAlive);
+      if (live && !(await stopHolder(dir, live, deps))) return live;
       fs.rmSync(file, { force: true });
     }
   }
-  return liveWatcher(dir, nowMs, alive) || { pid: '?' };
+  return liveWatcher(dir, nowMs, deps.pidAlive) || { pid: '?' };
 }
 
 // Lets go of the lock only while it is still this watcher's.
@@ -194,23 +197,29 @@ async function waitUntil(check, timeoutMs, sleep) {
   }
 }
 
-// `inbox watch --stop`: asks the running watcher to stop, makes sure it ended (ending its process if it is stuck
-// in a pull), then removes the watcher's files: they belong to one session.
-async function watchStop(dir, deps) {
-  const out = deps.out || console.log;
+// Asks a live watcher to stop and makes sure it ended, ending its process if it is stuck in a pull. True once it
+// has.
+async function stopHolder(dir, live, deps) {
   const alive = deps.pidAlive || pidAlive;
   const kill = deps.kill || ((pid, sig) => process.kill(pid, sig));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const live = liveWatcher(dir, (deps.now || Date.now)(), alive);
+  fs.writeFileSync(path.join(dir, STOP_FILE), `${live.id}\n`);
+  const gone = () => !alive(live.pid) || (readJson(path.join(dir, LOCK_FILE)) || {}).id !== live.id;
+  let stopped = await waitUntil(gone, deps.graceMs ?? 5000, sleep);
+  for (const sig of ['SIGTERM', 'SIGKILL']) {
+    if (stopped) break;
+    try { kill(live.pid, sig); } catch { /* ended in between */ }
+    stopped = await waitUntil(gone, 3000, sleep);
+  }
+  return stopped;
+}
+
+// `inbox watch --stop`: stops the running watcher, then removes the watcher's files: they belong to one session.
+async function watchStop(dir, deps) {
+  const out = deps.out || console.log;
+  const live = liveWatcher(dir, (deps.now || Date.now)(), deps.pidAlive);
   if (live) {
-    fs.writeFileSync(path.join(dir, STOP_FILE), `${live.id}\n`);
-    const gone = () => !alive(live.pid) || (readJson(path.join(dir, LOCK_FILE)) || {}).id !== live.id;
-    let stopped = await waitUntil(gone, deps.graceMs ?? 5000, sleep);
-    for (const sig of ['SIGTERM', 'SIGKILL']) {
-      if (stopped) break;
-      try { kill(live.pid, sig); } catch { /* ended in between */ }
-      stopped = await waitUntil(gone, 3000, sleep);
-    }
+    const stopped = await stopHolder(dir, live, deps);
     if (!stopped) {
       out(`The watcher (pid ${live.pid}) would not stop. Its files are kept: end process ${live.pid}, then run inbox watch --stop again.`);
       return 1;
@@ -315,10 +324,11 @@ async function runWatch(inbox, kv, args, deps) {
   opts.notes.forEach((n) => out(n));
   const now = deps.now || Date.now;
   const id = crypto.randomBytes(8).toString('hex');
-  const held = claimLock(dir, { pid: process.pid, id, every: opts.every, started: Math.floor(now() / 1000) }, now(), deps.pidAlive);
+  const held = await claimLock(dir, { pid: process.pid, id, every: opts.every, started: Math.floor(now() / 1000) }, deps);
   if (held) {
-    out(`WATCHER: already watching (pid ${held.pid}): this one exits and that one carries on`);
-    return BUSY_EXIT;
+    // The holder would not stop: exit 1, as a failure the loop diagnoses, rather than poll beside it.
+    out(`WATCHER: another watcher (pid ${held.pid}) holds this site and would not stop`);
+    return 1;
   }
   try {
     return await pollLoop(inbox, kv, opts, deps, dir, id);

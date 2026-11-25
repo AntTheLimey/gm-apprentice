@@ -65,9 +65,9 @@ does the waiting, and you only wake when a request actually arrives.
      the table is quiet and wakes you only when there is something to do.
      It exits 0 after a new batch, a reminder line, `WATCHER: session time
      is up` or `WATCHER: stopped`; 1 after the first failure line; 2 on a
-     usage error (fix the command); 3 with `WATCHER: already watching` when
-     one is running for the site already, which needs nothing from you: that
-     one wakes you.
+     usage error (fix the command). One watcher runs per site: a new launch
+     stops the one running, which ends with `WATCHER: stopped`, and takes
+     over.
 
      ```bash
      npx gm-apprentice-publish inbox watch --exit-on-batch
@@ -86,8 +86,8 @@ does the waiting, and you only wake when a request actually arrives.
    `inbox reply` prints `Note: no inbox watch is running`, relaunch it at
    once. **On `WATCHER: session time is up`**, ask the GM once whether to
    keep watching; on yes, run `inbox open` again with the same code (it
-   restarts the clock) and relaunch the watcher. `WATCHER: stopped` follows
-   your own `inbox watch --stop`: do not relaunch.
+   restarts the clock) and relaunch the watcher. **On `WATCHER: stopped`**,
+   do nothing: a newer launch took over, or you ran `inbox watch --stop`.
    `--every N` sets another interval in seconds (kept between 1 and 300).
 
 ## When a batch arrives
@@ -313,7 +313,9 @@ not relaunch it:
 2. Run `npx gm-apprentice-publish inbox watch --stop`. It stops the
    watcher however it was launched, makes sure it ended, and removes the
    `.watcher-*` files: they belong to one session, not to the GM's site
-   repo. Its `WATCHER: stopped` line, if it wakes you, needs nothing.
+   repo. Whatever the stopped watcher's task reports when it ends needs
+   nothing. If `--stop` says the watcher would not stop, tell the GM the
+   process id it names, which they can end.
 
 The session code stays set in KV until the next "start your checking loop"
 replaces it. `flush` is also safe to run ad hoc at any time — it is idempotent,

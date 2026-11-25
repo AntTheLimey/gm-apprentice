@@ -368,23 +368,47 @@ test('watch --help prints the usage without needing a site', async () => {
 // One watcher per site, and a status and a stop that need no host task handle (#884).
 const lockOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, LOCK_FILE), 'utf8'));
 
-test('a second watch while one runs exits 3 and the first carries on, then lets go of the lock', async () => {
+test('a new watch stops the one running and takes over; the old one prints "WATCHER: stopped"', async () => {
   const kv = fakeKV(); const dir = siteDir();
-  let release; const held = new Promise((r) => { release = r; });
-  const lines = [];
+  const firstLines = [];
+  // The first watcher's wait ends when a stop request lands, as the real wait does.
   const first = runInbox(['watch'], {
-    adapter: kv, cwd: dir, out: (s) => lines.push(String(s)), maxPolls: 2, sleep: () => held,
+    adapter: kv, cwd: dir, out: (s) => firstLines.push(String(s)), maxPolls: 1000,
+    sleep: async () => { while (!fs.existsSync(path.join(dir, STOP_FILE))) await new Promise((r) => setTimeout(r, 10)); },
   });
-  await new Promise((r) => setImmediate(r));
-  assert.equal(lockOf(dir).pid, process.pid);
-  const second = await watch(kv, dir, ['--exit-on-batch'], { polls: 5 });
-  assert.equal(second.rc, 3);
-  assert.deepEqual(second.lines, [`WATCHER: already watching (pid ${process.pid}): this one exits and that one carries on`]);
+  await until(() => fs.existsSync(path.join(dir, LOCK_FILE)));
+  const firstId = lockOf(dir).id;
   await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
-  release();
+  const second = await watch(kv, dir, ['--exit-on-batch'], { polls: 5 });
   assert.equal(await first, 0);
-  assert.equal(lines.length, 1, 'the first watcher still prints the batch');
+  assert.deepEqual(firstLines, ['WATCHER: stopped']);
+  assert.equal(second.rc, 0);
+  assert.equal(second.lines.length, 1, 'the new watcher prints the batch');
   assert.equal(fs.existsSync(path.join(dir, LOCK_FILE)), false);
+  assert.notEqual(firstId, undefined);
+});
+
+test('a holder that will not stop leaves the new watch exiting 1, without polling beside it', async () => {
+  const dir = siteDir();
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 4242, id: 'held', every: 30, started: Math.floor(Date.now() / 1000) }));
+  const lines = []; const kills = [];
+  const rc = await runInbox(['watch'], {
+    adapter: fakeKV(), cwd: dir, out: (s) => lines.push(String(s)), maxPolls: 1,
+    pidAlive: () => true, kill: (pid, sig) => kills.push(`${pid} ${sig}`), graceMs: 50,
+  });
+  assert.equal(rc, 1);
+  assert.deepEqual(lines, ['WATCHER: another watcher (pid 4242) holds this site and would not stop']);
+  assert.deepEqual(kills, ['4242 SIGTERM', '4242 SIGKILL']);
+  assert.equal(fs.existsSync(path.join(dir, HEARTBEAT_FILE)), false, 'it never polled');
+});
+
+test('a watcher whose pull runs long still counts as running', async () => {
+  const dir = siteDir();
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: process.pid, id: 'x', every: 30, started: now / 1000 - 3600 }));
+  fs.writeFileSync(path.join(dir, HEARTBEAT_FILE), `${now / 1000 - 8 * 60}\n`);
+  const r = await control(dir, ['--status'], { now: () => now });
+  assert.equal(r.rc, 0, 'last poll 8 minutes ago: a long pull, not a dead watcher');
 });
 
 test('a lock left by a watcher that was killed, or by a pid now used by another program, is taken over', async () => {
