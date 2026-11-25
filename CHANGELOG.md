@@ -9,6 +9,14 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.147] — 2026-11-24
+
+### Fixed
+
+- The Cloudflare token steps in the publish guide match Cloudflare's current
+  screens (Start from scratch, then a permission search), and the publish
+  tool's KV-permission message points at the API tokens page.
+
 ## [1.12.146] — 2026-11-24
 
 ### Changed

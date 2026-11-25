@@ -33,23 +33,34 @@ An API token lets the deploy command publish on your behalf without a
 browser login each time. Create one scoped to **only** what publishing
 needs — nothing more.
 
-1. Go to https://dash.cloudflare.com/profile/api-tokens
-2. Click **Create Token**.
-3. Scroll to **Create Custom Token** and click **Get started**.
-4. Give it a name like `gm-apprentice-publish`.
-5. Under **Permissions**, add one row:
-   - **Account** · **Cloudflare Pages** · **Edit**
-6. Under **Account Resources**, select your account.
-7. Click **Continue to summary**, then **Create Token**.
-8. **Copy the token now** — Cloudflare shows it only once. If you lose
+These are Cloudflare's screens as of November 2026. The GM-facing
+walkthrough with screenshots is
+https://gmapprentice.com/tutorials/set-up-cloudflare/.
+
+1. Open https://dash.cloudflare.com/profile/api-tokens (in the dashboard:
+   **User settings → API credentials → API tokens**).
+2. Click **Create token**.
+3. In **Token name**, type a name such as `gm-apprentice-publish`.
+4. Under **Policies**, click **Start from scratch**, then **Start with an
+   Account policy**. The policy opens with **Include · All accounts**; a
+   GM with more than one Cloudflare account picks the one for their
+   campaign sites there.
+5. In the permission search box, type `Cloudflare Pages`, then tick
+   **Edit** on the **Cloudflare Pages** row.
+6. Leave **Token expiration** at **No expiration** and click **Continue
+   to summary**.
+7. Check the summary lists **Cloudflare Pages: Edit** (and **Workers KV
+   Storage: Edit** if added below), then click **Create Token**.
+8. **Copy the token now**, and nothing around it: a stray quotation mark
+   makes the setup refuse it. Cloudflare shows it only once. If you lose
    it, delete it and make a new one.
 
 > **One optional tick now saves a trip later.** If you think you might
-> ever want the live status bar or the at-table change-request inbox, add
-> a **second** permission row while you're here — **Account** · **Workers
-> KV Storage** · **Edit** — and you'll never need to touch this token
-> again. If you only want a plain shareable site, the single **Cloudflare
-> Pages** · **Edit** row is all you need.
+> ever want the live status bar or the at-table change-request inbox, at
+> step 5 also type `Workers KV` in the search box and tick **Edit** on the
+> **Workers KV Storage** row, and you'll never need to touch this token
+> again. If you only want a plain shareable site, **Cloudflare Pages:
+> Edit** is all you need.
 
 Keeping the token to just "Cloudflare Pages: Edit" means that even if it
 leaked, it could only touch your Pages sites — not billing, DNS, or
@@ -92,7 +103,7 @@ then, `doctor` reports wrangler as not authenticated.
 
 **If the GM pastes a token into the chat anyway**, don't use it. Tell them
 it is now in the chat's record, so they should delete that token in
-Cloudflare's API Tokens list, create a new one (Step 1), and run the line
+Cloudflare's API tokens page, create a new one (Step 1), and run the line
 above.
 
 > **The old foot-gun is gone.** This guide used to warn that credentials
@@ -268,8 +279,9 @@ running from elsewhere. Both are:
 - **KV-permission probe next** — the command lists KV namespaces to
   confirm the token can manage KV before it creates or changes anything (this is the
   command's own check, not a `doctor` run). If the token can't manage KV, it stops with the fix
-  rather than half-applying anything: edit the token (My Profile → API
-  Tokens → your token → Edit) to add **Account · Workers KV Storage · Edit**
+  rather than half-applying anything: edit the token on
+  https://dash.cloudflare.com/profile/api-tokens to add **Workers KV
+  Storage: Edit**
   (Cloudflare returns `Authentication error [code: 10000]` for this case),
   then re-run — no undo needed.
 - **Idempotent** — safe to re-run. A namespace id already in `wrangler.toml`
@@ -356,15 +368,18 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
 > a *different* project. If unsure, run `npx wrangler@4 pages project list`.
 
 > **Your API token needs KV permission too.** If you took the optional
-> **Account · Workers KV Storage · Edit** tick when you created the token
+> **Workers KV Storage: Edit** tick when you created the token
 > (Step 1), you're already done here — skip to creating the namespace. Otherwise:
 > the token from Step 1 of this
 > guide is scoped to *Cloudflare Pages* only — enough to deploy, but **not** to
 > create or use a KV namespace. Before the steps below, edit that token (or
-> create a new one) so it also has **Account · Workers KV Storage · Edit**. In
-> the Cloudflare dashboard: **My Profile → API Tokens →** your token **→ Edit →**
-> add the permission row **→ Save**. Editing keeps the same token value, so you
-> do not need to change `CLOUDFLARE_API_TOKEN`. Without this, `kv namespace
+> create a new one) so it also has **Workers KV Storage: Edit**. Open
+> https://dash.cloudflare.com/profile/api-tokens, edit the token, type
+> `Workers KV` in the permission search box, tick **Edit** on the **Workers KV
+> Storage** row, and save. Editing keeps the same token value, so you
+> do not need to change `CLOUDFLARE_API_TOKEN`. A new token has a new value:
+> save it with the line from Step 2, in the GM's own terminal, before the
+> steps below. Without this, `kv namespace
 > create` fails with `Authentication error [code: 10000]`.
 
 1. **Create the KV namespace:**

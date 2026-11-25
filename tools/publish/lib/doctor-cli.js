@@ -9,7 +9,7 @@ const FIXES = {
   git: 'Install git (macOS: `xcode-select --install`; Linux: your package manager; Windows: https://git-scm.com).',
   gh: 'Install the GitHub CLI (https://cli.github.com), then run `gh auth login`.',
   // A function: the line names this tool by its full path (no `gm-publish` command is on anyone's PATH).
-  wrangler: () => `Create a Cloudflare API token (Account · Cloudflare Pages · Edit), then in your own terminal window run \`${ownTerminalLine()}\`: it asks for the token and hides it.`,
+  wrangler: () => `Create a Cloudflare API token (Cloudflare Pages: Edit), then in your own terminal window run \`${ownTerminalLine()}\`: it asks for the token and hides it.`,
 };
 
 function parseArgs(argv) {
