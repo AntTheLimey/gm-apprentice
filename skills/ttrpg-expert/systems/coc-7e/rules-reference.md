@@ -267,9 +267,8 @@ CoC 7e uses a structured chase system with an abstract track:
 
 ### Hit Point Recovery
 
-- **First Aid**: Heals 1 HP if applied within one round of
-  injury (one hour for non-combat wounds). Requires a
-  successful First Aid roll.
+- **First Aid**: Heals 1 HP if applied within one hour of
+  injury (p.120). Requires a successful First Aid roll.
 - **Medicine**: Heals 1D3 HP. Requires a successful Medicine
   roll and proper facilities.
 - **Natural healing**: 1 HP per week of rest.
