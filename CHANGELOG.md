@@ -9,7 +9,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
-## [UNRELEASED-6b]
+## [1.12.149] — 2026-11-25
 
 ### Added
 
@@ -18,11 +18,11 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - Call of Cthulhu melee and firearms on the target's row: Dodge or Fight Back with the outnumbered die, and chips for range, aim, point blank, several shots and Regency flintlocks.
 - GURPS rows show this turn's Dodge, Parry and Block (a tap rolls one), a manoeuvre chip, and spells paid from FP or the Energy Reserve; a PC's weapon or a typed skill opens the to-hit calculator.
 - Physical dice count: a small box beside every Roll takes the number rolled at the table, judged like a server roll and logged as typed.
-- People a fight beat names without a stat block get a blank row to type into, in every system.
+- People a fight beat names without a stat block get a blank row to type into, in every system. Publish tool 1.70.66.
 
 ### Changed
 
-- Hit location is one list, Torso first, with Martial Arts's extra places, on the run sheet, the player site and the skill's combat reference (one row a place, as the book has it).
+- Hit location is one list, Torso first, with Martial Arts's extra places, on the run sheet, the player site and the skill's combat reference (there, each place's penalty and page).
 - The Table Log keeps each system's vitals (Call of Cthulhu HP, MP, SAN and Luck; GURPS HP and FP) and wrap-up writes them to the sheets, with the Energy Reserve held through the night; a Call of Cthulhu or GURPS run sheet uses its own words throughout.
 - Nothing in a fight waits on anything else: any card line can be skipped, any manoeuvre or chip set by hand, and a fight left at any point.
 - Tab and typing hold the rows still, Same for all says how many rows it filled, and a D&D initiative with decimals is refused rather than cut.
