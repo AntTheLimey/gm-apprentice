@@ -311,7 +311,13 @@ function readFoe({ notePath, index, text }) {
     for (const k of COMBAT_KEYS) if (nums[k] === null && more[k] !== null) nums[k] = more[k];
     // a gun the block builds from a Firearms skill alone (no damage, no Malf) takes what a Weapons table's gun of the
     // same skill says: its damage, malfunction, reload and impaling
-    if (nums.guns && more.guns) nums.guns = nums.guns.map((g) => fillGun(g, more.guns));
+    if (nums.guns && more.guns) {
+      nums.guns = nums.guns.map((g) => fillGun(g, more.guns));
+      // a table gun with damage that filled no line (two shared the skill's figure) stays a gun of its own, never
+      // dropped (CodeRabbit on #887)
+      const kept = (o) => nums.guns.some((g) => g.name === o.name || (g.skill === o.skill && g.damage === o.damage));
+      for (const o of more.guns) if (o.damage !== null && !kept(o)) nums.guns.push(o);
+    }
   }
   // a caster: the note names a spell, in its block or beside it (Task 38 fix round)
   if (spellsIn(text == null ? index.read(notePath).body : text)) nums.caster = true;

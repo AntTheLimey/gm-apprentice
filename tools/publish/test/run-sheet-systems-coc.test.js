@@ -500,7 +500,10 @@ for (const crlf of [false, true]) {
         fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Bridge Warden.md'),
           '---\nname: Bridge Warden\ntype: npc\n---\n\n## Stats\n\n**HP** 11 · **DEX** 50\n- Firearms (Handgun) 50%\n\n## Weapons\n\n| Weapon | Skill | Damage | Attacks | Malf |\n|---|---|---|---|---|\n| Flintlock Pistol | 50% | 1D6+1 | 1/4 | 95 |\n| Hunting Rifle | 50% | 2D6+4 | 1 | 98 |\n'.replace(/\n/g, crlf ? '\r\n' : '\n'));
         const n = systemFor('coc-7e').readFoe({ notePath: 'Characters/NPCs/Bridge Warden.md', index: buildIndex(tmp), text: undefined }).nums;
-        assert.deepEqual(n.guns, [{ name: 'Firearms (Handgun)', skill: 50, damage: null, malfunction: null, reload: null, impales: null }]);
+        // two table guns at the skill's figure: neither is copied onto the skill's line, and both are kept as guns of
+        // their own (CodeRabbit on #887 changed this on purpose: they were dropped)
+        assert.deepEqual(n.guns.map((g) => [g.name, g.skill, g.damage, g.malfunction]), [['Firearms (Handgun)', 50, null, null],
+          ['Flintlock Pistol', 50, '1D6+1', 95], ['Hunting Rifle', 50, '2D6+4', 98]]);
       } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
     it('the stat block\'s own figures win over a sibling section\'s', () => {
