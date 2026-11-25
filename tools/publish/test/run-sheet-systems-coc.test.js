@@ -24,7 +24,8 @@ for (const crlf of [false, true]) {
     it('a Spells line naming a spell marks a caster; "none", a blank or no line does not', () => {
       const hale = path.join(dir, `${NPCS}Warden Hale.md`);
       const was = fs.readFileSync(hale, 'utf8');
-      const nl = crlf ? '\r\n' : '\n';
+      // the file's own line ends: a Windows checkout is CRLF whatever this describe copies
+      const nl = was.includes('\r\n') ? '\r\n' : '\n';
       try {
         for (let [line, want] of [['**Spells:** Contact Deep One, Shrivelling', true], ['**Spells:** none', undefined], ['Spells: \u2014', undefined],
           ['- **Spells**: *Hymn of the Low Tide* (custom, below)', true], ['', undefined],
@@ -383,7 +384,7 @@ for (const crlf of [false, true]) {
     it('a sheet naming a spell marks a caster; None, the template\'s placeholder or tomes alone do not', () => {
       const note = path.join(dir, 'Characters/PCs/Iris Calder.md');
       const was = fs.readFileSync(note, 'utf8');
-      const nl = crlf ? '\r\n' : '\n';
+      const nl = was.includes('\r\n') ? '\r\n' : '\n';
       try {
         for (const [section, want] of [['None.', undefined], ['{Mythos tomes read and spells learned.}', undefined], ['- *Revelations of Glaaki*, read in 1925', undefined],
           ['- *Revelations of Glaaki*, read in 1925\n- Spells: Contact Deep One', true], ['- Contact Ghoul (spell, from the Glaaki volume)', true],

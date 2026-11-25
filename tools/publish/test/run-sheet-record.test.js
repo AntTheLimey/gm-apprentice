@@ -35,7 +35,8 @@ const body = (s, m = model) => R.tableLogBody(m, s, OPTS);
 const sectionsOf = (text) => readTableLog(text).sections;
 
 // the exact text table-log-new files, as vault_write.record_text builds it
-const PY = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'scripts', 'vault_write.py'), 'utf8');
+// Windows checks the script out CRLF: the patterns below are written with \n
+const PY = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'scripts', 'vault_write.py'), 'utf8').replace(/\r\n/g, '\n');
 const pySections = () => {
   const tuple = /TABLE_LOG_SECTIONS: tuple\[str, \.\.\.\] = \(([\s\S]*?)\n\)/.exec(PY)[1];
   return [...tuple.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
@@ -868,7 +869,7 @@ describe("each system's vitals columns (Task 20)", () => {
     const py = execFileSync('python3', ['-c', [
       'import sys; sys.path.insert(0, "skills/shared/scripts"); import vault_write as vw',
       'for s in ("coc-7e", "coc-7e-regency", "gurps-4e", "dnd-5e-2024", None): print(repr(vw.table_log_vitals_head(s)))',
-    ].join('\n')], { cwd: path.join(__dirname, '..', '..', '..'), encoding: 'utf8' }).trim().split('\n');
+    ].join('\n')], { cwd: path.join(__dirname, '..', '..', '..'), encoding: 'utf8' }).trim().split(/\r?\n/); // Windows prints \r\n
     const { systemFor } = require('../lib/run-sheet/systems');
     ['coc-7e', 'coc-7e-regency', 'gurps-4e', 'dnd-5e-2024', null].forEach((sys, i) => {
       const m = { ...model, rules: systemFor(sys).describe() };
