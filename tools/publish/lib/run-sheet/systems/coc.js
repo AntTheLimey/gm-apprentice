@@ -102,6 +102,8 @@ function skillGunName(name, line) {
   const tail = /\(([^()]+)\)\s*\**\s*$/.exec(line.replace(/\s+$/, ''));
   return tail && FIREARM.test(tail[1]) && !/^\s*\d/.test(tail[1]) ? tail[1] : name;
 }
+// the mark a weapon table's row carries when its Skill cell names Firearms (tableLines), read by attackLines
+const GUN_MARK = '{firearm}';
 function attackLines(stats) {
   const out = { fighting: [], firearms: [], guns: [] };
   for (const line of String(stats == null ? '' : stats).replace(/\r\n?/g, '\n').split('\n')) {
@@ -110,7 +112,7 @@ function attackLines(stats) {
     const key = keyOf(m[1]);
     if (key === 'firearms') { out.guns.push(gunOf(skillGunName(m[1], line), Number(m[2]), line)); continue; }
     if (key) continue;
-    const gun = FIREARM.test(m[1]);
+    const gun = FIREARM.test(m[1]) || line.trimEnd().endsWith(GUN_MARK);
     out[gun ? 'firearms' : 'fighting'].push(Number(m[2]));
     if (gun) out.guns.push(gunOf(m[1], Number(m[2]), line));
   }
@@ -180,6 +182,8 @@ function tableLines(rows) {
       const rest = cells.filter((c, n) => ![0, skill, damage, malf, attacks].includes(n) && c && !/^[\u2014\u2013-]$/.test(c));
       if (rest.length) line += `; ${rest.join('; ')}`;
     }
+    // a Skill cell that says Firearms makes the row a gun whatever its name (`Fowling piece`; CodeRabbit on #887)
+    if (/\bfirearms?\b/i.test(cells[skill] || '')) line += ` ${GUN_MARK}`;
     return line;
   });
 }

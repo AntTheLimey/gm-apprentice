@@ -190,6 +190,12 @@ for (const crlf of [false, true]) {
       assert.deepEqual([nw.firearms, nw.fighting, nw.dodge], [40, 35, 50]);
       assert.deepEqual(nw.guns, [{ name: 'Pistol (wheel-lock)', skill: 40, damage: '1D8+1', malfunction: null, reload: 3, impales: null }]);
     });
+    // CodeRabbit on #887: a weapon table's Skill cell that says Firearms makes the row a gun, whatever its name
+    it('a table row "Fowling piece | Firearms (Shotgun) 50% | 2D6" is a gun, not Fighting', () => {
+      const n = readNumbers('| Weapon | Skill | Damage |\n|---|---|---|\n| Fowling piece | Firearms (Shotgun) 50% | 2D6 |\n| Cudgel | Fighting (Brawl) 40% | 1D6 |');
+      assert.deepEqual([n.firearms, n.fighting], [50, 40]);
+      assert.deepEqual(n.guns.map((g) => [g.name, g.skill, g.damage]), [['Fowling piece', 50, '2D6']]);
+    });
     // Task 23b B12: dice with no `damage` word count only right after the percentage
     it('a skill line with dice further along is no attack; dice right after the percentage still are', () => {
       const n = (t) => readNumbers(`**HP** 10\n${t}`);
