@@ -26,14 +26,23 @@ for (const crlf of [false, true]) {
       const was = fs.readFileSync(hale, 'utf8');
       const nl = crlf ? '\r\n' : '\n';
       try {
-        for (const [line, want] of [['**Spells:** Contact Deep One, Shrivelling', true], ['**Spells:** none', undefined], ['Spells: \u2014', undefined],
-          ['- **Spells**: *Hymn of the Low Tide* (custom, below)', true], ['', undefined]]) {
+        for (let [line, want] of [['**Spells:** Contact Deep One, Shrivelling', true], ['**Spells:** none', undefined], ['Spells: \u2014', undefined],
+          ['- **Spells**: *Hymn of the Low Tide* (custom, below)', true], ['', undefined],
+          // fix round 2 (m1, m2): none written as words or 0 is none; a table row's cell counts
+          ['**Spells:** None known', undefined], ['**Spells:** none (yet)', undefined], ['**Spells:** 0', undefined],
+          ['| Stat | Value |\n|---|---|\n| Spells | Contact Deep One |', true], ['| Stat | Value |\n|---|---|\n| Spells | none |', undefined]]) {
+          line = line.replace(/\n/g, nl);
           fs.writeFileSync(hale, was.replace(`**Combat**${nl}`, `${line}${nl}${nl}**Combat**${nl}`));
           assert.equal(read(dir, 'Warden Hale').nums.caster, want, line || 'no line');
         }
-        // a Spells section of its own, with a spell in it
-        fs.writeFileSync(hale, was.replace('<!-- /gm-only -->', `### Spells${nl}${nl}- Contact Deep One${nl}${nl}<!-- /gm-only -->`));
-        assert.equal(read(dir, 'Warden Hale').nums.caster, true);
+        // a Spells section of its own, with a spell in it; an empty Spells table, or a heading that only mentions a spell
+        // over prose (fix round 2, m1), is none
+        for (const [section, want] of [[`### Spells${nl}${nl}- Contact Deep One`, true], [`### Spells${nl}${nl}| Spell | Cost |${nl}|---|---|`, undefined],
+          [`### Breaking the spell${nl}${nl}Hale believes the spell on the light can be broken.`, undefined],
+          [`### Spells${nl}${nl}<!-- fill in${nl}later -->`, undefined]]) {
+          fs.writeFileSync(hale, was.replace('<!-- /gm-only -->', `${section}${nl}${nl}<!-- /gm-only -->`));
+          assert.equal(read(dir, 'Warden Hale').nums.caster, want, section);
+        }
       } finally { fs.writeFileSync(hale, was); }
     });
     it('reads a template line plus a characteristics table', () => {
@@ -376,10 +385,17 @@ for (const crlf of [false, true]) {
       const nl = crlf ? '\r\n' : '\n';
       try {
         for (const [section, want] of [['None.', undefined], ['{Mythos tomes read and spells learned.}', undefined], ['- *Revelations of Glaaki*, read in 1925', undefined],
-          ['- *Revelations of Glaaki*, read in 1925\n- Spells: Contact Deep One', true], ['- Contact Ghoul (spell, from the Glaaki volume)', true]]) {
+          ['- *Revelations of Glaaki*, read in 1925\n- Spells: Contact Deep One', true], ['- Contact Ghoul (spell, from the Glaaki volume)', true],
+          // fix round 2 (I1): plain spell names and a prose line under the template's heading count; a tome's italic
+          // title alone does not, nor does a Spells line saying none
+          ['- Contact Ghoul\n- Elder Sign', true], ['Learned Contact Ghoul from the Glaaki volume.', true],
+          ['- *Revelations of Glaaki* (holds three spells, not yet learned)\n- Spells: none', undefined]]) {
           fs.writeFileSync(note, `${was}${nl}## Arcane Tomes & Spells${nl}${nl}${section.replace(/\n/g, nl)}${nl}`);
           assert.equal(readPc('Iris Calder').numbers.caster, want, section);
         }
+        // a heading that starts with Spells counts as Spells does (fix round 2, I1)
+        fs.writeFileSync(note, `${was}${nl}## Spells Known${nl}${nl}- Contact Ghoul${nl}`);
+        assert.equal(readPc('Iris Calder').numbers.caster, true, 'Spells Known');
       } finally { fs.writeFileSync(note, was); }
     });
     it('a one-line sheet falls back to its line, current = max, with a quiet note', () => {

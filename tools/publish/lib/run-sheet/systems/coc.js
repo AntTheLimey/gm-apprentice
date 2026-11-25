@@ -252,19 +252,44 @@ function fillGun(g, others) {
   return out;
 }
 
-// Whether a note names a spell (Task 38 fix round: a row shows MP only for a character with spells). A `Spells:` line
-// with a spell after it (an NPC block's `**Spells:** Contact Deep One`; `none`, a dash or a blank is none), a `Spells`
-// section with anything in it, or a line naming a spell in a section whose heading names spells (a PC sheet's Arcane
-// Tomes & Spells: a tome alone is no spell). The template's `{…}` placeholder and comments are nothing.
-const NO_SPELL = /^(?:none|nil|no|n\/a|nothing|[-\u2013\u2014]+)\.?$/i;
+// Whether a note names a spell (Task 38 fix round: a row shows MP only for a character with spells). Erring towards
+// a caster, since MP shown on a non-caster costs nothing (fix round 2):
+// - a `Spells:` line at a line's start, or a `| Spells | … |` table row, with a spell after it;
+// - any real line under a heading that names spells (`Spells`, `Spells Known`, a PC sheet's `Arcane Tomes & Spells`),
+//   except a line that is only a tome's italic title, a `Tomes:` line, a table's header and rule, and none.
+// None is a blank, `none` and anything after it (`None known`, `none (yet)`), `0`, a dash, n/a; the template's `{…}`
+// placeholder and comments are nothing. A heading that only mentions "the spell" names no spells.
+const NO_SPELL = /^(?:none\b.*|nil|no|n\/a|nothing|0|[-–—]+)\.?$/i;
 const plain = (v) => String(v).replace(/[*_`]/g, '').trim();
-const noSpell = (v) => !v || NO_SPELL.test(v) || /^\{.*\}$/.test(v) || /^<!--/.test(v);
+const noSpell = (v) => !v || NO_SPELL.test(v) || /^\{.*\}$/.test(v);
+const SPELL_LABEL = /^(?:\**[ \t]*spells?[ \t]*\**[ \t]*:\**|\|[ \t]*\**spells?\**[ \t]*\|)/i;
+// a section's line, as a spell or not
+function spellLine(raw) {
+  const line = raw.replace(/^[ \t]*(?:[-*+]|\d+\.)[ \t]+/, '').trim();
+  if (!line || /^\|?[\s:|-]+\|?$/.test(line)) return false;
+  // a tome: its italic title first (`*Revelations of Glaaki*, read in 1925`), or a Tomes line
+  if (/^(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)/.test(line) || /^\**[ \t]*(?:mythos[ \t]+)?(?:tomes?|books?)\b/i.test(line)) return false;
+  // a label or a table's cells: what follows it
+  const cells = line.startsWith('|') ? line.split('|').map(plain).filter(Boolean) : null;
+  if (cells) return cells.some((c, i) => !(i === 0 && /^spells?$/i.test(c)) && !noSpell(c));
+  return !noSpell(plain(line.replace(SPELL_LABEL, '')));
+}
 function spellsIn(text) {
-  const t = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
-  for (const m of t.matchAll(/^[ \t]*(?:[-*+][ \t]+)?\**[ \t]*Spells?[ \t]*\**[ \t]*:[ \t]*\**(.*)$/gim)) if (!noSpell(plain(m[1]))) return true;
-  for (const m of t.matchAll(/^#{1,6}[ \t]+([^\n]*\bspells?\b[^\n]*)\n([\s\S]*?)(?=^#{1,6}[ \t]|(?![\s\S]))/gim)) {
-    const lines = m[2].split('\n').map((l) => plain(l.replace(/^[ \t]*[-*+][ \t]+/, ''))).filter((l) => !noSpell(l));
-    if (/^spells?$/i.test(plain(m[1])) ? lines.length > 0 : lines.some((l) => /\bspells?\b/i.test(l) && !/^spells?\s*:/i.test(l))) return true;
+  // comments go first, a many-line one too
+  const t = String(text == null ? '' : text).replace(/\r\n?/g, '\n').replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  for (const m of t.matchAll(/^[ \t]*(?:[-*+][ \t]+)?(?:\**[ \t]*Spells?[ \t]*\**[ \t]*:|\|[ \t]*\**Spells?\**[ \t]*\|)(.*)$/gim)) {
+    // a table's header row (a rule under it) names a column, not a spell
+    const next = t.slice(m.index + m[0].length + 1).split('\n', 1)[0];
+    if (m[0].trim().startsWith('|') && /^\s*\|?[\s:|-]+\|?\s*$/.test(next) && /-/.test(next)) continue;
+    if (!noSpell(plain(m[1].replace(/\|[ \t]*$/, '')))) return true;
+  }
+  for (const m of t.matchAll(/^#{1,6}[ \t]+([^\n]*)\n([\s\S]*?)(?=^#{1,6}[ \t]|(?![\s\S]))/gim)) {
+    const head = plain(m[1]);
+    if (!/^spells?\b/i.test(head) && !/\bspells\b/i.test(head)) continue;
+    // a table's header row is a heading, not a spell
+    const lines = m[2].split('\n');
+    const rows = lines.filter((l, i) => !(l.trim().startsWith('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && /-/.test(lines[i + 1])));
+    if (rows.some(spellLine)) return true;
   }
   return false;
 }
