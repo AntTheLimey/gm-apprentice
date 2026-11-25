@@ -81,7 +81,9 @@ describe('dice: 3d6 against a target', () => {
   it('target 14', () => expect(14, (t) => (t <= 4 ? 'critical success' : t <= 14 ? 'success' : t >= 17 ? 'critical failure' : 'failure')));
   it('target 15', () => expect(15, (t) => (t <= 5 ? 'critical success' : t <= 15 ? 'success' : t >= 17 ? 'critical failure' : 'failure')));
   it('target 16', () => expect(16, (t) => (t <= 6 ? 'critical success' : t <= 16 ? 'success' : t === 18 ? 'critical failure' : 'failure')));
-  it('target 17', () => expect(17, (t) => (t <= 6 ? 'critical success' : t <= 17 ? 'success' : 'critical failure')));
+  // a 17 is a failure at any target, an ordinary one at 16 or more (B556; CodeRabbit on #887 caught the target 17 case)
+  it('target 17', () => expect(17, (t) => (t <= 6 ? 'critical success' : t <= 16 ? 'success' : t === 17 ? 'failure' : 'critical failure')));
+  it('target 20', () => expect(20, (t) => (t <= 6 ? 'critical success' : t <= 16 ? 'success' : t === 17 ? 'failure' : 'critical failure')));
   it('a miss by 10 or more is a critical failure, and a target under 3 still rolls', () => {
     assert.strictEqual(outcomeAt(3, 13), 'critical failure');
     assert.strictEqual(outcomeAt(3, 12), 'failure');

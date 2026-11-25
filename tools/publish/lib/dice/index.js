@@ -23,7 +23,7 @@ const three = (randomInt) => [randomInt(1, 7), randomInt(1, 7), randomInt(1, 7)]
 
 // ---- GURPS: 3d6 against a target ----
 // The critical ranges are numbers with their pages: success 3-4, 5 at 15+, 6 at 16+; failure 18, 17 at 15 or
-// less, or 10 over the target (GURPS Basic Set B348, B556). A target under 3 still rolls.
+// less, or 10 over the target; 17 fails at any target (GURPS Basic Set B348, B556). A target under 3 still rolls.
 const AGAINST_LIMIT = 99;
 
 function rollAgainst(spec, { randomInt = crypto.randomInt } = {}) {
@@ -36,7 +36,8 @@ function judgeAgainst(dice, total, target) {
   let outcome;
   if (total <= 4 || (total === 5 && target >= 15) || (total === 6 && target >= 16)) outcome = 'critical success';
   else if (total === 18 || (total === 17 && target <= 15) || total >= target + 10) outcome = 'critical failure';
-  else outcome = total <= target ? 'success' : 'failure';
+  // a 17 that is no critical failure is still a failure, at any target (B556)
+  else outcome = total <= target && total !== 17 ? 'success' : 'failure';
   return { dice, total, target, margin: target - total, outcome };
 }
 
