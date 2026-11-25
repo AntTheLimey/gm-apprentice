@@ -239,7 +239,8 @@
     const f = state().fight;
     if (!f || !panelBoxes().length) return;
     const r = ids.map(rowById).find(noNumbers);
-    if (!r) return;
+    // no blank row: Start, what comes next, rather than the page (PRENTICE review M4, RF1)
+    if (!r) { if (!document.activeElement || document.activeElement === document.body) RP.focusTo('#fNext'); return; }
     pickRow(r.id);
   }
   function pickRow(id) {
@@ -2170,6 +2171,14 @@
       const f = d && d.fight;
       const fr = rules().fight || rules();
       return f && isNum(fr.nameCap) ? fr.nameCap : null;
+    },
+    // where focus goes when the page loads with a fight running (PRENTICE review M4): the acting row's entry box, else
+    // the first row's that has one; none outside a fight
+    bootFocus() {
+      const f = state().fight;
+      if (!f) return null;
+      const row = (f.started && f.turn && document.querySelector(attr('data-fhp', f.turn))) || document.querySelector('#side [data-fhp]');
+      return row ? attr('data-fhp', row.dataset.fhp) : '#fNext';
     },
     measureRows(d) {
       const f = d && d.fight;

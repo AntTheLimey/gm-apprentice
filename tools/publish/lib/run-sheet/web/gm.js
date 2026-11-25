@@ -2123,6 +2123,12 @@
     loadKept();
     applySides();
     render();
+    // focus on a live control after a load, never the page (RF1, PRENTICE review M4): a part's (a running fight's
+    // entry box), else the header's Jot
+    if (!document.activeElement || document.activeElement === document.body) {
+      const k = parts.map((part) => part.bootFocus && part.bootFocus()).find(Boolean) || '#hjot';
+      if (document.querySelector(k)) focusTo(k);
+    }
     listen();
     loadView();
   }

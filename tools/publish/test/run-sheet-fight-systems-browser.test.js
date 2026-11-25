@@ -3918,6 +3918,41 @@ describe('A made-up CoC foe\'s card takes a tap (PRENTICE review), by real input
   });
 });
 
+// PRENTICE review M4: focus never lands on the page. After Fight with no blank row it is on Start; after a reload with a
+// fight running it is in the acting row's entry box (the first row's before Start), with none in the header's Jot.
+describe('Focus after Fight and after a reload (PRENTICE review), by real input', { skip: browserSkip() }, () => {
+  const where = (page) => page.evaluate('(() => { const e = document.activeElement; return e === document.body ? "body" : e.id ? `#${e.id}` : e.dataset.fhp ? `fhp=${e.dataset.fhp}` : e.tagName; })()');
+  const reload = async (page) => {
+    await page.evaluate('window.__old = true');
+    await page.reload();
+    await page.waitFor('!window.__old && document.readyState === "complete" && document.body.dataset.probe', 10000);
+    await page.sleep(200);
+    return settled(page);
+  };
+  it('CoC: Fight on a beat with no blank row focuses Start; a reload focuses the first row\'s entry box, then the acting row\'s; no fight, the Jot box', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 0);
+      assert.ok(p.fight.rows.every((r) => r.kind === 'pc' || r.hp !== null), 'no blank row');
+      await page.sleep(200);
+      assert.strictEqual(await where(page), '#fNext');
+      p = await reload(page);
+      assert.strictEqual(await where(page), `fhp=${p.fight.rows.find((r) => r.in && r.hp !== null).id}`);
+      await tap(page, '#fNext');
+      if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+      p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+      p = await reload(page);
+      assert.strictEqual(await where(page), `fhp=${p.fight.turn}`);
+      // the fight ended (two clicks), then a reload: the Jot box
+      await tap(page, '#fEnd');
+      await tap(page, '#fEnd');
+      p = await until(page, '!p.fight && p.saved === "Saved" && p.pending === 0');
+      p = await reload(page);
+      assert.strictEqual(await where(page), '#hjot');
+    });
+  });
+});
+
 // PRENTICE review M3: a made-up name, where "+ New" is the only choice, is added by Enter (6a refused it); a name the
 // cast has still takes the cast's note first. Real input.
 describe('The Add box takes a made-up name on Enter (PRENTICE review), by real input', { skip: browserSkip() }, () => {
