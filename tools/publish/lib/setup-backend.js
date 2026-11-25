@@ -6,8 +6,8 @@ const { planChanges, applyChanges } = require('./settings/write');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
 const KV_PERMISSION_FIX =
-  'Your Cloudflare token lacks KV permission. Edit it (My Profile → API Tokens → your token → Edit) ' +
-  'to add the row Account · Workers KV Storage · Edit, then re-run.';
+  'Your Cloudflare token lacks KV permission. Edit it on https://dash.cloudflare.com/profile/api-tokens: ' +
+  'search the permissions for Workers KV and tick Edit on Workers KV Storage, save, then re-run.';
 
 function checkKvPermission({ runWrangler }) {
   const r = runWrangler(['kv', 'namespace', 'list']);

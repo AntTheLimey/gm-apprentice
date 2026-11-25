@@ -163,8 +163,8 @@ For each check that is `false`, apply the one-line fix and re-run
   install line doctor prints for their OS, then re-run.
 - **Cloudflare · `wrangler.authed: false`** → run the **token dance**:
   1. Point the GM at `references/cloudflare-pages.md` **Step 1** to
-     create a Cloudflare API token scoped to **Cloudflare Pages · Edit**.
-     Mention the optional one-tick **Workers KV Storage · Edit** row —
+     create a Cloudflare API token scoped to **Cloudflare Pages: Edit**.
+     Mention the optional one-tick **Workers KV Storage: Edit** permission —
      if the GM might ever want the live status bar or the inbox, adding
      it now means never touching the token again.
   2. Save the token in the GM's own terminal, never in the chat: run
