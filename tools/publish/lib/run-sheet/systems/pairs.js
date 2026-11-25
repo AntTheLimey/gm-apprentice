@@ -62,7 +62,17 @@ const leadingNumber = (v) => {
   return m ? Number(m[1]) : null;
 };
 
+// A pool's value written `6/12` (current over maximum, GURPS's current may be below 0) or `12 (currently 4)`: its
+// maximum, and the current it starts at (null when the value states none), both from the one declaration.
+const POOL_PAIR = /^\s*\(?\s*(-?\d+)\s*\/\s*(\d+)/;
+const poolMax = (v) => { const m = POOL_PAIR.exec(String(v == null ? '' : v)); return m ? Number(m[2]) : leadingNumber(String(v == null ? '' : v).replace(/^\(\s*/, '')); };
+const poolNow = (v) => {
+  const t = String(v == null ? '' : v);
+  const m = POOL_PAIR.exec(t) || /\(\s*currently[ \t]+(-?\d+)\s*\)/i.exec(t);
+  return m ? Number(m[1]) : null;
+};
+
 // The first line of an error's message, for a note that says why a sheet could not be read.
 const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
 
-module.exports = { pairs, firstOf, leadingNumber, clean, firstLine, cellsOf, isSep, isRow };
+module.exports = { pairs, firstOf, leadingNumber, poolMax, poolNow, clean, firstLine, cellsOf, isSep, isRow };

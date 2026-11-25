@@ -8,7 +8,7 @@
 const path = require('node:path');
 const { dnd, describeAs } = require('./dnd');
 const { statSection } = require('./stat-section');
-const { pairs, firstOf, leadingNumber, clean, firstLine } = require('./pairs');
+const { pairs, firstOf, leadingNumber, poolMax, poolNow, clean, firstLine } = require('./pairs');
 const { deriveGurps, drFigure } = require('../web/gurps-math');
 const { extractSections } = require('../../processor');
 const { parseGurps } = require('../../templates/gurps/parse');
@@ -121,11 +121,7 @@ function keyOf(raw) {
 }
 
 // A pool figure: the maximum, whether written `9`, `6/9` (current over maximum) or `10 (currently 4)`.
-function maxOf(v) {
-  v = String(v == null ? '' : v).replace(/^\(\s*/, '');
-  const m = /^\s*(-?\d+)\s*\/\s*(\d+)/.exec(String(v == null ? '' : v));
-  return m ? Number(m[2]) : leadingNumber(v);
-}
+const maxOf = poolMax;
 
 // `face 0`, `face open`, `open face`, `bare face`, `face bare`, `face unarmoured`, on the DR's own line
 const FACE_BARE = /\bface\s*(?::\s*)?(?:0\b|open\b|bare\b|none\b|unarmou?red\b)|\b(?:open|bare)[ -]face/i;
@@ -228,7 +224,7 @@ function currentOf(md, word) {
   const text = String(md == null ? '' : md);
   const found = [];
   for (const m of text.matchAll(new RegExp(String.raw`\b${word}[ \t*:]*\d+[ \t*]*\(\s*currently[ \t]+(\d+)\s*\)`, 'gi'))) found.push([m.index, Number(m[1])]);
-  for (const m of text.matchAll(new RegExp(String.raw`\b${word}[ \t*:]*(\d+)[ \t]*/[ \t]*\d+`, 'gi'))) found.push([m.index, Number(m[1])]);
+  for (const m of text.matchAll(new RegExp(String.raw`\b${word}[ \t*:]*(-?\d+)[ \t]*/[ \t]*\d+`, 'gi'))) found.push([m.index, Number(m[1])]);
   if (!found.length) return null;
   found.sort((a, b) => a[0] - b[0]);
   return found[found.length - 1][1];
@@ -242,9 +238,13 @@ function readFoe({ notePath, index, text }) {
   const found = FOE_TYPES.has(type) ? statSection(text == null ? index.read(notePath).body : text) : null;
   if (!found || !found.md) return { stats: '', statsHeading: null, nums: null, lacks: [], hpStart: null, fpStart: null };
   const nums = readNumbers(found.md);
+  // each pool's start from the declaration its maximum came from (`| HP | 6/12 |`, `HP -2/12`), else a current
+  // written elsewhere in the block (CodeRabbit on #887)
+  const ps = pairs(found.md, keyOf);
+  const start = (k, word) => { const v = poolNow(firstOf(ps, k)); return v !== null ? v : currentOf(found.md, word); };
   return {
     stats: found.md, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums),
-    hpStart: currentOf(found.md, '(?:HP|Hit Points)'), fpStart: currentOf(found.md, '(?:FP|Fatigue Points)'),
+    hpStart: start('hp', '(?:HP|Hit Points)'), fpStart: start('fp', '(?:FP|Fatigue Points)'),
   };
 }
 

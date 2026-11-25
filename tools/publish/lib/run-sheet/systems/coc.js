@@ -8,7 +8,7 @@ const path = require('node:path');
 const { SYSTEM_NAMES } = require('../../shared-lists');
 const { dnd, describeAs } = require('./dnd');
 const { statSection, combatSections, currentOf } = require('./stat-section');
-const { pairs, firstOf, leadingNumber, clean, firstLine, cellsOf, isSep, isRow } = require('./pairs');
+const { pairs, firstOf, leadingNumber, poolMax, poolNow, clean, firstLine, cellsOf, isSep, isRow } = require('./pairs');
 const { extractSections } = require('../../processor');
 const { parseCoC } = require('../../templates/coc/parse');
 const { buildCoCLiveData } = require('../../templates/coc/live-data');
@@ -210,7 +210,9 @@ function readNumbers(raw) {
   const all = (k) => ps.filter(([key]) => key === k).map(([, v]) => leadingNumber(v));
   const lines = attackLines(stats);
   const db = firstOf(ps, 'db');
-  const nums = { hp: n('hp'), mp: n('mp'), san: n('san'), dex: n('dex'), luck: n('luck'), armour: null,
+  // a pool written current over maximum (`HP 4/12`) is its maximum (CodeRabbit on #887)
+  const pool = (k) => poolMax(firstOf(ps, k));
+  const nums = { hp: pool('hp'), mp: pool('mp'), san: pool('san'), dex: n('dex'), luck: n('luck'), armour: null,
     str: n('str'), con: n('con'), siz: n('siz'), pow: n('pow'), int: n('int'),
     fighting: highest(all('fighting').concat(lines.fighting)), firearms: highest(all('firearms').concat(lines.firearms)),
     dodge: n('dodge'), db: db === null ? null : (clean(db).replace(/\s*[·|].*$/, '') || null), build: n('build'), attacks: leadingNumber(String(firstOf(ps, 'attacks') || '').replace(/^per round\s*:?\s*/i, '')),
@@ -313,7 +315,9 @@ function readFoe({ notePath, index, text }) {
   }
   // a caster: the note names a spell, in its block or beside it (Task 38 fix round)
   if (spellsIn(text == null ? index.read(notePath).body : text)) nums.caster = true;
-  return { stats: found.md, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums), hpStart: currentOf(found.md) };
+  // the start from the declaration the maximum came from (`HP 4/12`, `| HP | 4/12 |`), else a current written elsewhere
+  const now = poolNow(firstOf(pairs(normalise(found.md), keyOf), 'hp'));
+  return { stats: found.md, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums), hpStart: now !== null ? now : currentOf(found.md) };
 }
 
 // A PC's numbers come from the same reader the player site uses (parseCoC, then buildCoCLiveData), so the GM page
