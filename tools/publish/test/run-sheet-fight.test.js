@@ -4081,6 +4081,19 @@ describe('Same for all, field by field (step 6b Task 23, D3)', () => {
   const named = (s, name) => s.fight.rows.find((r) => r.name === name);
   const three = () => ['Bouncer 1', 'Bouncer 2', 'Bouncer 3'].map((name, i) => ({ name, note: 'n', copy: i + 1, ini: null, hp: null, max: null }));
 
+  // CodeRabbit on #887: a copy with FP spent keeps what it has left under the copied maximum; a blank or full one fills
+  it('GURPS: a typed FP max copied leaves a copy\'s spent FP spent; a blank or full one follows it', () => {
+    const rows = three();
+    rows[1] = { ...rows[1], fp: 3, fpMax: 12 };
+    rows[2] = { ...rows[2], fp: 12, fpMax: 12 };
+    let s = begin(GURPS, rows);
+    const id = named(s, 'Bouncer 1').id;
+    s = G(s, { type: 'setStat', row: id, key: 'fp', value: 10 });
+    s = G(s, { type: 'sameForAll', row: id });
+    assert.deepEqual([named(s, 'Bouncer 2').fp, named(s, 'Bouncer 2').fpMax], [3, 10]);
+    assert.deepEqual([named(s, 'Bouncer 3').fp, named(s, 'Bouncer 3').fpMax], [10, 10]);
+  });
+
   it('GURPS: ST, HT and DX copied; each copy works out its HP, FP and Speed; a typed initiative is kept', () => {
     let s = begin(GURPS, three());
     s = G(s, { type: 'setInit', row: named(s, 'Bouncer 2').id, ini: 10 });

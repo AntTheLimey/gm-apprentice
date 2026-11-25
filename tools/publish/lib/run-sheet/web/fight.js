@@ -1207,7 +1207,7 @@
     }),
     // Same for all, field by field (Task 23, D3): each of this group's others not hurt or given a status
     // (FM.untouched) takes each figure the source holds and it has not typed itself (FM.copyFields): the stat keys
-    // (`statKeysOf`: max, ac and mod for D&D), each pool full at its copied max, the HP at the max. A figure the source
+    // (`statKeysOf`: max, ac and mod for D&D), each pool at its copied max (a spent one keeps what is left), the HP at the max. A figure the source
     // worked out is not copied; its inputs are, and GURPS works the copy's out again (deriveStats). A copy with no typed
     // initiative takes the one its figures give (CoC's DEX, GURPS's Speed), placed as a typed one is. Nothing else is
     // copied (not HP lost, side, seen or typed).
@@ -1220,8 +1220,9 @@
         const c = FM.copyFields(r, x, keys);
         const tk = x.typedKeys || {};
         for (const k of c.fields) {
-          x[k] = r[k];
-          if (FOLLOWS[k]) x[FOLLOWS[k]] = r[k];
+          // a pool's max: a blank or full pool follows it, a spent one keeps what is left (fitMax; CodeRabbit on #887)
+          if (FOLLOWS[k] && FOLLOWS[k] !== 'hp') fitMax(x, k, r[k]);
+          else { x[k] = r[k]; if (FOLLOWS[k]) x[FOLLOWS[k]] = r[k]; }
           if (FROM_KEY[k] && x.from && x.from[FROM_KEY[k]]) { x.from = { ...x.from }; delete x.from[FROM_KEY[k]]; }
         }
         if (rules.initiative === 'speed') deriveStats(x);
