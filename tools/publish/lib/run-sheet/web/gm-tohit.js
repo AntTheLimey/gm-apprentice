@@ -89,7 +89,9 @@
     return `<div class="thd-top"><label class="thd-lab" for="thFrom">Start from</label><select id="thFrom">${opts}<option value="${TYPED}">a typed skill</option></select>`
       + '<span class="sp"></span><button type="button" id="thClose">Close ✕</button></div>'
       + '<div class="thd-typed" id="thTyped" hidden>'
-      + '<label>Level <input type="number" id="thLevel" min="1" max="99" step="1" inputmode="numeric" autocomplete="off"></label>'
+      // a text box with the number pad, as every figure on the run sheet: a number box's spinner fills most of a box this
+      // narrow, and a click in its middle stepped it to 1 in Linux's and Windows's Chrome (CI, step 6b)
+      + '<label>Level <input type="text" id="thLevel" inputmode="numeric" autocomplete="off"></label>'
       + '<label>Type <select id="thType"><option value="melee">Melee</option><option value="ranged">Ranged</option></select></label>'
       + '<label>Name <input type="text" id="thName" placeholder="Typed skill" autocomplete="off" maxlength="60"></label>'
       + '<span class="thd-err" id="thErr" role="status" aria-live="polite"></span></div>'

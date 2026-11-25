@@ -541,8 +541,8 @@ ol.to > li.row2 .mnote.lost.now { color: var(--bad); font-weight: 650; }
 .thdlg .thd-typed { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 14px 0; }
 .thdlg .thd-typed[hidden] { display: none; }
 .thdlg .thd-typed label { display: inline-flex; gap: 5px; align-items: center; font-size: .85rem; color: var(--muted); }
-.thdlg .thd-typed input[type="number"] { width: 5ch; }
-.thdlg .thd-typed input[type="text"] { width: 12rem; max-width: 100%; }
+.thdlg .thd-typed #thLevel { width: 5ch; }
+.thdlg .thd-typed #thName { width: 12rem; max-width: 100%; }
 .thdlg .thd-err { color: var(--bad); font-size: .85rem; }
 .thdlg .thd-enc { margin: 6px 14px 0; }
 .thdlg .thd-body { overflow: auto; overscroll-behavior: contain; padding: 8px 14px 14px; min-height: 0; flex: 1 1 auto; }
