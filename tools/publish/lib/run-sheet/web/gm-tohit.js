@@ -94,6 +94,8 @@
       + '<label>Name <input type="text" id="thName" placeholder="Typed skill" autocomplete="off" maxlength="60"></label>'
       + '<span class="thd-err" id="thErr" role="status" aria-live="polite"></span></div>'
       + `<p class="thd-enc note">${esc(ENCUMBRANCE)}</p>`
+      // the PC list's failure, said as draw() says its own (final review M1); a typed skill still works
+      + `<p class="thd-err" id="thListErr" role="status"${ui.listErr ? '' : ' hidden'}>${ui.listErr ? esc(`The PCs' sheets could not be read (${ui.listErr}): a typed skill still works.`) : ''}</p>`
       + '<div class="thd-body"><p class="thd-empty note" id="thEmpty" hidden></p><div class="tohit" id="thBox"></div></div>';
   }
 
@@ -109,7 +111,9 @@
     if (!d.open) d.showModal();
     $('#thClose').focus();
     let pcs = [];
-    try { pcs = (await RP.getJson('/api/tohit')).pcs || []; } catch (e) { pcs = []; }
+    let listErr = null;
+    try { pcs = (await RP.getJson('/api/tohit')).pcs || []; } catch (e) { pcs = []; listErr = String(e.message || e).split('\n')[0]; }
+    ui.listErr = listErr;
     if (t !== ui.ticket || !ui.open) return;
     ui.pcs = pcs;
     const r = ui.row;

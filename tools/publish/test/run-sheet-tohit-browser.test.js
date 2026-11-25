@@ -588,3 +588,27 @@ describe('the GURPS to-hit calculator on the GM page, by real input', { skip: br
     }
   });
 });
+
+// Final review M1: a PC list that fails says so, as draw() does its own failure, and the typed skill still works.
+// The failure is real: the vault's folder is gone (an unplugged drive), so the server's list answers 500.
+describe('To-hit: the PC list failing is said, not silent (step 6b final review), by real input', { skip: browserSkip() }, () => {
+  it('the vault gone: To-hit opens on a typed skill with a line saying the PCs could not be read; a typed 12 still draws', async () => {
+    const run = await start();
+    const gone = `${run.vault}-gone`;
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await sheetUp(page, run);
+      fs.renameSync(run.vault, gone);
+      try {
+        await tap(page, '#pcsToHit');
+        await page.waitFor('document.querySelector("#thListErr") && !document.querySelector("#thListErr").hidden', 5000);
+        assert.match(await text(page, '#thListErr'), /^The PCs' sheets could not be read \(could not read \.: ENOENT[^\n]*\): a typed skill still works\.$/);
+        assert.deepStrictEqual(await page.evaluate('Array.from(document.querySelectorAll("#thFrom option"), (o) => o.textContent)'), ['a typed skill']);
+        await tap(page, '#thLevel');
+        await page.waitFor('document.activeElement === document.querySelector("#thLevel")', 2000);
+        await page.type('12');
+        await rollIs(page, 12);
+        assert.strictEqual(await page.evaluate('document.querySelector("#thListErr").hidden'), false, 'the line stays while the typed skill draws');
+      } finally { fs.renameSync(gone, run.vault); }
+    });
+  });
+});
