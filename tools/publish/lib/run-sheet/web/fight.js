@@ -1227,6 +1227,9 @@
         }
         if (rules.initiative === 'speed') deriveStats(x);
         if (!tk.max && isNum(x.max) && (c.hp || c.fields.length)) x.hp = x.max;
+        // the marks and Tired worked out again from the copy's new figures (CodeRabbit on #887)
+        settleMarks(s, f, x, at, true);
+        settleTired(s, f, x, at, true);
         if (!tk.ini) {
           const ini = FM.initOf(x, rules);
           if (ini !== null && ini !== x.ini) { x.ini = ini; replace(s, f, x, at, { quiet: true }); }

@@ -4094,6 +4094,19 @@ describe('Same for all, field by field (step 6b Task 23, D3)', () => {
     assert.deepEqual([named(s, 'Bouncer 3').fp, named(s, 'Bouncer 3').fpMax], [10, 10]);
   });
 
+  // CodeRabbit on #887: Tired is worked out again against the copied maximum
+  it('GURPS: a Tired copy whose FP max is copied higher than a third of its FP is Tired no more', () => {
+    const rows = three();
+    rows[1] = { ...rows[1], fp: 12, fpMax: 12 };
+    let s = begin(GURPS, rows);
+    s = G(s, { type: 'hp', row: named(s, 'Bouncer 2').id, entry: 'f-9' });
+    assert.deepEqual([named(s, 'Bouncer 2').fp, named(s, 'Bouncer 2').tired], [3, true]);
+    const id = named(s, 'Bouncer 1').id;
+    s = G(s, { type: 'setStat', row: id, key: 'fp', value: 8 });
+    s = G(s, { type: 'sameForAll', row: id });
+    assert.deepEqual([named(s, 'Bouncer 2').fp, named(s, 'Bouncer 2').fpMax, named(s, 'Bouncer 2').tired], [3, 8, false]);
+  });
+
   it('GURPS: ST, HT and DX copied; each copy works out its HP, FP and Speed; a typed initiative is kept', () => {
     let s = begin(GURPS, three());
     s = G(s, { type: 'setInit', row: named(s, 'Bouncer 2').id, ini: 10 });
