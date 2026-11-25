@@ -16,7 +16,9 @@ a second `--background` reports the running one. Never start it with a
 plain `serve` in one of your background tasks: a host limit on those
 stops the server mid-session. If `--background` refuses because one is
 running "from a terminal or task", run `serve --stop`, then
-`--background` again. Tell them it never goes online (`deploy` refuses
+`--background` again. On Windows, if `--status` later finds it gone
+after your session ended, your host ends what its commands start: tell
+the GM, and offer to start it again. Tell them it never goes online (`deploy` refuses
 its folder) and that the site's build steps don't run for it: any it
 needs go under `gm_site.before_build` or `gm_site.after_build`.
 A session's Story page shows its wrap-up's Memorable Moments as cards

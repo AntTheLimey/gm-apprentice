@@ -21,17 +21,18 @@ function runDir(env = process.env) {
   return env.GM_APPRENTICE_RUN_DIR || path.join(os.homedir(), '.gm-apprentice', 'run');
 }
 
-// The record's files for a site folder: the record, the stop request and the background server's output.
+// The record's files for a site folder. The key is the folder's real path, so a folder named through a link has
+// the same record as the folder itself.
 function recordFor(folder, env = process.env) {
-  const key = crypto.createHash('sha256').update(path.resolve(folder)).digest('hex').slice(0, 16);
+  let real;
+  try { real = fs.realpathSync(folder); } catch { real = path.resolve(folder); }
+  const key = crypto.createHash('sha256').update(real).digest('hex').slice(0, 16);
   const dir = runDir(env);
-  return {
-    dir,
-    file: path.join(dir, `serve-${key}.json`),
-    stop: path.join(dir, `serve-${key}.stop`),
-    log: path.join(dir, `serve-${key}.log`),
-  };
+  return { dir, stem: `serve-${key}`, file: path.join(dir, `serve-${key}.json`) };
 }
+
+// A stop request names the one server it is for, so a server started after it was written never acts on it.
+const stopFile = (rec, id) => path.join(rec.dir, `${rec.stem}.${id}.stop`);
 
 function readRecord(rec) {
   try {
@@ -48,11 +49,12 @@ function writeRecord(rec, record) {
   fs.renameSync(tmp, rec.file);
 }
 
-// Removes the record only while it is still this server's: a newer server's record is left alone.
-function clearRecord(rec, pid) {
+// Removes the record only while it is still this server's: a newer server's record is left alone. With `id`, also
+// that server's stop request.
+function clearRecord(rec, pid, id) {
   const r = readRecord(rec);
   if (!r || r.pid === pid) { try { fs.rmSync(rec.file, { force: true }); } catch { /* gone already */ } }
-  try { fs.rmSync(rec.stop, { force: true }); } catch { /* gone already */ }
+  if (id) { try { fs.rmSync(stopFile(rec, id), { force: true }); } catch { /* gone already */ } }
 }
 
 function pidAlive(pid) {
@@ -72,14 +74,16 @@ function answersTo(port, id, timeoutMs = 1500) {
   });
 }
 
-// The record of the server running for this folder, or null. A record whose server is gone is cleared; one whose
-// server is only slow to answer is kept (and null returned), so a later --stop still finds it.
+// The record of the server running for this folder, or null. A record whose server is gone is cleared. One whose
+// process is there but did not answer in time comes back with `answering: false`: it may be the server, busy, so it
+// is neither taken for gone nor signalled.
 async function runningRecord(rec, deps = {}) {
   const r = readRecord(rec);
   if (!r) return null;
   const answer = (deps.pidAlive || pidAlive)(r.pid) ? await (deps.answersTo || answersTo)(r.port, r.id) : 'no';
-  if (answer === 'yes') return r;
-  if (answer === 'no') clearRecord(rec, r.pid);
+  if (answer === 'yes') return { ...r, answering: true };
+  if (answer === 'slow') return { ...r, answering: false };
+  clearRecord(rec, r.pid, r.id);
   return null;
 }
 
@@ -94,8 +98,13 @@ function claim(rec, pid) {
     } catch (err) {
       if (err.code !== 'EEXIST') throw err;
       let held = null;
-      try { held = JSON.parse(fs.readFileSync(rec.file, 'utf8')); } catch { /* half written: someone is claiming */ }
-      if (!held || !Number.isInteger(held.pid) || pidAlive(held.pid)) return false;
+      try { held = JSON.parse(fs.readFileSync(rec.file, 'utf8')); } catch { /* half written, or left half written */ }
+      if (!held || !Number.isInteger(held.pid)) {
+        // Someone may be writing it this moment; one still unreadable after 10 s was left by a start that died.
+        let age = 0;
+        try { age = Date.now() - fs.statSync(rec.file).mtimeMs; } catch { /* gone: try again */ }
+        if (age < 10000) return false;
+      } else if (pidAlive(held.pid)) return false;
       try { fs.rmSync(rec.file, { force: true }); } catch { /* taken by another */ }
     }
   }
@@ -123,8 +132,9 @@ async function waitFor(check, timeoutMs, everyMs = 100) {
 }
 
 // Asks the running server to stop, and makes sure it did: first through the stop request it watches for (it
-// closes every connection and exits), then, if it is still there after `graceMs`, by ending the process. Resolves
-// { stopped: false } when nothing was running, else { stopped: true, pid, port, portFree }.
+// closes every connection and exits), then, if it is still there after `graceMs`, by ending the process; but only
+// a process that has just answered to the server's id is ever signalled. Resolves { stopped: false } when nothing
+// was running, else { stopped, pid, port, portFree, answering }.
 async function stopServer(rec, deps = {}) {
   const r = await runningRecord(rec, deps);
   if (!r) return { stopped: false };
@@ -137,23 +147,20 @@ async function stopServer(rec, deps = {}) {
   // its parent has not yet reaped still looks alive).
   const gone = async () => !alive(r.pid) || ((await answers(r.port, r.id, 500)) === 'no' && await free(r.port));
   fs.mkdirSync(rec.dir, { recursive: true });
-  fs.writeFileSync(rec.stop, `${Date.now()}\n`);
-  // The pid answered to the record's id a moment ago and has not gone away since, so it is still the server.
+  fs.writeFileSync(stopFile(rec, r.id), `${Date.now()}\n`);
   let stopped = await waitFor(gone, graceMs, 200);
-  if (!stopped) {
-    try { kill(r.pid, 'SIGTERM'); } catch { /* gone in between */ }
+  // Signalled only while it answers to the server's id: a pid the system has since given to another program never is.
+  for (const sig of ['SIGTERM', 'SIGKILL']) {
+    if (stopped || (await answers(r.port, r.id, 1000)) !== 'yes') break;
+    try { kill(r.pid, sig); } catch { /* gone in between */ }
     stopped = await waitFor(gone, 3000, 200);
   }
-  if (!stopped && alive(r.pid)) {
-    try { kill(r.pid, 'SIGKILL'); } catch { /* gone in between */ }
-    stopped = await waitFor(gone, 3000, 200);
-  }
-  if (stopped) clearRecord(rec, r.pid);
+  if (stopped) clearRecord(rec, r.pid, r.id);
   const portIsFree = await waitFor(() => free(r.port), 3000, 200);
-  return { stopped, pid: r.pid, port: r.port, portFree: portIsFree };
+  return { stopped, pid: r.pid, port: r.port, portFree: portIsFree, answering: r.answering };
 }
 
 module.exports = {
-  ID_PREFIX, runDir, recordFor, readRecord, writeRecord, clearRecord, claim, pidAlive, answersTo, runningRecord, portFree,
+  ID_PREFIX, runDir, recordFor, stopFile, readRecord, writeRecord, clearRecord, claim, pidAlive, answersTo, runningRecord, portFree,
   waitFor, stopServer,
 };

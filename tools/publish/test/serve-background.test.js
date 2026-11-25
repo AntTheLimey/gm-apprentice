@@ -124,13 +124,14 @@ describe('serve --background, --status and --stop (#883)', () => {
       let text = '';
       c.stdout.on('data', (d) => { text += d; });
       c.stderr.on('data', (d) => { text += d; });
-      c.on('exit', (code) => resolve({ code, text }));
+      c.on('close', (code) => resolve({ code, text }));
     });
     try {
       const [a, b] = await Promise.all([start(), start()]);
       assert.equal(a.code, 0, a.text);
       assert.equal(b.code, 0, b.text);
       const pids = [a, b].map((r) => /\(pid (\d+)/.exec(r.text)?.[1]);
+      assert.ok(pids[0] && pids[1], `${a.text}\n${b.text}`);
       assert.equal(pids[0], pids[1], `${a.text}\n${b.text}`);
       assert.equal(await get(port), 200);
     } finally {
@@ -163,7 +164,7 @@ describe('serve records', () => {
         graceMs: 1000,
         kill: (pid, sig) => signals.push(sig),
       });
-      assert.deepEqual(res, { stopped: true, pid: 424243, port: 1, portFree: true });
+      assert.deepEqual(res, { stopped: true, pid: 424243, port: 1, portFree: true, answering: true });
       assert.deepEqual(signals, []);
     } finally { fs.rmSync(runDir, { recursive: true, force: true }); }
   });
@@ -189,14 +190,21 @@ describe('serve records', () => {
       // A second server for the same folder is refused while the first runs.
       await assert.rejects(runServe({ configPath: built.configPath, site: 'gm', keepRecord: true }, { out: () => {}, listen, env, proc }),
         /already being served .*Stop it first with serve --stop\./);
-      fs.writeFileSync(rec.stop, 'now');
+      // A stop request for another server is not this one's.
+      fs.writeFileSync(records.stopFile(rec, 'another-server'), 'now');
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(result.server.listening, true);
+      fs.writeFileSync(records.stopFile(rec, result.id), 'now');
       await result.closed;
       assert.equal(result.server.listening, false);
       assert.equal(fs.existsSync(rec.file), false);
-      assert.equal(fs.existsSync(rec.stop), false);
+      assert.equal(fs.existsSync(records.stopFile(rec, result.id)), false);
     } finally {
-      // A failed assertion must not leave the server holding this test process open.
-      if (result && result.server.listening) { result.server.closeAllConnections(); result.server.close(); }
+      // A failed assertion must not leave the server holding this test process open: the managed stop.
+      if (result && result.server.listening) {
+        fs.writeFileSync(records.stopFile(records.recordFor(built.gm.dir, env), result.id), 'now');
+        await result.closed;
+      }
       built.cleanup();
       fs.rmSync(runDir, { recursive: true, force: true });
     }
@@ -221,6 +229,49 @@ describe('serve records', () => {
     }
   });
 
+  it('a process that stops answering is never signalled, and is reported as not answering', async () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'serve-run-'));
+    const rec = records.recordFor('/some/site-gm', { GM_APPRENTICE_RUN_DIR: runDir });
+    records.writeRecord(rec, { pid: 424244, port: 1, id: 'x', urls: [], site: 'gm', folder: '/some/site-gm' });
+    const signals = [];
+    try {
+      // Busy at first (no answer in time), then a reused pid on a port someone else holds: never confirmed.
+      let calls = 0;
+      const res = await records.stopServer(rec, {
+        pidAlive: () => true,
+        answersTo: async () => (calls++ === 0 ? 'slow' : 'no'),
+        portFree: async () => false,
+        graceMs: 100,
+        kill: (pid, sig) => signals.push(sig),
+      });
+      assert.deepEqual(signals, []);
+      assert.equal(res.stopped, false);
+      assert.equal(res.answering, false);
+    } finally { fs.rmSync(runDir, { recursive: true, force: true }); }
+  });
+
+  it('a folder named through a link has the same record as the folder', { skip: process.platform === 'win32' && 'links need rights on Windows' }, () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'serve-link-')));
+    try {
+      fs.mkdirSync(path.join(base, 'site-gm'));
+      fs.symlinkSync(path.join(base, 'site-gm'), path.join(base, 'linked'));
+      const env = { GM_APPRENTICE_RUN_DIR: base };
+      assert.equal(records.recordFor(path.join(base, 'linked'), env).file, records.recordFor(path.join(base, 'site-gm'), env).file);
+    } finally { fs.rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it('a claim left unreadable by a start that died is taken over after 10 s, not before', () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'serve-run-'));
+    const rec = records.recordFor('/some/site-gm', { GM_APPRENTICE_RUN_DIR: runDir });
+    try {
+      fs.writeFileSync(rec.file, '');
+      assert.equal(records.claim(rec, process.pid), false);
+      const old = new Date(Date.now() - 20000);
+      fs.utimesSync(rec.file, old, old);
+      assert.equal(records.claim(rec, process.pid), true);
+    } finally { fs.rmSync(runDir, { recursive: true, force: true }); }
+  });
+
   it('a server that ignores the stop request is ended', async () => {
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'serve-run-'));
     const env = { GM_APPRENTICE_RUN_DIR: runDir };
@@ -231,13 +282,13 @@ describe('serve records', () => {
     try {
       const res = await records.stopServer(rec, {
         pidAlive: () => alive,
-        answersTo: async () => 'yes',
+        answersTo: async () => (alive ? 'yes' : 'no'),
         portFree: async () => true,
         graceMs: 100,
         kill: (pid, sig) => { signals.push(sig); if (sig === 'SIGTERM') alive = false; },
       });
       assert.deepEqual(signals, ['SIGTERM']);
-      assert.deepEqual(res, { stopped: true, pid: 424242, port: 1, portFree: true });
+      assert.deepEqual(res, { stopped: true, pid: 424242, port: 1, portFree: true, answering: true });
       assert.equal(fs.existsSync(rec.file), false);
     } finally {
       fs.rmSync(runDir, { recursive: true, force: true });

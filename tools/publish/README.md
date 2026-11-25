@@ -244,6 +244,9 @@ server however it was started, closing any connection a tablet holds
 open, and says whether the port is free. There is one server per site:
 a second start reports the one already running. The record that lets
 `--status` and `--stop` find it is kept in `~/.gm-apprentice/run`.
+One limit on Windows: if the program that ran the command keeps every
+process it starts in a job that ends with it, the server ends with that
+program too, and nothing the tool does can take it out of that job.
 
 It builds nothing, watches nothing and asks for no passphrase. A folder
 with nothing built in it (no `gm-build.json` for the GM site, no

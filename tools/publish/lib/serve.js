@@ -178,6 +178,10 @@ function prepare({ configPath, site, port }, deps) {
   return { folder, wanted };
 }
 
+function notAnswering(site, r) {
+  return `A ${siteName(site)} site server (pid ${r.pid}, port ${r.port}) is running but not answering. Stop it with serve --stop, then start again.`;
+}
+
 function alreadyRunning(site, r) {
   return `The ${siteName(site)} site is already being served (pid ${r.pid}${r.background ? ', in the background' : ', from a terminal or task'}), at ${r.urls.join(' ')}`;
 }
@@ -206,6 +210,7 @@ async function runServe({ configPath, site = 'gm', port = 4321, keepRecord = fal
   const rec = keepRecord ? records.recordFor(folder, env) : null;
   if (rec) {
     const running = await records.runningRecord(rec);
+    if (running && !running.answering) throw new Error(notAnswering(site, running));
     if (running) throw new Error(`${alreadyRunning(site, running)}. Stop it first with serve --stop.`);
     if (!records.claim(rec, proc.pid)) {
       throw new Error(`Another ${siteName(site)} site server is starting, or is not answering. Check with serve --status, or stop it with serve --stop.`);
@@ -239,19 +244,27 @@ async function runServe({ configPath, site = 'gm', port = 4321, keepRecord = fal
     let finish;
     closed = new Promise((r) => { finish = r; });
     let stopping = false;
+    let watch = null;
     const stop = () => {
       if (stopping) return;
       stopping = true;
       clearInterval(watch);
       for (const sig of STOP_SIGNALS) proc.removeListener(sig, stop);
       // A tablet keeps its connection open: close them all, or the server would wait on them.
-      server.close(() => { records.clearRecord(rec, proc.pid); finish(); });
+      server.close(() => { records.clearRecord(rec, proc.pid, id); finish(); });
       server.closeAllConnections();
     };
-    try { fs.rmSync(rec.stop, { force: true }); } catch { /* none left over */ }
-    records.writeRecord(rec, { pid: proc.pid, port: actual, site, folder, urls, id, background, started: new Date().toISOString() });
+    try {
+      records.writeRecord(rec, { pid: proc.pid, port: actual, site, folder, urls, id, background, started: new Date().toISOString() });
+    } catch (err) {
+      // Not findable by --status or --stop: not left running.
+      await new Promise((r) => { server.close(r); server.closeAllConnections(); });
+      records.clearRecord(rec, proc.pid);
+      throw new Error(`The server could not write its record in ${rec.dir} (${err.code || err.message}), so it was stopped.`);
+    }
     // A stop request is a file, not a signal: Windows cannot send a background process one it could act on.
-    const watch = setInterval(() => { if (fs.existsSync(rec.stop)) stop(); }, deps.stopPollMs || 500);
+    const request = records.stopFile(rec, id);
+    watch = setInterval(() => { if (fs.existsSync(request)) stop(); }, deps.stopPollMs || 500);
     for (const sig of STOP_SIGNALS) proc.on(sig, stop);
   }
 
@@ -259,7 +272,7 @@ async function runServe({ configPath, site = 'gm', port = 4321, keepRecord = fal
   for (const url of urls) out(url);
   if (site === 'gm') out(TRUST_LINE);
   out(background ? 'Stop it with serve --stop.' : 'Press Ctrl+C to stop.');
-  return { server, urls, closed };
+  return { server, urls, closed, id };
 }
 
 // `serve --background`: starts the server as a process of its own, apart from this terminal and from any agent's
@@ -274,6 +287,7 @@ async function startBackground({ configPath, site = 'gm', port = 4321 } = {}, de
   // One already running: reported when it runs in the background; one in a terminal or an agent's task stops with
   // it, which is what --background is for, so it is named and not taken for a lasting one.
   const report = (running) => {
+    if (!running.answering) throw new Error(notAnswering(site, running));
     if (!running.background) {
       throw new Error(`${alreadyRunning(site, running)}. It stops when that terminal or task ends: stop it with serve --stop, then start it again with serve --background.`);
     }
@@ -283,13 +297,15 @@ async function startBackground({ configPath, site = 'gm', port = 4321 } = {}, de
   const running = await records.runningRecord(rec);
   if (running) return report(running);
 
-  // Each start has its own output file, so two at once cannot write over each other's reason; earlier ones go.
+  // Each start has its own output file, so two at once cannot write over each other's reason. Old ones go; one
+  // under a minute old may belong to a start still under way.
   fs.mkdirSync(rec.dir, { recursive: true });
-  const stem = path.basename(rec.log, '.log');
   for (const f of fs.readdirSync(rec.dir)) {
-    if (f.startsWith(`${stem}.`) && f.endsWith('.log')) { try { fs.rmSync(path.join(rec.dir, f), { force: true }); } catch { /* in use */ } }
+    if (!f.startsWith(`${rec.stem}.`) || !f.endsWith('.log')) continue;
+    const file = path.join(rec.dir, f);
+    try { if (Date.now() - fs.statSync(file).mtimeMs > 60000) fs.rmSync(file, { force: true }); } catch { /* gone or in use */ }
   }
-  const logFile = path.join(rec.dir, `${stem}.${crypto.randomBytes(4).toString('hex')}.log`);
+  const logFile = path.join(rec.dir, `${rec.stem}.${crypto.randomBytes(4).toString('hex')}.log`);
   const log = fs.openSync(logFile, 'w');
   const bin = path.join(__dirname, '..', 'bin', 'gm-publish.js');
   const args = [bin, 'serve', '--site', site, '--port', String(port), '--config', path.resolve(configPath)];
@@ -305,16 +321,26 @@ async function startBackground({ configPath, site = 'gm', port = 4321 } = {}, de
   child.unref();
 
   const startTimeoutMs = deps.startTimeoutMs || 15000;
+  const deadline = Date.now() + startTimeoutMs;
   let record = null;
   await records.waitFor(() => {
+    if (exited !== null) return true;
     const r = records.readRecord(rec);
     if (r && r.pid === child.pid) { record = r; return true; }
-    return exited !== null;
+    return false;
   }, startTimeoutMs);
+  // Ready only while it answers: a child that wrote its record and then died is not reported as serving.
+  if (record && (exited !== null || (await records.answersTo(record.port, record.id)) !== 'yes')) record = null;
   if (!record) {
     if (exited === null) { try { child.kill(); } catch { /* gone */ } }
-    // Another start won the race: report its server.
-    const other = await records.runningRecord(rec);
+    // Another start won the race: wait (within the time left) for its server to be listening, and report it.
+    let other = null;
+    await records.waitFor(async () => {
+      other = await records.runningRecord(rec);
+      if (other) return true;
+      const held = records.readRecord(rec);
+      return !held && !fs.existsSync(rec.file); // no record and no claim: nobody else is starting
+    }, Math.max(0, deadline - Date.now()), 200);
     if (other) return report(other);
     let said = '';
     try { said = fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean).slice(-3).join(' '); } catch { /* no output */ }
@@ -335,6 +361,7 @@ async function serveStatus({ configPath, site = 'gm' } = {}, deps = {}) {
   const folder = (deps.folderFor || folderFor)(configPath, site);
   const r = await records.runningRecord(records.recordFor(folder, deps.env));
   if (!r) { out(`The ${siteName(site)} site is not being served.`); return { running: false }; }
+  if (!r.answering) { out(notAnswering(site, r)); return { running: true, answering: false, pid: r.pid }; }
   out(`The ${siteName(site)} site is being served (pid ${r.pid}, since ${r.started}, ${r.background ? 'in the background until serve --stop' : 'from a terminal or task: it stops when that ends'}):`);
   for (const url of r.urls) out(url);
   return { running: true, pid: r.pid, urls: r.urls };
@@ -348,6 +375,9 @@ async function serveStop({ configPath, site = 'gm' } = {}, deps = {}) {
   const folder = (deps.folderFor || folderFor)(configPath, site);
   const res = await records.stopServer(records.recordFor(folder, deps.env), deps);
   if (!res.stopped && res.pid === undefined) { out(`The ${siteName(site)} site is not being served: nothing to stop.`); return res; }
+  if (!res.stopped && !res.answering) {
+    throw new Error(`The ${siteName(site)} site server (pid ${res.pid}) is not answering and did not stop when asked. It was not forced, since it could not be confirmed as the server: end process ${res.pid} yourself if it is.`);
+  }
   if (!res.stopped) throw new Error(`The ${siteName(site)} site server (pid ${res.pid}) would not stop.`);
   out(`Stopped the ${siteName(site)} site server (pid ${res.pid}).${res.portFree ? ` Port ${res.port} is free.` : ` Port ${res.port} is still held by something else.`}`);
   return res;
