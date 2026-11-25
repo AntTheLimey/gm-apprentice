@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.150] — 2026-11-25
+
+### Fixed
+
+- The at-table inbox no longer needs restarting every 30 minutes: the watcher runs as a background command with no time limit and wakes the loop only when a player sends something (#884).
+- `inbox watch --status` says whether the watcher is running; `inbox watch --stop` stops it, makes sure it ended and clears its files. One watcher runs per site, and a reply sent while none is running says so.
+
 ## [1.12.149] — 2026-11-25
 
 ### Added

@@ -148,7 +148,14 @@ by the publish-site skill's checking loop; run it by hand to inspect the queue.
                                              Otherwise runs until stopped; with
                                              --exit-on-batch it exits 0 after a batch or
                                              reminder line, 1 after a failure line. A
-                                             usage error exits 2
+                                             usage error exits 2. One watcher runs per
+                                             site: another prints "WATCHER: already
+                                             watching" and exits 3
+  inbox watch --status                       Say whether a watcher is running for the site
+                                             and when it last polled (exit 0 if so, 1 if not)
+  inbox watch --stop                         Stop the running watcher (it prints
+                                             "WATCHER: stopped"), make sure it ended, and
+                                             remove the .watcher-* files
   inbox handled <id> [<id>...]               Mark requests handled
   inbox flag <id> [<id>...]                  Mark requests flagged for the GM
   inbox reply <id> <applied|rejected|advice> "<text>"

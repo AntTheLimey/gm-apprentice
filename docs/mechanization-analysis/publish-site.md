@@ -162,7 +162,7 @@ Deterministic transactional orchestration.
 the model renders from memory. Size S.
 
 **g) Stop sequence (282-299):** `flush` (already A), kill watcher, `rm
-.watcher-heartbeat` — fold into `inbox watch --stop`. Size S.
+.watcher-heartbeat` — fold into `inbox watch --stop`. Size S. Done in #884.
 
 ### C — hybrid
 

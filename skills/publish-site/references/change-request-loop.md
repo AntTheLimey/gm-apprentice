@@ -47,9 +47,8 @@ does the waiting, and you only wake when a request actually arrives.
 2. Set it live:  `npx gm-apprentice-publish inbox open WOLF`
    (or `gma publish inbox open WOLF`). A new code starts a
    new session: the watcher forgets which requests it showed you before, and
-   runs 5 hours from now (`--hours N` for another length, 1 to 12).
-   Stop any watcher still running first: a monitor-mode watcher keeps its
-   shown ids in memory and would write the old ones back.
+   runs 5 hours from now (`--hours N` for another length, 1 to 12). A
+   watcher already running picks the new session up on its next poll.
 3. Print it prominently for the GM to read to the table:
    `╔═══════════════╗  SESSION CODE: WOLF  ╚═══════════════╝`
 4. Launch the **watcher** from `<site_dir>`, then leave the session idle.
@@ -61,33 +60,35 @@ does the waiting, and you only wake when a request actually arrives.
    prints `WATCHER: still pending: <id> <id>...`, and again every 5 minutes
    while it stays pending. After 5 failed polls in a row it prints
    `WATCHER: inbox pull failed N times in a row`, and again every 5 more.
-   - **If the host offers a monitor primitive** that notifies you per line
-     of output, prefer it:
-
-     ```bash
-     npx gm-apprentice-publish inbox watch
-     ```
-
-   - **Otherwise, a background shell command** (`run_in_background: true`),
-     which only notifies you when it exits. It exits 0 after a new batch or
-     a reminder line, 1 after the first failure line and 2 on a usage error
-     (fix the command):
+   - **Run it as a background command** (`run_in_background: true`), which
+     notifies you when it exits. It has no time limit: it waits as long as
+     the table is quiet and wakes you only when there is something to do.
+     It exits 0 after a new batch, a reminder line, `WATCHER: session time
+     is up` or `WATCHER: stopped`; 1 after the first failure line; 2 on a
+     usage error (fix the command); 3 with `WATCHER: already watching` when
+     one is running for the site already, which needs nothing from you: that
+     one wakes you.
 
      ```bash
      npx gm-apprentice-publish inbox watch --exit-on-batch
      ```
 
-   **Whenever the watcher ends without a `WATCHER: session time is up`
-   line** and the GM has not said stop, relaunch it at once and say nothing:
-   a monitor reaching its time limit, or an `--exit-on-batch` exit once its
-   batch is handled. Never ask, and never take a quiet table for the end of
-   the session. **On `WATCHER: session time is up`**, ask the GM once
-   whether to keep watching; on yes, run `inbox open` again with the same
-   code (it restarts the clock) and relaunch the watcher.
+   - **Only on a host without background commands**, use its monitor
+     primitive, which notifies you per line, with plain
+     `npx gm-apprentice-publish inbox watch`. A monitor ends at the host's
+     time limit (30 minutes in Claude Code): relaunch it at once and say
+     nothing, every time it ends without a `WATCHER:` line.
+
+   **When the watcher wakes you with a batch or a reminder, relaunch it
+   first, then handle the batch**, so a request sent meanwhile wakes you
+   too. The relaunch stays quiet about the batch you are handling. Never
+   ask, and never take a quiet table for the end of the session. If
+   `inbox reply` prints `Note: no inbox watch is running`, relaunch it at
+   once. **On `WATCHER: session time is up`**, ask the GM once whether to
+   keep watching; on yes, run `inbox open` again with the same code (it
+   restarts the clock) and relaunch the watcher. `WATCHER: stopped` follows
+   your own `inbox watch --stop`: do not relaunch.
    `--every N` sets another interval in seconds (kept between 1 and 300).
-   What neither mode can self-report is dying outright (terminal closed,
-   process killed); that's what `.watcher-heartbeat` is for — see Stop
-   below.
 
 ## When a batch arrives
 
@@ -201,11 +202,11 @@ the cell being changed, on a PC that is not live), read first from the PC's
      (nothing else marks them). Log the failure. The watcher names them on
      a `still pending` line 5 minutes later: retry the deploy then, and
      reply once it succeeds.
-5. **Get the watcher running again for the next request.** On the monitor
-   primitive it is still running, unless it ended (Start step 4). With
-   `--exit-on-batch`, relaunch the same command. **On a `WATCHER: still pending` line**, those ids were shown before
-   and never replied to: retry their deploy (a leak-held batch only once the
-   GM has cleared the check) and reply, then step 5 again.
+5. **The watcher is already running again** (Start step 4 relaunched it
+   when the batch woke you). **On a `WATCHER: still pending` line**, those
+   ids were shown before and never replied to: relaunch the watcher, retry
+   their deploy (a leak-held batch only once the GM has cleared the check)
+   and reply.
 
 Once a request reaches a terminal outcome it returns exactly one response to
 the chat log: `applied` (sheet redeployed), `rejected` (with the point-math
@@ -259,15 +260,14 @@ do". Diagnose it before anything else:
 1. Run `npx gm-apprentice-publish inbox pull` once by hand and read the
    actual error.
 2. **Fixable now** (e.g. re-authenticate, stale `wrangler` credentials):
-   fix it, confirm with one more manual pull. With `--exit-on-batch`,
-   relaunch the watcher; the monitor primitive never exited and picks up on
-   its next poll.
+   fix it, confirm with one more manual pull, and relaunch the watcher (a
+   monitor never exited and picks up on its next poll).
 3. **Not fixable immediately** (e.g. a Cloudflare outage): tell the GM the
-   change-request loop is degraded. With `--exit-on-batch`, relaunch it with
-   `--every 120` so a still-broken inbox doesn't wake you every few
-   minutes, and drop back to the default once a pull succeeds. The monitor
-   primitive keeps running and repeats the line every 5 failures until the
-   inbox recovers; the repeats are the same outage, not a new problem.
+   change-request loop is degraded. Relaunch the watcher with `--every 120`
+   so a still-broken inbox doesn't wake you every few minutes, and drop back
+   to the default once a pull succeeds. A monitor keeps running and repeats
+   the line every 5 failures until the inbox recovers; the repeats are the
+   same outage, not a new problem.
 
 ## Terminal log format
 
@@ -287,20 +287,15 @@ One line per request so a glance tells the whole story:
 **Mid-session liveness check.** A dead watcher and a quiet table look
 identical — no output either way. If a GM asks "is it still checking?", or a
 player says they submitted something and nothing happened, run
-`cat <site_dir>/.watcher-heartbeat` — it shows the Unix timestamp of the
-last poll, written every poll in both modes. Stale by more than two or three
-intervals (60-90s at the default 30s; more if you set `--every`) means it
-died silently. A fresh heartbeat proves only that it polls, not that a
-request was handled: when a player says nothing happened, also run
-`inbox pull` and compare its ids with the ones you have replied to. Then:
+`npx gm-apprentice-publish inbox watch --status`: it says whether a watcher
+is running for the site and how long ago it last polled. `Not watching`
+means relaunch it (Start step 4); a second one never starts beside a live
+one. A recent poll proves only that it polls, not that a request was
+handled: when a player says nothing happened, also run `inbox pull` and
+compare its ids with the ones you have replied to.
 
-- **`--exit-on-batch`:** relaunch it (Start step 4) before assuming the
-  queue is simply empty.
-- **Monitor primitive:** ask the host whether the task is still running;
-  if it ended, relaunch it, and never start a second poller beside a live one.
-
-On "stop", **flush live state to the vault, then terminate the background
-watcher** and do not relaunch it:
+On "stop", **flush live state to the vault, then stop the watcher** and do
+not relaunch it:
 
 1. Run `npx gm-apprentice-publish flush` (or `gma publish flush`). This snapshots each PC's current live vitals back into their vault
    `.md` (GURPS: current HP and FP into the `## Current Status` block; CoC:
@@ -315,10 +310,10 @@ watcher** and do not relaunch it:
    body block) is skipped with a warning: the build reads vitals from that
    frontmatter and ignores the body, so a body write wouldn't take effect —
    author current status in the body block to let flush sync it.
-2. Terminate the background watcher, then
-   `rm -f <site_dir>/.watcher-heartbeat <site_dir>/.watcher-seen.json <site_dir>/.watcher-session.json` —
-   they're session-scoped scratch state, not something to leave behind in
-   the GM's site repo between sessions.
+2. Run `npx gm-apprentice-publish inbox watch --stop`. It stops the
+   watcher however it was launched, makes sure it ended, and removes the
+   `.watcher-*` files: they belong to one session, not to the GM's site
+   repo. Its `WATCHER: stopped` line, if it wakes you, needs nothing.
 
 The session code stays set in KV until the next "start your checking loop"
 replaces it. `flush` is also safe to run ad hoc at any time — it is idempotent,
