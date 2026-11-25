@@ -3747,11 +3747,12 @@ describe('CoC cards: one per hit, Dying\'s reminders and the SAN bout (step 6b T
     assert.deepEqual(named(s, 'Tom Reyes').conds, ['Major wound', 'Prone', 'Unconscious']);
     assert.deepEqual(cards(s, 'Tom Reyes'), []);
     assert.deepEqual(lines(s).slice(-2), ['Tom Reyes: Major wound, CON 55, failed.', 'Tom Reyes: Major wound: Prone, Unconscious.']);
-    // an NPC's line is never a tap
+    // PRENTICE review M2 changed this on purpose: an NPC's line takes a tap too (the roll made at the table, for a foe
+    // made up there with no CON)
     s = typeIn(s, 'Vera Holm', '-8');
-    const npc = clone(s.fight);
     s = rolled(s, 'Vera Holm', { tap: 'passed' });
-    assert.deepEqual(s.fight, npc);
+    assert.deepEqual(cards(s, 'Vera Holm'), [], 'passed: the card is settled');
+    assert.deepEqual(lines(s).slice(-2).map((l) => l.replace(/CON \d+/, 'CON n')), ['Vera Holm: Major wound, CON n, passed.', 'Vera Holm: Major wound: Prone.']);
   });
 
   it('a dismissed card writes no log line', () => {

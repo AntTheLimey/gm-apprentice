@@ -858,7 +858,8 @@
       if (!card) return;
       const C = K.C;
       const i = GM.nextLine(card, C);
-      const res = K.M.rollResult(a.result, r);
+      // a card's line takes a tap for any row (CoC: a made-up foe with no CON, PRENTICE review M2; GURPS's always did)
+      const res = K.M.rollResult(a.result, r, true);
       if (i < 0 || a.line !== i || !res) return;
       const l = card.lines[i];
       if (!res.tapped && K.M.lineTarget(l, r) !== res.target) return;

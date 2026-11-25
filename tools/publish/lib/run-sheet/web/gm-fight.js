@@ -291,10 +291,13 @@
     if (note) addTo({ cast: note, count: n });
     else addTo({ name, count: n }, `${name}${n > 1 ? ` ×${n}` : ''}`);
   }
-  // What Add and Enter take: the top hit, when the cast has one. A blank row is only ever the explicit "+ New".
+  // What Add and Enter take: the top hit, when the cast has one; when "+ New" is the only choice, a blank row by that
+  // name (a foe made up at the table, PRENTICE review M3). With cast hits, a blank row is only ever the explicit "+ New".
   function addTop(text) {
-    const top = FM.addChoices(model().cast || [], text, RS.castSearch)[0];
+    const all = FM.addChoices(model().cast || [], text, RS.castSearch);
+    const top = all[0];
     if (top && !top.isNew) { addByName(top.note); return true; }
+    if (top && top.isNew && all.length === 1) { addByName(null, top.name); return true; }
     return false;
   }
   const NO_ONE = 'No one in the vault by that name: choose "+ New" to add them with no note';
@@ -1655,7 +1658,7 @@
       + `<button type="button" class="x" ${cardBtn(r, c, '', 'dismiss')} title="Dismiss: nothing applied, nothing logged" aria-label="Dismiss this card">\u2715</button></div>`;
     if (want) {
       const lab = statLabel(K, want);
-      h += `<label class="cht"><span class="lab">${esc(lab)}</span><input data-fcardstat="${esc(`${r.id}|${want}`)}" inputmode="numeric" autocomplete="off" placeholder="${esc(lab)}" aria-label="${esc(lab)} for ${esc(r.gmName)}"><span class="note">${K.coc ? 'first, then Roll' : 'for Roll, or tap Passed or Failed'}</span></label>`;
+      h += `<label class="cht"><span class="lab">${esc(lab)}</span><input data-fcardstat="${esc(`${r.id}|${want}`)}" inputmode="numeric" autocomplete="off" placeholder="${esc(lab)}" aria-label="${esc(lab)} for ${esc(r.gmName)}"><span class="note">for Roll, or tap Passed or Failed</span></label>`;
     }
     h += `<ol class="clines">${c.lines.map((l, i) => {
       const cls = [i === next ? 'next' : '', l.result || l.taken ? 'rolled' : ''].join(' ').trim();
@@ -1680,9 +1683,9 @@
         + `<button type="button" class="primary fail" ${cardBtn(r, c, next, 'failed')} ${wait} title="The player's roll failed">Failed</button></span>`;
     } else if (next >= 0) {
       const wait = want || ui.rolling[c.id];
-      // a GURPS row with no HT (a foe made up at the table): the GM's Passed or Failed tap of the table roll settles the
-      // line at once; the HT box stays, for Roll, never a gate (fix round)
-      if (want && !K.coc) {
+      // a row with no HT (GURPS) or CON or INT (CoC, PRENTICE review M2), as a foe made up at the table has: the GM's
+      // Passed or Failed tap of the table roll settles the line at once; the box stays, for Roll, never a gate
+      if (want) {
         const tw = ui.rolling[c.id] ? 'disabled' : '';
         h += `<span class="taps" role="group" aria-label="The roll at the table"><button type="button" class="primary pass" ${cardBtn(r, c, next, 'passed')} ${tw} title="The roll at the table passed">Passed</button>`
           + `<button type="button" class="primary fail" ${cardBtn(r, c, next, 'failed')} ${tw} title="The roll at the table failed">Failed</button></span>`;

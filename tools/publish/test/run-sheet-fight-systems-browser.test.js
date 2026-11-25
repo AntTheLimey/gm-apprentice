@@ -3849,3 +3849,54 @@ describe('A GURPS foe made up at the table: the quick figures first (step 6b Tas
     });
   }
 });
+
+// PRENTICE review M2: a CoC foe made up at the table has no CON; its Major wound card offers Passed and Failed for the
+// roll made at the table, as GURPS's no-HT card does, and the CON box stays for Roll. Real input.
+describe('A made-up CoC foe\'s card takes a tap (PRENTICE review), by real input', { skip: browserSkip() }, () => {
+  it('CoC: "Cultist" with 16 HP takes 8: its Major wound card has Passed and Failed; Failed settles the line', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 0);
+      p = await addNew(page, 'Cultist');
+      const id = named(p, 'Cultist').id;
+      p = await typeInto(page, `[data-fmax="${id}"]`, 16);
+      p = await typeInto(page, `[data-fhp="${id}"]`, '-8');
+      const card = `#acting .fcard[data-fcrow="${id}"]`;
+      await page.waitFor(`document.querySelector(${q(card)})`, 3000);
+      assert.ok(await page.evaluate(`Boolean(document.querySelector(${q(`${card} [data-fcardstat]`)}))`), 'the CON box stays');
+      assert.match(await text(page, `${card} .cht .note`), /for Roll, or tap Passed or Failed/);
+      assert.strictEqual(await attrOf(page, `${card} button.roll`, 'disabled'), '', 'Roll waits for CON');
+      await tap(page, `${card} button.fail`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(id)}).cards.length === 0 || p.fight.rows.find((r) => r.id === ${q(id)}).cards[0].lines[0].result`);
+      p = await settled(page);
+      const log = await logOf(run);
+      assert.deepStrictEqual(log.slice(-2), ['Cultist: Major wound, failed.', 'Cultist: Major wound: Prone, Unconscious.']);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
+
+// PRENTICE review M3: a made-up name, where "+ New" is the only choice, is added by Enter (6a refused it); a name the
+// cast has still takes the cast's note first. Real input.
+describe('The Add box takes a made-up name on Enter (PRENTICE review), by real input', { skip: browserSkip() }, () => {
+  it('CoC: "Knife man", Enter: a blank row; "Dock Cult", Enter: the Dock Cultist\'s note', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 0);
+      await tap(page, '#fAddName');
+      await page.type('Knife man');
+      await page.waitFor('document.querySelectorAll("#fHits button").length === 1 && document.querySelector("#fHits [data-faddnew]")', 3000);
+      await page.key('Enter');
+      p = await until(page, 'p.fight.rows.some((r) => r.name === "Knife man" && r.in) && p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(named(p, 'Knife man').note, null, 'a blank row, no note');
+      assert.strictEqual(await page.evaluate('document.querySelector("#fAddName").validationMessage'), '');
+      await tap(page, '#fAddName');
+      await page.type('Dock Cult');
+      await page.waitFor('document.querySelector("#fHits [data-faddpick]")', 3000);
+      await page.key('Enter');
+      p = await until(page, 'p.fight.rows.some((r) => r.name === "Dock Cultist" && r.in) && p.saved === "Saved" && p.pending === 0');
+      assert.ok(named(p, 'Dock Cultist').note, 'the cast\'s note');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});

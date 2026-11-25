@@ -343,6 +343,8 @@ describe('coc-math: a hit\'s card and the SAN bout (Task 18)', () => {
     assert.equal(C.rollResult({ ...d100(34, 55, 'regular'), difficulty: 'hard' }, npc), null);
     assert.equal(C.rollResult({ ...d100(34, 55, 'regular'), asked: { bonus: 1, penalty: 0 } }, npc), null);
     assert.equal(C.rollResult({ tap: 'passed' }, npc), null);
+    // PRENTICE review M2: a card's line takes an NPC's tap (a foe made up at the table has no CON to roll against)
+    assert.deepEqual(C.rollResult({ tap: 'passed' }, npc, true), { tapped: true, passed: true });
     assert.deepEqual(C.rollResult({ tap: 'failed' }, pc), { tapped: true, passed: false });
     assert.equal(C.rollResult(d100(34, 55, 'regular'), pc), null);
   });

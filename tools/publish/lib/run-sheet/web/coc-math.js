@@ -347,13 +347,14 @@
     if (log && v === '?') return name;
     return `${name}${log ? ',' : ':'} ${((K && K.stats) || {})[l.stat] || l.stat.toUpperCase()} ${v}`;
   }
-  // A line's result as the reducer takes it: a PC's is the GM's tap of the player's roll ({ tap: 'passed' | 'failed' });
-  // any other row's is the server's d100 (rollPercent's) at Regular with no dice. Null when it is neither, or the wrong
-  // one for the row (the sheet never rolls for a PC).
-  function rollResult(x, row) {
+  // A line's result as the reducer takes it: the GM's tap of a roll made at the table ({ tap: 'passed' | 'failed' }: a
+  // PC's always; an NPC's only where the caller says so (`tapAny`: a card's line, as a foe made up at the table has no
+  // CON to roll against, PRENTICE review M2), or the server's d100 (rollPercent's) at Regular with no dice for any row
+  // but a PC's. Null when it is neither, or the wrong one for the row (the sheet never rolls for a PC).
+  function rollResult(x, row, tapAny = false) {
     if (!x || typeof x !== 'object') return null;
     const pc = Boolean(row && row.kind === 'pc');
-    if (x.tap === 'passed' || x.tap === 'failed') return pc ? { tapped: true, passed: x.tap === 'passed' } : null;
+    if (x.tap === 'passed' || x.tap === 'failed') return pc || tapAny ? { tapped: true, passed: x.tap === 'passed' } : null;
     if (pc || !isLevel(x.level) || !isNum(x.kept) || !isNum(x.target) || (x.difficulty || 'regular') !== 'regular') return null;
     const asked = x.asked && typeof x.asked === 'object' ? x.asked : { bonus: x.bonus || 0, penalty: x.penalty || 0 };
     if (asked.bonus || asked.penalty) return null;
