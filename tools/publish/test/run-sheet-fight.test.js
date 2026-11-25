@@ -438,18 +438,18 @@ describe('the fight in the state', () => {
     assert.equal(rec.find((v) => v.rowId === GUARD).hp, 10);
   });
 
-  // Task 28 proof (Dead End): a counted line with no note ("Foam-covered guards ×4") gives rows with copies and no
+  // Task 28 proof: a counted line with no note ("Tarred dockhands ×4") gives rows with copies and no
   // note; the GM's name and the log number them as a note's copies are, never four rows of one bare name.
   it('copies of a counted line with no note are numbered', () => {
     const nm = clone(model);
-    const foam = (i) => ({ key: `g.foe.foam${i > 1 ? `~${i}` : ''}`, note: null, name: `Foam guards ${i}`, ally: false, ac: null, hp: null, init: null });
-    nm.beats[0].foes = [foam(1), foam(2)];
+    const tarred = (i) => ({ key: `g.foe.tarred${i > 1 ? `~${i}` : ''}`, note: null, name: `Tarred dockhands ${i}`, ally: false, ac: null, hp: null, init: null });
+    nm.beats[0].foes = [tarred(1), tarred(2)];
     let s = fightAt(move(fresh(), ADA, GATE), GATE, { m: nm });
-    const foams = s.fight.rows.filter((r) => !r.note && r.kind === 'foe');
-    assert.deepEqual(foams.map((r) => r.copy), [1, 2]);
-    assert.deepEqual(RS.derive(nm, s).fight.view.rows.filter((r) => !r.note && r.kind === 'foe').map((r) => r.gmName), ['Foam guards 1', 'Foam guards 2']);
-    s = F(s, { type: 'out', row: foams[1].id, on: true });
-    assert.equal(texts(s).at(-1), 'Foam guards 2 is out of the fight.');
+    const dockhands = s.fight.rows.filter((r) => !r.note && r.kind === 'foe');
+    assert.deepEqual(dockhands.map((r) => r.copy), [1, 2]);
+    assert.deepEqual(RS.derive(nm, s).fight.view.rows.filter((r) => !r.note && r.kind === 'foe').map((r) => r.gmName), ['Tarred dockhands 1', 'Tarred dockhands 2']);
+    s = F(s, { type: 'out', row: dockhands[1].id, on: true });
+    assert.equal(texts(s).at(-1), 'Tarred dockhands 2 is out of the fight.');
     // a lone "+ New" row and a numbered "+ New" run keep the names they were given
     s = join(s, { name: 'Bouncer', count: 2 }, nm);
     s = join(s, { name: 'Lookout', count: 1 }, nm);
@@ -469,12 +469,12 @@ describe('the fight in the state', () => {
   // review M4: the Jot chip reads "<acting gmName> dropped.", so a numbered copy's chip carries its number
   it('the acting row of a numbered copy has the name the Jot chip prints', () => {
     const nm = clone(model);
-    const foam = (i) => ({ key: `g.foe.foam${i > 1 ? `~${i}` : ''}`, note: null, name: `Foam guards ${i}`, ally: false, ac: null, hp: null, init: 99 - i });
-    nm.beats[0].foes = [foam(1), foam(2)];
+    const tarred = (i) => ({ key: `g.foe.tarred${i > 1 ? `~${i}` : ''}`, note: null, name: `Tarred dockhands ${i}`, ally: false, ac: null, hp: null, init: 99 - i });
+    nm.beats[0].foes = [tarred(1), tarred(2)];
     const s = fightAt(move(fresh(), ADA, GATE), GATE, { m: nm });
     const acting = RS.derive(nm, s).fight.view.acting;
     assert.ok(acting && acting.row, 'someone is acting');
-    assert.match(`${acting.row.gmName} dropped.`, /^Foam guards [12] dropped\.$/);
+    assert.match(`${acting.row.gmName} dropped.`, /^Tarred dockhands [12] dropped\.$/);
   });
 
   it('rollInit fills only empty boxes', () => {

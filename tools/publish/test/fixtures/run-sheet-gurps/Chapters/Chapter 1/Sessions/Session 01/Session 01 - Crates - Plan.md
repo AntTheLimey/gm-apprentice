@@ -38,7 +38,7 @@ The crew breaks into the warehouse while the guards change over.
 **Entities:** [[Tower Security]], [[Ned Pike]]
 **NPCs**
 - [[Tower Security|Security guards]] ×4
-- Foam-covered guards ×4
+- Tarred dockhands ×4
 - **[[Ned Pike]]:** watches from the roof
 **Points to land**
 - the guards' routine

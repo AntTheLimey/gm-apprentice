@@ -728,8 +728,8 @@ describe('run sheet beats: the Plan shape', () => {
 
     // S6-D7: a counted line with no note and a counted link to a group note are who entries, so a fight can run them
     it('a no-note line keeps its count: the symbol, a digit, or a number word before lower-case words', () => {
-      for (const [line, name] of [['- **Foam-covered guards ×4:** rifles', 'Foam-covered guards'], ['- **Foam-covered guards x4:** rifles', 'Foam-covered guards'],
-        ['- **4 foam-covered guards:** rifles', 'foam-covered guards'], ['- **Four foam-covered guards:** rifles', 'foam-covered guards']]) {
+      for (const [line, name] of [['- **Tarred dockhands ×4:** rifles', 'Tarred dockhands'], ['- **Tarred dockhands x4:** rifles', 'Tarred dockhands'],
+        ['- **4 tarred dockhands:** rifles', 'tarred dockhands'], ['- **Four tarred dockhands:** rifles', 'tarred dockhands']]) {
         const r = npcs(line, '');
         assert.deepStrictEqual(r.beats[0].who.map((w) => [w.name, w.count, w.note || null]), [[name, 4, null]], line);
       }

@@ -35,7 +35,7 @@ function keyOf(raw) {
 // An attack line a block writes with a name of its own (`- Boat hook 45% (22/9), damage 1D6+DB`): its name and skill.
 // A firearm's name says so (`Pocket pistol`); any other is Fighting. Dodge and the named skills are pairs' (keyOf).
 // The name may hold digits (`.38 Revolver`, `12-gauge shotgun`): it runs to the ` NN%` figure. The damage may be
-// written without the word, as Canticle's blocks do (`- Knife: 35%, 1D4+2`, `* **Pistol (flintlock)** 45% — 1D10+2`):
+// written without the word, as some blocks do (`- Knife: 35%, 1D4+2`, `* **Pistol (wheel-lock)** 40% — 1D8+1`):
 // a dice figure right after the percentage counts, with only `,` `:` `—` `–` and spaces between, after the half and fifth group `(17/7)` if there is one (`First Aid 60%: restores
 // 1D3` is a skill, not an attack).
 const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%(?=.*\bdamage\b|(?:\s*\(\d{1,3}\s*\/\s*\d{1,3}\))?[\s,:\u2014\u2013]*\d*d\d+\b)/i;

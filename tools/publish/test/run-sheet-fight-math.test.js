@@ -335,12 +335,12 @@ test('a fight beat gives blank rows: a statless NPC benched, a no-note counted l
   const blank = (o) => ({ ally: false, ac: null, hp: null, init: null, ...o });
   const beat = { ...gate, foes: [
     blank({ key: 'b1.foe.plain', note: 'NPCs/Plain.md', name: 'Plain Person', benched: true }),
-    blank({ key: 'b1.foe.g1', note: null, name: 'Foam guards 1' }), blank({ key: 'b1.foe.g2', note: null, name: 'Foam guards 2' }),
+    blank({ key: 'b1.foe.g1', note: null, name: 'Tarred dockhands 1' }), blank({ key: 'b1.foe.g2', note: null, name: 'Tarred dockhands 2' }),
   ] };
   const r = M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state: here, beatKey: 'b1', idBase: 'a' });
   const plain = r.rows.find((x) => x.name === 'Plain Person');
   assert.deepEqual([plain.in, plain.hp, plain.max, plain.note], [false, null, null, 'NPCs/Plain.md']);
-  const guards = r.rows.filter((x) => /^Foam guards/.test(x.name));
+  const guards = r.rows.filter((x) => /^Tarred dockhands/.test(x.name));
   assert.deepEqual(guards.map((x) => [x.in, x.hp, x.note, M.sideOfRow(x)]), [[true, null, null, 'foe'], [true, null, null, 'foe']]);
 });
 

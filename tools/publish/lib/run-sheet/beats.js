@@ -369,7 +369,7 @@ function readBeats(planBody, index) {
         const counted = /^\d+$/.test(p);
         const wants = q[4].replace(/\s+/g, ' ').trim();
         if (counted) return { target: '', name, knownAs: name, count: Number(p), counted, wants };
-        // a count in the name itself (`Foam-covered guards ×4`, `4 guards`, `four guards`): the name keeps the rest.
+        // a count in the name itself (`Tarred dockhands ×4`, `4 guards`, `four guards`): the name keeps the rest.
         // A number word counts only before lower-case words, so `Three Fingers` stays a name.
         const c = countIn(name, /^\S+\s+[a-z]/.test(name));
         if (c && c.rest) return { target: '', name: c.rest, knownAs: p || c.rest, count: c.count, counted: true, wants };

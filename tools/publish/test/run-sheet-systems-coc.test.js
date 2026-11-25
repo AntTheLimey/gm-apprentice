@@ -184,9 +184,10 @@ for (const crlf of [false, true]) {
       const run = readNumbers('**Skills:** Persuade 75%, Firearms (Handgun) 40%, Dodge 30%');
       assert.deepEqual([run.firearms, run.guns[0].name, run.guns[0].skill], [40, 'Firearms (Handgun)', 40]);
       // damage written without the word
-      const nw = readNumbers('* **Pistol (flintlock)** 45% — 1D10+2, 1/3 rounds\n- Knife: 35%, 1D4+2\n* **Dodge** 50%');
-      assert.deepEqual([nw.firearms, nw.fighting, nw.dodge], [45, 35, 50]);
-      assert.deepEqual(nw.guns, [{ name: 'Pistol (flintlock)', skill: 45, damage: '1D10+2', malfunction: null, reload: 3, impales: false }]);
+      // (an invented line since the PRENTICE review: the shape, not a campaign's words)
+      const nw = readNumbers('* **Pistol (wheel-lock)** 40% — 1D8+1, 1/3 rounds\n- Knife: 35%, 1D4+2\n* **Dodge** 50%');
+      assert.deepEqual([nw.firearms, nw.fighting, nw.dodge], [40, 35, 50]);
+      assert.deepEqual(nw.guns, [{ name: 'Pistol (wheel-lock)', skill: 40, damage: '1D8+1', malfunction: null, reload: 3, impales: null }]);
     });
     // Task 23b B12: dice with no `damage` word count only right after the percentage
     it('a skill line with dice further along is no attack; dice right after the percentage still are', () => {

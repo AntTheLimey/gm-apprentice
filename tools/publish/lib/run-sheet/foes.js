@@ -152,7 +152,7 @@ function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried =
   return { foes: e ? rows([e], beatKey, carried, system) : [], warnings };
 }
 
-// A line with no note: counted (`Foam-covered guards x4`), blank rows named and numbered by the line's words, which
+// A line with no note: counted (`Tarred dockhands x4`), blank rows named and numbered by the line's words, which
 // are all there is to read its side from; single (`The shikarri`), one benched row with no warning, as D4 gives a
 // statless NPC.
 function noteless(w, whoText, sides, add) {

@@ -400,7 +400,7 @@
 
   // What the GM sees: the unmasked name when there is one, then the copy number once there are two.
   // How many rows share a row's name run, for gmName's copy number: a note's rows (not PCs), or, for a counted line
-  // with no note ("Foam-covered guards ×4"), the note-less rows of that name that carry a copy number. A "+ New" row
+  // with no note ("Tarred dockhands ×4"), the note-less rows of that name that carry a copy number. A "+ New" row
   // has its number in its name and no copy, so it counts alone.
   function copiesOf(rows, row) {
     if (row.note) return rows.filter((x) => x.note === row.note && x.kind !== 'pc').length;

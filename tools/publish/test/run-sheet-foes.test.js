@@ -151,11 +151,11 @@ describe('run sheet foes', () => {
     const NO_NUMBERS = (n) => `${n}: no numbers in the vault: type them in the fight, or fill them in prep`;
 
     it('a no-note counted line gives four numbered rows', () => {
-      const r = foesOfGate('- **Foam-covered guards \u00d74:** rifles');
-      const rows = r.foes.filter((f) => /^Foam/.test(f.name));
-      assert.deepStrictEqual(rows.map((f) => [f.name, f.note, f.hp]), [1, 2, 3, 4].map((i) => [`Foam-covered guards ${i}`, null, null]));
+      const r = foesOfGate('- **Tarred dockhands \u00d74:** rifles');
+      const rows = r.foes.filter((f) => /^Tarred/.test(f.name));
+      assert.deepStrictEqual(rows.map((f) => [f.name, f.note, f.hp]), [1, 2, 3, 4].map((i) => [`Tarred dockhands ${i}`, null, null]));
       assert.strictEqual(new Set(rows.map((f) => f.key)).size, 4);
-      assert.ok(r.warnings.some((w) => w.text === NO_NUMBERS('Foam-covered guards')));
+      assert.ok(r.warnings.some((w) => w.text === NO_NUMBERS('Tarred dockhands')));
     });
 
     it('"four guards" counts', () => {
@@ -228,9 +228,9 @@ describe('run sheet foes', () => {
     });
 
     it('the warning names only ticked rows', () => {
-      const r = foesOfGate('- **[[Sister Fen]]:** hides\n- **Foam-covered guards \u00d74:** rifles');
+      const r = foesOfGate('- **[[Sister Fen]]:** hides\n- **Tarred dockhands \u00d74:** rifles');
       const no = r.warnings.filter((w) => /no numbers in the vault: type them in the fight/.test(w.text)).map((w) => w.text);
-      assert.deepStrictEqual(no, [NO_NUMBERS('Foam-covered guards')], 'the benched person raises none');
+      assert.deepStrictEqual(no, [NO_NUMBERS('Tarred dockhands')], 'the benched person raises none');
     });
   });
 
