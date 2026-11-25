@@ -556,7 +556,8 @@ test('--stop ends a watcher stuck in a pull, by ending its process', async () =>
     const r = await control(dir, ['--stop'], { graceMs: 1500 });
     assert.deepEqual(r.lines, [`Stopped the watcher (pid ${w.child.pid}).`, 'Removed the watcher files.']);
     const end = await w.closed;
-    assert.equal(end.sig, 'SIGTERM');
+    // Windows ends a process without a signal name.
+    if (process.platform !== 'win32') assert.equal(end.sig, 'SIGTERM');
     assert.deepEqual(fs.readdirSync(dir), []);
   } finally { w.child.kill('SIGKILL'); }
 });
@@ -578,4 +579,34 @@ test('a reply during a session with no watcher running says so; with one running
   assert.match(lines[1], /^Note: no inbox watch is running for this site, so the next request will not wake you\./);
   fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: process.pid, id: 'x', every: 30, started: Math.floor(Date.now() / 1000) }));
   assert.equal((await reply('c')).length, 1, 'a watcher is running: no note');
+});
+
+test('--stop keeps the files of a watcher launched while it stopped the old one', async () => {
+  const dir = siteDir();
+  const nowS = Math.floor(Date.now() / 1000);
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 4242, id: 'old', every: 30, started: nowS }));
+  fs.writeFileSync(path.join(dir, SESSION_FILE), JSON.stringify({ start: nowS, hours: 5 }));
+  const r = await control(dir, ['--stop'], {
+    pidAlive: () => true, graceMs: 50,
+    // The old one ends, and a new launch takes the site at that moment.
+    kill: () => fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 4343, id: 'new', every: 30, started: nowS })),
+  });
+  assert.deepEqual(r, { rc: 0, lines: ['Stopped the watcher (pid 4242).', 'A new watcher has started since: its files are kept.'] });
+  assert.equal(lockOf(dir).id, 'new');
+  assert.ok(fs.existsSync(path.join(dir, SESSION_FILE)));
+});
+
+test('a lock still being written by another launch is waited for, not taken over', async () => {
+  const dir = siteDir();
+  const file = path.join(dir, LOCK_FILE);
+  fs.writeFileSync(file, '');
+  setTimeout(() => fs.writeFileSync(file, JSON.stringify({ pid: 4242, id: 'other', every: 30, started: Math.floor(Date.now() / 1000) })), 300);
+  const lines = []; const kills = [];
+  const rc = await runInbox(['watch'], {
+    adapter: fakeKV(), cwd: dir, out: (s) => lines.push(String(s)), maxPolls: 1,
+    pidAlive: (pid) => pid === 4242 && !kills.length,
+    kill: (pid, sig) => kills.push(`${pid} ${sig}`), graceMs: 50,
+  });
+  assert.equal(rc, 0);
+  assert.deepEqual(kills, ['4242 SIGTERM'], 'the other launch was found and asked to stop, not overwritten blind');
 });

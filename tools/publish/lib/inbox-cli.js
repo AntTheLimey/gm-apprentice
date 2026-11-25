@@ -111,8 +111,17 @@ function pidAlive(pid) {
 
 // The Unix seconds of the last poll, or null.
 function readBeat(dir) {
-  const t = Number.parseInt(fs.existsSync(path.join(dir, HEARTBEAT_FILE)) ? fs.readFileSync(path.join(dir, HEARTBEAT_FILE), 'utf8') : '', 10);
+  let t = NaN;
+  try { t = Number.parseInt(fs.readFileSync(path.join(dir, HEARTBEAT_FILE), 'utf8'), 10); } catch { /* none yet, or just removed */ }
   return Number.isFinite(t) ? t : null;
+}
+
+// Written whole: a reader never sees an empty heartbeat.
+function writeBeat(dir, unixSeconds) {
+  const file = path.join(dir, HEARTBEAT_FILE);
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${unixSeconds}\n`);
+  fs.renameSync(tmp, file);
 }
 
 // The watcher running for this site, as its lock with `last` (Unix seconds of its last poll, or of its start), or
@@ -137,12 +146,27 @@ async function claimLock(dir, lock, deps) {
       return null;
     } catch (err) {
       if (err.code !== 'EEXIST') throw err;
+      if (await beingWritten(file)) continue;
       const live = liveWatcher(dir, nowMs, deps.pidAlive);
       if (live && !(await stopHolder(dir, live, deps))) return live;
       fs.rmSync(file, { force: true });
     }
   }
   return liveWatcher(dir, nowMs, deps.pidAlive) || { pid: '?' };
+}
+
+// A lock with nothing readable in it may be one another launch is writing this moment: give it two seconds to
+// appear. True when it did (the caller looks again); false once it is plainly left over.
+async function beingWritten(file) {
+  for (let i = 0; i < 20; i++) {
+    const lock = readJson(file);
+    if (lock && Number.isInteger(lock.pid)) return i > 0;
+    let age = Infinity;
+    try { age = Date.now() - fs.statSync(file).mtimeMs; } catch { return true; }
+    if (age > 2000) return false;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
 }
 
 // Lets go of the lock only while it is still this watcher's.
@@ -225,6 +249,11 @@ async function watchStop(dir, deps) {
       return 1;
     }
     out(`Stopped the watcher (pid ${live.pid}).`);
+    // A launch made while this one stopped has taken over: its files are its own.
+    if (liveWatcher(dir, (deps.now || Date.now)(), deps.pidAlive)) {
+      out('A new watcher has started since: its files are kept.');
+      return 0;
+    }
   } else {
     out('No watcher was running.');
   }
@@ -361,7 +390,7 @@ async function pollLoop(inbox, kv, opts, deps, dir, id) {
     } catch {
       pending = null;
     }
-    fs.writeFileSync(path.join(dir, HEARTBEAT_FILE), `${Math.floor(now() / 1000)}\n`);
+    writeBeat(dir, Math.floor(now() / 1000));
     if (pending === null) {
       fails++;
       if (fails % STREAK === 0) {
