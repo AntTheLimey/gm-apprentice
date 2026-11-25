@@ -208,6 +208,7 @@ is discussed.
 - Active defenses — `mechanics.md`, `combat.md`,
   `character-sheet.md`: B373; quick reference B556.
 - Combat maneuvers — `combat.md`, `session-procedures.md`: B363.
+- Sideslip and Slip — `combat.md`: *GURPS Martial Arts* MA123.
 - Hit locations, one row each, with penalty, DR and short notes of what
   differs from a torso hit — `combat.md`: B552, discussed at B398-B399, with *GURPS
   Martial Arts*'s extended locations (MA137); generated from
@@ -270,7 +271,7 @@ with its page reference (B398, B400, B420, B552, MA137). The generated
 `combat.md` table keeps one row a location (penalty, DR, a note of what
 differs from a torso hit, page), in our own words. Names and numbers only.
 
-**`tools/publish/lib/run-sheet/systems/gurps.js`** (the run sheet's fight figures: turn order, marks, Tired, FP, the wounding table, the consequences of a hit and a turn: shock, major wound, knockdown, death checks; the active defences: Dodge from Basic Speed, posture, stunned, reeling and tired, retreat, repeat parry, one Block a turn, the manoeuvres' limits, the manoeuvre names and the Aim and Evaluate counts)
+**`tools/publish/lib/run-sheet/systems/gurps.js`, `tools/publish/lib/run-sheet/web/gurps-math.js`** (the run sheet's fight figures, and the sums the page works from them: turn order, marks, Tired, FP, the wounding table, the consequences of a hit and a turn: shock, major wound, knockdown, death checks; the active defences: Dodge from Basic Speed, posture, stunned, reeling and tired, retreat, repeat parry, one Block a turn, the manoeuvres' limits, the manoeuvre names and the Aim and Evaluate counts)
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
 License: SJG Online Policy
 (https://www.sjgames.com/general/online_policy.html).

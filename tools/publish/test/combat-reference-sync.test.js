@@ -166,7 +166,8 @@ describe('the hit locations\' notes and misses (Task 35 review)', () => {
   it('the groin\'s note says what its `male` field holds; the face\'s and skull\'s say their `behind`', () => {
     const g = at('groin');
     assert.deepEqual(g.male, { shock: 2, shockMax: 8, shockTypes: ['cr'], knockdown: -5 });
-    assert.equal(g.note, 'a male target: double shock from crushing (max 8), knockdown −5');
+    // (figures and names only since the PRENTICE review: the shown note says no rule in words)
+    assert.equal(g.note, 'male: crushing shock \u00d72 (max 8), knockdown \u22125');
     assert.equal(CONSEQUENCES.knockdown.male.groin, g.male);
     assert.deepEqual([at('face').behind, at('face').note], [-7, 'from behind −7']);
     assert.deepEqual([at('skull').behind, at('skull').note], [-5, 'from behind −5']);

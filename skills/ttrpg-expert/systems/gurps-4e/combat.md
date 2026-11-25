@@ -121,7 +121,7 @@ from the run sheet's hit-location table; edit that, not this. -->
 | Torso | 0 | -- | -- | B398, B552 |
 | Arm | -2 | -- | imp, pi+, pi++ x1; crippled over HP/2, excess lost; shield arm -4 | B398, B552 |
 | Leg | -2 | -- | imp, pi+, pi++ x1; crippled over HP/2, excess lost | B398, B552 |
-| Groin | -3 | -- | miss by 1 hits the torso; a male target: double shock from crushing (max 8), knockdown -5 | B398, B552 |
+| Groin | -3 | -- | miss by 1 hits the torso; male: crushing shock x2 (max 8), knockdown -5 | B398, B552 |
 | Vitals | -3 | -- | not cut, burn, cor, tox; imp, pi-, pi, pi+, pi++ x3; tbb x2; knockdown on any shock, -5 on a major wound; miss by 1 hits the torso; crushing may aim here, at x1 | B398, B552, MA137 |
 | Hand | -4 | -- | imp, pi+, pi++ x1; crippled over HP/3, excess lost; shield hand -8 | B398, B552 |
 | Foot | -4 | -- | imp, pi+, pi++ x1; crippled over HP/3, excess lost | B398, B552 |

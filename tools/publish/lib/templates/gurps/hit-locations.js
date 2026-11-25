@@ -34,7 +34,8 @@ const SPINE = ['cr', 'cut', ...POINTED];
 // the notes written from a place's own fields; a minus sign, never a hyphen
 const minus = (n) => String(n).replace('-', '\u2212');
 const TYPE_NAMES = { cr: 'crushing' };
-const maleNote = (m) => `a male target: ${m.shock === 2 ? 'double' : `\u00d7${m.shock}`} shock from ${m.shockTypes.map((t) => TYPE_NAMES[t] || t).join(' or ')} (max ${m.shockMax}), knockdown ${minus(m.knockdown)}`;
+// figures and names only, never what they do (PRENTICE review): `male: crushing shock ×2 (max 8), knockdown −5`
+const maleNote = (m) => `male: ${m.shockTypes.map((t) => TYPE_NAMES[t] || t).join(' or ')} shock \u00d7${m.shock} (max ${m.shockMax}), knockdown ${minus(m.knockdown)}`;
 const behindNote = (n) => `from behind ${minus(n)}`;
 const GROIN_MALE = { shock: 2, shockMax: 8, shockTypes: ['cr'], knockdown: -5 };
 
