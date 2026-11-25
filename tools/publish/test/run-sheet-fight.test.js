@@ -2853,8 +2853,13 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
   it('All-Out Attack: Dodge, Parry and Block rolls are dropped', () => {
     let s = begin(rows().map((r) => (r.name === 'Bouncer 2' ? { ...r, manoeuvre: 'all-out attack' } : r)));
     s = go(s);
-    for (const k of ['dodge', 'parry', 'block']) s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: k, result: rolled(5, 8) });
+    // each against its own figure (Dodge 8, Parry 9, Block 8), so only the manoeuvre can drop it (CodeRabbit on #887)
+    for (const [k, t] of [['dodge', 8], ['parry', 9], ['block', 8]]) s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: k, result: rolled(5, t) });
     assert.equal(named(s, 'Bouncer 2').defended, 0);
+    // the same rolls without All-Out Attack are taken: the figures are right
+    let t2 = go(begin(rows()));
+    for (const [k, t] of [['dodge', 8], ['parry', 9], ['block', 8]]) t2 = G(t2, { type: 'defendRolled', row: named(t2, 'Bouncer 2').id, defence: k, result: rolled(5, t) });
+    assert.ok(named(t2, 'Bouncer 2').defended > 0);
   });
 
   it('a PC shows the sheet\'s defences and has no Defend: its roll is dropped, its retreat refused', () => {
