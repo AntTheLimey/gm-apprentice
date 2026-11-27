@@ -2100,6 +2100,27 @@ describe('S2: the players\' column outside a fight', { skip: browserSkip() }, ()
 // Task 9 fix round 1: the find box lives in the rail, which a fight at 1100 folds. "/" reaches it from anywhere (never
 // while typing in a box), opening the rail first.
 describe('the find box from the keyboard', { skip: browserSkip() }, () => {
+  // fix round 2: one column (1000 wide and under) has no rail; the box tops the sheet there, and "/" reaches it
+  it('1000, one column: the find box tops the sheet, and "/" from far down the page brings it into view', async () => {
+    const run = await start();
+    await withPage({ width: 1000, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('document.getElementById("find").closest("#sheet") !== null'), true, 'in the sheet');
+      await tap(page, '#endBtn');
+      await page.sleep(400);
+      assert.ok(await page.evaluate('scrollY') > 500, 'far down the page');
+      await page.click('#end h2', { offsetX: 6 });
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      await page.waitFor('(() => { const r = document.getElementById("find").getBoundingClientRect(); return r.width > 0 && r.top >= document.getElementById("top").getBoundingClientRect().bottom && r.bottom <= innerHeight; })()', 2000);
+      await page.type('chapel');
+      await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+      await page.key('Enter');
+      await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Chapel Yard"');
+      assert.deepStrictEqual((await P(page)).errors, []);
+    });
+  });
   it('1100, in a fight with the rail folded: "/" opens the rail and the box, and Enter opens the first hit', async () => {
     const run = await start();
     await withPage({ width: 1100, height: 762 }, async (page) => {

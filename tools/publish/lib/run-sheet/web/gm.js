@@ -830,8 +830,8 @@
     G.pane = null;
     for (const part of parts) if (!G.pane && part.pane) G.pane = part.pane(d) || null;
     $('#rail').innerHTML = railHTML(d);
-    placeFind();
     $('#sheet').innerHTML = sheetHTML(d);
+    placeFind();
     renderSide(d);
     if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
     document.querySelectorAll('[data-keepscroll]').forEach((el) => { if (kept[el.dataset.keepscroll]) el.scrollTop = kept[el.dataset.keepscroll]; });
@@ -1680,10 +1680,17 @@
   });
   // a press outside the box closes its list (the press goes on to do what it says)
   document.addEventListener('pointerdown', (ev) => { if (find.hits.length && !findbox.contains(ev.target)) findClose(); }, true);
+  // Under the rail's heading; in one column (1000 wide and under, no rail) at the top of the sheet (fix round 2)
   function placeFind() {
+    if (window.innerWidth <= NARROW) {
+      const sheet = $('#sheet');
+      if (sheet && sheet.firstChild !== findbox) sheet.insertBefore(findbox, sheet.firstChild);
+      return;
+    }
     const head = $('#rail .rhd');
     if (head && head.nextSibling !== findbox) head.after(findbox);
   }
+  window.addEventListener('resize', () => { if (G.model && G.state) placeFind(); });
 
   // ------------------------------------------------------------------ the drawer
   async function openNote(p) {
@@ -2432,9 +2439,11 @@
     // the page stays where the GM is reading: a box in the sticky header, focused plainly, scrolled the page to its top
     if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus({ preventScroll: true }); return; }
     // "/" reaches the find box from anywhere but a box being typed in, opening the rail first when it is folded (a
-    // fight at 1100 folds it) (Task 9 fix round 1)
-    if (!typing && !picking && ev.key === '/' && !ev.metaKey && !ev.ctrlKey && !ev.altKey && window.innerWidth > NARROW) {
+    // fight at 1100 folds it) (Task 9 fix round 1), or at the sheet's top in one column (fix round 2)
+    if (!typing && !picking && ev.key === '/' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
       ev.preventDefault();
+      // one column: the box tops the sheet, brought into view below the header
+      if (window.innerWidth <= NARROW) { placeFind(); findInput.focus(); return; }
       if (G.lay.rail) foldClick('railOpen');
       findInput.focus({ preventScroll: true });
       return;
