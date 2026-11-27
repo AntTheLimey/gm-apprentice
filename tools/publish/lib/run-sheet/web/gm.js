@@ -1618,9 +1618,10 @@
   const KIND = { npc: 'person', creature: 'creature', pc: 'PC', location: 'place' };
   const findbox = document.createElement('div');
   findbox.className = 'findw';
-  findbox.innerHTML = '<input id="find" type="search" placeholder="Find a person or place (/)" aria-label="Find a person or place" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="findHits"><div class="findhits" id="findHits" role="listbox"></div>';
+  findbox.innerHTML = '<input id="find" type="search" placeholder="Find a person or place (/)" aria-label="Find a person or place" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="findHits"><div class="findhits" id="findHits" role="listbox"></div><span class="warn findsay" id="findSay" role="status"></span>';
   const findInput = findbox.querySelector('#find');
   const findList = findbox.querySelector('#findHits');
+  const findSay = findbox.querySelector('#findSay');
   const find = { hits: [], sel: 0 };
   function findables() {
     const out = [];
@@ -1651,7 +1652,7 @@
     findClose();
     openNote(h.note);
   }
-  findInput.addEventListener('input', findType);
+  findInput.addEventListener('input', () => { findSay.textContent = ''; findType(); });
   findInput.addEventListener('keydown', (ev) => {
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       if (!find.hits.length) { if (findInput.value.trim()) findType(); ev.preventDefault(); return; }
@@ -1665,6 +1666,8 @@
       ev.preventDefault();
       ev.stopPropagation();
       if (!find.hits.length && findInput.value.trim()) findType();
+      // nothing to open: said beside the box, as Move them says an empty Enter (fix round 1)
+      if (!find.hits.length) { findSay.textContent = findInput.value.trim() ? 'Nothing matches' : ''; return; }
       findOpen(find.sel);
       return;
     }

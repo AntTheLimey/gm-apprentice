@@ -630,3 +630,5 @@ ol.to .defs input.typed.sm { width: calc(6ch + 8px); }
 .rail .findhits button { display: flex; justify-content: space-between; gap: 6px; text-align: left; font-size: .82rem; }
 .rail .findhits button.sel { background: var(--ice-soft); border-color: var(--ice); }
 .rail .findhits .k { color: var(--muted); font: 500 .7rem var(--mono); align-self: center; }
+.rail .findsay { display: block; font-size: .78rem; margin-top: 2px; }
+.rail .findsay:empty { display: none; }

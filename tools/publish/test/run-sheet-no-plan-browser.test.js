@@ -634,6 +634,15 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         await page.key('Escape');
         assert.strictEqual(await page.evaluate('document.querySelectorAll("#findHits [data-findhit]").length'), 0);
         assert.strictEqual(await page.evaluate('document.getElementById("find").value'), 'venn');
+        // fix round 1: Enter with no hits says so beside the box, as Move them does; typing takes it away
+        await page.type('zzq');
+        await page.key('Enter');
+        await page.waitFor('(document.getElementById("findSay") || {}).textContent === "Nothing matches"', 2000);
+        const say = await inView(page, '#findSay');
+        assert.ok(say.whole, `beside the box, in view: ${JSON.stringify(say)}`);
+        assert.strictEqual(await page.evaluate('document.getElementById("drawer").classList.contains("open")'), false);
+        await page.key('Backspace');
+        assert.strictEqual(await page.evaluate('document.getElementById("findSay").textContent'), '');
         assert.strictEqual(await noSideways(page), true);
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
