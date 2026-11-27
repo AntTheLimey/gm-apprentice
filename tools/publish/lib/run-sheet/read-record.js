@@ -1,0 +1,215 @@
+'use strict';
+// The no-Plan run sheet's record reader: a night with no Plan, built from the last Wrap-Up. `readRecord` gives
+// `readSheet`'s model (party, PCs, cast, carried vitals) plus `model.record`: Last time, World, Coming up with its lead
+// card, and where the crew is. It shows what the record holds and never forecasts. A template placeholder (a line that
+// is only `{...}`, a checklist item `- [ ] {...}`, a label with nothing after it) reads as empty.
+
+const pt = require('./plan-text');
+const { buildIndex, stemOf } = require('./notes');
+const { readSheet } = require('./read');
+const { listSessions, tableLogOf } = require('./sessions');
+const { canonicalNfc } = require('../unicode');
+
+const LEFT_OUT = 'Points to land and If-they need a Plan.';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const AREA_TYPES = /^(city|town|village|settlement|space station|station|outpost|base|ship)$/i;
+const PEOPLE_TYPES = new Set(['npc', 'creature']);
+const THREAT_TYPES = new Set(['npc', 'creature', 'faction', 'organization']);
+
+const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
+const nl = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n');
+const uniq = (list) => [...new Set(list)];
+
+// A day and a short month, never the locale's ("29 Nov"); what is not a date reads as written.
+function shortDate(v) {
+  const t = v instanceof Date ? (Number.isNaN(v.getTime()) ? '' : v.toISOString().slice(0, 10)) : String(v == null ? '' : v).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}`;
+  return t || null;
+}
+
+// Text a template leaves behind: nothing, or only a `{...}` placeholder.
+const isPlaceholder = (s) => {
+  const t = String(s || '').trim();
+  return t === '' || /^\{[\s\S]*\}$/.test(t);
+};
+const stripComments = (s) => nl(s).replace(/<!--[\s\S]*?-->/g, '');
+// Text read as prose: comments gone, placeholder paragraphs gone, blank edges trimmed.
+const prose = (s) => stripComments(s).split(/\n\s*\n/).map((p) => p.trim()).filter((p) => !isPlaceholder(p)).join('\n\n');
+
+const sectionText = (body, level, re) => {
+  const hit = pt.sections(body, level).find((s) => re.test(s.title));
+  return hit ? hit.text : '';
+};
+const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.trim()).filter((t) => !isPlaceholder(t));
+
+// One World State label's items: the line's own words and any nested bullets, each split on sentence ends and `;`.
+function labelItems(text, name) {
+  const lines = nl(text).split('\n');
+  const want = low(name);
+  const at = lines.findIndex((l) => { const m = pt.LABEL.exec(l); return m && low(m[1]) === want; });
+  if (at < 0) return [];
+  const parts = [pt.LABEL.exec(lines[at])[2].trim()];
+  for (let i = at + 1; i < lines.length; i++) {
+    if (pt.LABEL.test(lines[i])) break;
+    if (/^\s+(?:[-*+]|\d+[.)])\s+/.test(lines[i])) parts.push(lines[i].replace(/^\s+(?:[-*+]|\d+[.)])\s+/, '').trim());
+    else if (lines[i].trim() === '') continue;
+    else if (/^\s+\S/.test(lines[i])) parts[parts.length - 1] += ` ${lines[i].trim()}`;
+    else break;
+  }
+  return parts.filter((p) => !isPlaceholder(p))
+    .flatMap((p) => p.split(/(?<=[.!?])\s+(?=[A-Z])|;\s*/))
+    .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p));
+}
+const labelValue = (text, name) => labelItems(text, name).join(' ');
+
+// The settlement a place is in: the first place on its parent chain (itself first, at most 12 steps) whose location_type
+// is a settlement; else its parent, else itself.
+function areaOf(index, place) {
+  if (!place || !index.has(place)) return place || null;
+  const parentOf = (p) => { const l = pt.links(String((index.read(p).fm || {}).parent_location || ''))[0]; return l ? index.resolve(l) : null; };
+  let cur = place;
+  for (let d = 0; cur && d < 12; d++) {
+    if (AREA_TYPES.test(String((index.read(cur).fm || {}).location_type || ''))) return cur;
+    cur = parentOf(cur);
+  }
+  return parentOf(place) || place;
+}
+
+function readRecord(vaultPath, session, { party = [], deps } = {}) {
+  const given = session || {};
+  const model = readSheet(vaultPath, {
+    session: { index: given.index || null, title: given.title || '', chapter: given.chapter || null, number: given.number === undefined ? null : given.number, after: given.after || null },
+    party, deps,
+  });
+  const index = buildIndex(vaultPath, { deps });
+  const fmOf = (p) => (p && index.has(p) ? index.read(p).fm || {} : {});
+  const typeOf = (p) => low(fmOf(p).type);
+  const isPlace = (p) => Boolean(p) && typeOf(p) === 'location';
+  const nameOf = (p) => { const n = fmOf(p).name; return typeof n === 'string' && n.trim() ? n.trim() : stemOf(p); };
+  const parentOf = (p) => { const l = pt.links(String(fmOf(p).parent_location || ''))[0]; return l ? index.resolve(l) : null; };
+  const chain = (p) => { const out = []; for (let c = p; c && !out.includes(c) && out.length < 12; c = parentOf(c)) out.push(c); return out; };
+  const depth = (p) => chain(p).length;
+  const deepest = (places) => places.slice().sort((a, b) => depth(b) - depth(a))[0] || null;
+  const placesIn = (text) => uniq(pt.links(text).map((t) => index.resolve(t)).filter(isPlace));
+
+  const label = given.number !== null && given.number !== undefined ? `Session ${given.number}` : (given.title || 'Session');
+  const sessions = listSessions(vaultPath, { deps, index });
+  const afterSession = given.after ? sessions.find((s) => s.index === given.after) : null;
+  const wrapUp = afterSession ? afterSession.wrapUp : null;
+  const wrapNote = wrapUp && index.has(wrapUp) ? index.read(wrapUp) : null;
+  const wrapBody = wrapNote ? nl(wrapNote.body) : '';
+
+  let header;
+  if (given.played) header = `${label}: played${shortDate(given.playDate) ? ` ${shortDate(given.playDate)}` : ''}, not wrapped up yet`;
+  else if (!wrapUp) header = `${label}, no Plan: there is no record yet`;
+  else header = `${label}, no Plan: built from ${afterSession.label}'s Wrap-Up`;
+
+  // Last time
+  const recap = sectionText(wrapBody, 2, /^(?:narrative )?recap$/i);
+  const lastTime = {
+    recap: prose(recap).split('\n\n').slice(0, 2).join('\n\n'),
+    playDate: wrapNote ? shortDate((wrapNote.fm || {}).play_date) || (afterSession ? shortDate(afterSession.playDate) : null) : null,
+  };
+
+  // World: the World State's labelled bullets
+  const gm = sectionText(wrapBody, 2, /^gm notes$/i) || wrapBody;
+  const worldText = stripComments(sectionText(gm, 3, /^world state$/i));
+  const worldLoc = placesIn(labelValue(worldText, 'Location'))[0] || null;
+  const date = labelValue(worldText, 'In-game date');
+  const threats = labelItems(worldText, 'Active threats');
+  const clocks = labelItems(worldText, 'Ticking clocks');
+  const world = {
+    date, location: worldLoc, threats, clocks,
+    md: [
+      date ? `- **In-game date:** ${date}` : '',
+      worldLoc ? `- **Location:** [[${stemOf(worldLoc)}]]` : '',
+      threats.length ? `- **Active threats:** ${threats.join(' ')}` : '',
+      clocks.length ? `- **Ticking clocks:** ${clocks.join(' ')}` : '',
+    ].filter(Boolean).join('\n'),
+  };
+
+  // Where the crew is
+  const pcNotes = model.pcs.map((p) => p.note);
+  const byPc = {};
+  for (const pc of pcNotes) {
+    const val = index.has(pc) ? pt.label(nl(index.read(pc).body), 'Location') : '';
+    byPc[pc] = isPlaceholder(val) ? null : (placesIn(val)[0] || null);
+  }
+  const whereNow = { place: null, text: '', from: null, byPc };
+  const logNote = tableLogOf(index, given.index || null).log;
+  const logPlaces = logNote ? placesIn(sectionText(nl(index.read(logNote).body), 2, /^where everyone ended$/i)) : [];
+  const pcPlaces = Object.values(byPc).filter(Boolean);
+  if (logPlaces.length) Object.assign(whereNow, { place: deepest(logPlaces), from: 'table-log' });
+  else if (worldLoc) Object.assign(whereNow, { place: worldLoc, from: 'world-state' });
+  else if (pcPlaces.length) Object.assign(whereNow, { place: deepest(pcPlaces), from: 'pc-notes' });
+  if (whereNow.place) whereNow.text = nameOf(whereNow.place);
+
+  // Coming up
+  const carries = sectionText(gm, 3, /^what carries forward$/i);
+  const handoff = prose(sectionText(gm, 3, /^handoff to session-prep$/i));
+  const intentions = bulletsOf(sectionText(carries, 4, /^player-stated intentions$/i));
+  const comingUp = { handoff, intentions, lead: null, empty: null };
+  if (!wrapUp) comingUp.empty = 'No record yet: nothing is coming up.';
+  else if (!handoff) comingUp.empty = 'The last Wrap-Up has no Handoff yet.';
+  if (wrapUp && clocks.length) comingUp.lead = leadFrom({ clocks, handoff, threats, whereNow });
+
+  function leadFrom({ clocks: cs, handoff: h, threats: ts, whereNow: where }) {
+    const allPlaces = index.notes().filter(isPlace);
+    const wordsOf = (s) => uniq((String(s).match(/\p{L}{5,}/gu) || []).map((w) => w.toLowerCase())).sort((a, b) => b.length - a.length);
+    const nameWords = (p) => new Set(wordsOf(`${nameOf(p)} ${stemOf(p)}`));
+    const area = where.place ? areaOf(index, where.place) : null;
+    let found = null;
+    for (const clock of cs) {
+      for (const w of wordsOf(clock)) {
+        const named = allPlaces.filter((p) => nameWords(p).has(w));
+        if (!named.length) continue;
+        const inside = (p) => (area && chain(p).includes(area) ? 1 : 0);
+        named.sort((a, b) => inside(b) - inside(a) || depth(b) - depth(a) || a.localeCompare(b));
+        found = { clock, word: w, place: named[0] };
+        break;
+      }
+      if (found) break;
+    }
+    const clock = found ? found.clock : cs[0];
+    const place = found ? found.place : null;
+    const people = uniq(pt.links(h).map((t) => index.resolve(t)).filter((p) => p && PEOPLE_TYPES.has(typeOf(p))));
+    // Threats whose own notes mention the clock's word or link the place: a threat names its note by a link, or by a
+    // word of its name (`Corvin's guild` is Corvin Tash).
+    let hits = [];
+    if (found) {
+      const re = new RegExp(`\\b${found.word}\\b`, 'i');
+      const named = new Set();
+      for (const t of ts) {
+        for (const p of pt.links(t).map((x) => index.resolve(x))) if (p && THREAT_TYPES.has(typeOf(p))) named.add(p);
+        for (const p of index.notes().filter((n) => THREAT_TYPES.has(typeOf(n)))) {
+          const words = (String(nameOf(p)).match(/\p{L}{4,}/gu) || []);
+          if (words.some((w) => new RegExp(`\\b${w}(?:'s)?\\b`).test(t))) named.add(p);
+        }
+      }
+      hits = [...named].filter((p) => {
+        const n = index.read(p);
+        const raw = `${JSON.stringify(n.fm || {})}\n${nl(n.body)}`;
+        return re.test(raw) || pt.links(raw).some((t) => index.resolve(t) === place);
+      }).sort();
+    }
+    return { title: clock, clock, place, people, hits, md: h };
+  }
+
+  model.record = {
+    from: wrapUp || null,
+    fromSession: wrapUp ? given.after : null,
+    header,
+    noPlanLine: given.planVault ? `No Plan for ${label}: this is built from the record. session-prep makes one.` : null,
+    lastTime,
+    world,
+    comingUp,
+    cards: [],
+    background: [],
+    whereNow,
+    leftOut: LEFT_OUT,
+  };
+  return model;
+}
+
+module.exports = { readRecord, areaOf };

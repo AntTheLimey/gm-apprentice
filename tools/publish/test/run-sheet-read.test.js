@@ -1209,3 +1209,17 @@ describe('readSheet with no Plan', () => {
     assert.strictEqual(byName['Yarrow Tide'], '');
   });
 });
+
+describe('readSheet with an index the story order lacks', () => {
+  it('falls back to after for the carried vitals', () => {
+    const { readSheet } = require('../lib/run-sheet/read');
+    const { copyRecordFixture } = require('./helpers/record-fixture');
+    const dir = copyRecordFixture();
+    made.push(dir);
+    fs.appendFileSync(path.join(dir, 'Characters/NPCs/Corvin Tash.md'),
+      '\n<!-- gm-only -->\n\n## GM Notes\n\n### Stats\n\n**Corvin Tash**\n\nST 11 | DX 11 | IQ 10 | HT 11\nHP 10 · FP 10 · Basic Speed 5.5\nFights as an ally.\n\n<!-- /gm-only -->\n');
+    const ghost = 'Chapters/Chapter 3/Sessions/Session 15/Session 15 - Not Filed Here.md';
+    const m = readSheet(dir, { session: { index: ghost, title: 'Session 15', chapter: 'Chapters/Chapter 3/Chapter 3.md', number: 15, after: 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger.md' } });
+    assert.strictEqual(m.cast.find((c) => c.note === 'Characters/NPCs/Corvin Tash.md').foe.hpNow, 6);
+  });
+});
