@@ -2171,3 +2171,39 @@ describe('S7 in a fight: the cut\'s points', { skip: browserSkip() }, () => {
     });
   });
 });
+
+// Task 9 fix round 2: the Add box's Enter took nearCast's surname-only top hit ("Mary Goodwin" added Peter Goodwin).
+// A known note wins on Enter only on a word start or a near typo (FM.enterChoice); otherwise Enter adds a blank row by
+// the typed name. The list a click picks from is unchanged.
+describe('the Add box\'s Enter', { skip: browserSkip() }, () => {
+  it('a shared surname adds a blank row; a word start or a near typo adds the note', async () => {
+    const run = await start();
+    // Garrick Fell, in no beat of this Plan, so not in the fight already
+    const FELL = 'Characters/NPCs/Garrick Fell.md';
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightAt(page, run);
+      const enter = async (text, test) => {
+        await tap(page, '#fAddName');
+        await page.type(text);
+        await page.waitFor('document.querySelector("#fHits button")');
+        await page.key('Enter');
+        return until(page, `p.saved === "Saved" && p.pending === 0 && (${test})`);
+      };
+      // the list still offers Garrick Fell for a click
+      await tap(page, '#fAddName');
+      await page.type('Mary Fell');
+      await page.waitFor(`document.querySelector('#fHits [data-faddpick="${FELL}"]')`);
+      await page.key('Enter');
+      let p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Mary Fell")');
+      const mary = p.fight.rows.find((r) => r.name === 'Mary Fell');
+      assert.strictEqual(mary.note || null, null, 'a blank row, no note');
+      assert.ok(!p.fight.rows.some((r) => r.note === FELL), 'Garrick Fell is not added');
+      p = await enter('Garick Fell', `p.fight.rows.some((r) => r.note === ${JSON.stringify(FELL)})`);
+      assert.strictEqual(p.fight.rows.filter((r) => r.note === FELL).length, 1, 'a near typo adds the note');
+      const FEN = 'Characters/NPCs/Sister Fen.md';
+      p = await enter('Sister F', `p.fight.rows.some((r) => r.note === ${JSON.stringify(FEN)})`);
+      assert.ok(!p.fight.rows.some((r) => r.name === 'Sister F'), 'a word start adds the note, not a blank row');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
