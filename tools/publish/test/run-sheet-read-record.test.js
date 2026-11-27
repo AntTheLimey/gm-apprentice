@@ -4,8 +4,8 @@ const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { readRecord, areaOf } = require('../lib/run-sheet/read-record');
-const { buildIndex } = require('../lib/run-sheet/notes');
+const { readRecord } = require('../lib/run-sheet/read-record');
+const { areaOf } = require('../lib/run-sheet/web/record-rank');
 const { copyRecordFixture } = require('./helpers/record-fixture');
 const { removeFixture } = require('./helpers/systems-fixture');
 
@@ -238,10 +238,11 @@ describe('readRecord', () => {
   });
 
   it('areaOf walks to the settlement the place is in', () => {
-    const idx = buildIndex(open());
-    assert.strictEqual(areaOf(idx, loc('The Salt Inn')), loc('Harbour District'));
-    assert.strictEqual(areaOf(idx, loc('Veyland')), loc('Veyland'));
-    assert.strictEqual(areaOf(idx, null), null);
+    // areaOf now lives in web/record-rank.js and takes the record's loc map (test changed on purpose)
+    const L = readRecord(open(), session()).record.loc;
+    assert.strictEqual(areaOf(loc('The Salt Inn'), L), loc('Harbour District'));
+    assert.strictEqual(areaOf(loc('Veyland'), L), loc('Veyland'));
+    assert.strictEqual(areaOf(null, L), null);
   });
 });
 

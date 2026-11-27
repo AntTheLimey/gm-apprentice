@@ -60,5 +60,5 @@
     return [...new Set(list)];
   }
 
-  return { AREA_TYPES, areaOf, rankCards, placesFor };
+  return { areaOf, rankCards, placesFor };
 }));

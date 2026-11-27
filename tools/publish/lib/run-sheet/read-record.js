@@ -91,9 +91,6 @@ function locOf(index, places) {
   }
   return out;
 }
-// The settlement a place is in, over a vault index (one copy of the rule lives in web/record-rank.js).
-const areaOf = (index, place) => RR.areaOf(place, locOf(index, index.notes().filter((p) => String(index.read(p).fm.type || '').toLowerCase() === 'location')));
-
 function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const given = session || {};
   const model = readSheet(vaultPath, {
@@ -103,7 +100,8 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const index = buildIndex(vaultPath, { deps });
   const fmOf = (p) => (p && index.has(p) ? index.read(p).fm || {} : {});
   const typeOf = (p) => low(fmOf(p).type);
-  const isPlace = (p) => Boolean(p) && typeOf(p) === 'location';
+  // a place is a location note in `loc`: maps and GM halves are not places (read.js already treats them so)
+  const isPlace = (p) => Boolean(p) && typeOf(p) === 'location' && Boolean(loc[p]);
   const nameOf = (p) => { const n = fmOf(p).name; return typeof n === 'string' && n.trim() ? n.trim() : stemOf(p); };
   const parentOf = (p) => { const l = pt.links(String(fmOf(p).parent_location || ''))[0]; return l ? index.resolve(l) : null; };
   const chain = (p) => { const out = []; for (let c = p; c && !out.includes(c) && out.length < 12; c = parentOf(c)) out.push(c); return out; };
@@ -381,4 +379,4 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   return model;
 }
 
-module.exports = { readRecord, areaOf };
+module.exports = { readRecord };

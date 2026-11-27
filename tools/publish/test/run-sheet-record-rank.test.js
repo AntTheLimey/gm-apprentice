@@ -73,6 +73,15 @@ for (const crlf of [false, true]) {
   });
 }
 
+describe('rankCards, people', () => {
+  const L = { in: { parent: null, type: 'city' }, out: { parent: null, type: 'city' } };
+  it('a card with no places whose person stands outside the area ranks elsewhere, not could', () => {
+    const card = { title: 'X', places: [], people: ['p'] };
+    const r = RR.rankCards([card], 'in', L, { p: 'out' });
+    assert.deepStrictEqual([r.here.length, r.could.length, r.elsewhere.length], [0, 0, 1]);
+  });
+});
+
 describe('areaOf', () => {
   const L = {
     a: { parent: null, type: 'region' }, b: { parent: 'a', type: 'city' }, c: { parent: 'b', type: 'building' },
