@@ -553,8 +553,13 @@
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches('input[data-movebox]')) reopenMoveList(ev.target); });
   // Move a group's PCs to a known place (`note`) or a typed one (`name`). The place's beat becomes the focus.
   function moveGroup(group, { note, name }) {
-    const g = groupByKey(group);
-    if (!g || !g.pcs.length) return;
+    const whole = groupByKey(group);
+    if (!whole || !whole.pcs.length) return;
+    // on the no-Plan page the GM may pick PCs in the row (Task 8 fix round 1): Move them moves those as a group of their
+    // own, else the whole row
+    const picked = whole.pcs.filter((p) => (G.ui.picked || {})[p]);
+    const g = { ...whole, pcs: picked.length ? picked : whole.pcs };
+    for (const p of g.pcs) if (G.ui.picked) delete G.ui.picked[p];
     if (G.ui.moveHits) for (const k of Object.keys(G.ui.moveHits)) if (k.endsWith(`|${group}`)) delete G.ui.moveHits[k];
     document.querySelectorAll(`input[data-moveg="${CSS.escape(group)}"]`).forEach((box) => { box.value = ''; });
     const names = g.pcs.map((p) => first(nameOf(p)));
@@ -602,8 +607,20 @@
     return groups().find((g) => g.key === key) || null;
   }
   // A group's place note: its spot's or beat's place; null for a place typed tonight (no note, so nothing ranks Here).
+  // Where the record has the crew the sheet has not placed. Tonight's own Table Log (the reader's first source, for a night
+  // reopened later) only echoes tonight's state once anyone is placed or off-screen: then the World State's place, else
+  // the place an unplaced PC's note gives (fix round 1).
+  function crewPlace() {
+    const r = REC();
+    const w = (r && r.whereNow) || {};
+    const placed = Object.values((G.state && G.state.positions) || {}).some(Boolean);
+    if (w.from !== 'table-log' || !placed) return w.place || null;
+    if (r.world && r.world.location && (r.loc || {})[r.world.location]) return r.world.location;
+    for (const p of unplacedCrew()) if (w.byPc && w.byPc[p]) return w.byPc[p];
+    return null;
+  }
   function groupPlaceNote(g, d = D()) {
-    if (g.key === CREW) return (REC() && REC().whereNow && REC().whereNow.place) || null;
+    if (g.key === CREW) return crewPlace();
     const b = d.beats.find((x) => x.key === g.beat);
     const spot = b && g.spot ? (b.spots || []).find((x) => x.key === g.spot) : null;
     return (spot && spot.note) || (b && b.place) || null;
@@ -615,13 +632,16 @@
     return out;
   }
   // The focused group's place, what the cards and places rank by.
+  // The focused row of Where they are: the crew not placed yet when the GM picked it (or when no group is placed),
+  // else the page's focused group.
+  function recFocus(gs = groups()) {
+    if (unplacedCrew().length && (G.ui.focusGroup === CREW || !gs.length)) return CREW;
+    return gs.length ? focusedGroup(gs) : null;
+  }
   function rankPlace(d) {
-    const gs = groups();
-    if (gs.length) {
-      const g = gs.find((x) => x.key === focusedGroup(gs));
-      return g ? groupPlaceNote(g, d) : null;
-    }
-    return groupPlaceNote(groupByKey(CREW), d);
+    const f = recFocus();
+    const g = f ? groupByKey(f) : null;
+    return g ? groupPlaceNote(g, d) : null;
   }
   function ranked(d) {
     const r = REC();
@@ -632,11 +652,10 @@
   // Fight here on the no-Plan page (gm-fight.js asks first): the crew the sheet has not placed stand where the record has
   // them, so they are put there quietly (no move is logged: they did not move), and the fight finds them standing there,
   // or offers them on Add when it is elsewhere.
-  function placeCrew() {
-    const r = REC();
-    const at = r && r.whereNow ? r.whereNow.place : null;
+  function placeCrew(extra = []) {
+    const at = crewPlace();
     const key = at ? (G.model.placeKeys || {})[at] : null;
-    const crew = unplacedCrew();
+    const crew = unplacedCrew().concat(extra.filter((p) => !unplacedCrew().includes(p)));
     if (!key || !crew.length) return;
     if (!D().beats.some((b) => b.key === key)) act({ type: 'improvise', key, title: nameOf(at), place: at, quiet: true });
     act({ type: 'moveAll', pcs: crew, to: { beat: key, spot: null, title: nameOf(at) } });
@@ -663,7 +682,7 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
+    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire', 'data-wpick', 'data-wback'];
     for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
@@ -926,7 +945,20 @@
     const card = (c) => `<a class="b" data-go="card:${esc(c.id)}">${esc(c.title)}</a>`;
     let h = '<button type="button" class="railstrip" id="railOpen" title="Open the run list" aria-label="Open the run list">⟩</button>';
     h += '<div class="hd rhd">Run sheet<button type="button" id="railFold" title="Fold the run list to a thin strip" aria-label="Fold the run list">⟨</button></div>';
-    h += '<a data-go="where">Where they are</a><a data-go="coming">Coming up</a>';
+    h += '<a data-go="where">Where they are</a>';
+    // the same groups as Where they are, each focusable, then the PCs off-screen
+    const rows = whereGroups();
+    const f = recFocus();
+    const faces = (list) => `<span class="fc">${list.map((p) => face(p)).join('')}</span>`;
+    h += rows.map((g) => {
+      const note = groupPlaceNote(g, d);
+      const b = g.key === CREW ? null : d.beats.find((x) => x.key === g.beat);
+      const at = note ? nameOf(note) : (b ? b.title : '');
+      return `<a class="b rg ${rows.length > 1 && g.key === f ? 'here' : ''}" data-pgroup="${esc(g.key)}" tabindex="0" role="link" title="Rank the cards around this group">${esc(at || '—')}${faces(g.pcs)}</a>`;
+    }).join('');
+    const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; }).map((p) => p.note);
+    if (off.length) h += `<div class="b rg">Off-screen${faces(off)}</div>`;
+    h += '<a data-go="coming">Coming up</a>';
     if (rk.here.length) h += `<div class="hd">Here</div>${rk.here.map(card).join('')}`;
     if (rk.could.length) h += `<div class="hd">Could come to them</div>${rk.could.map(card).join('')}`;
     h += RAIL_REC_END.map(([id, t]) => `<a data-go="${id}">${t}</a>`).join('');
@@ -938,7 +970,7 @@
   function titleHTML() {
     const ses = G.session || {};
     if (filedNow() && ses.filed) return `<div class="rtitle" id="rfiled"><span class="muted">Filed as</span> <b>${esc(ses.title || ses.label || '')}</b></div>`;
-    if (ses.index) return `<div class="rtitle" id="rindex"><span class="muted">Filed as</span> <b>${esc(ses.title || stem(ses.index))}</b> <span class="note">by session-prep</span></div>`;
+    if (ses.index) return `<div class="rtitle" id="rindex"><span class="muted">Named by session-prep:</span> <b>${esc(ses.title || stem(ses.index))}</b></div>`;
     if (filedNow()) return '<div class="rtitle"><span class="muted">Filing…</span></div>';
     const v = G.ui.titleDraft != null ? G.ui.titleDraft : (G.state.title || '');
     return `<div class="rtitle"><label for="rtitle">Tonight's title (optional)</label> <input id="rtitle" value="${esc(v)}" placeholder="${esc(ses.openTitle || '')}" maxlength="80" autocomplete="off">`
@@ -948,8 +980,6 @@
   function commitTitle() {
     const v = G.ui.titleDraft;
     G.ui.titleDraft = null;
-    clearTimeout(G.titleTimer);
-    G.titleTimer = null;
     if (v == null || filedNow() || RS.cleanTitle(v) === (G.state.title || '')) return;
     act({ type: 'setTitle', title: v });
   }
@@ -966,15 +996,38 @@
     // a place typed tonight has no note: its beat's own Fight
     const fight = note ? fightAt(note) : (b ? parts.map((x) => (x.beatButtons && x.beatButtons(b)) || '').join('') : '');
     const from = g.key === CREW && note ? ' <span class="note">from the record</span>' : '';
-    const who = `<span class="fc">${g.pcs.map((p) => face(p)).join('')}</span> ${many && g.key !== CREW ? `<a class="lk" data-pgroup="${esc(g.key)}">${esc(groupWho(g.key))}</a>` : `<b>${esc(groupWho(g.key))}</b>`}`;
-    return `<li class="wrow ${many && focus ? 'focus' : ''}"><span class="who">${who}</span> <span class="at">at ${place}${from}</span> <span class="wact">${moveBoxHTML(g.key, 'where')}${fight ? ` <span class="wbtns">${fight}</span>` : ''}</span></li>`;
+    // each PC a chip: picked, Move them moves the picked ones alone; "off" sends that PC off-screen (the rail's own action)
+    const chip = (p) => {
+      const on = Boolean((G.ui.picked || {})[p]);
+      const nm = nameOf(p);
+      return `<span class="pchip ${on ? 'on' : ''}"><button type="button" class="pick ${on ? 'on' : ''}" data-wpick="${esc(p)}" aria-pressed="${on}" title="${on ? `Picked: Move them moves the picked PCs. Click: unpick ${esc(nm)}` : `Pick ${esc(nm)}: Move them then moves the picked PCs alone`}">${face(p)}${esc(first(nm))}</button><button type="button" class="mini off" data-off="${esc(p)}" title="Move ${esc(nm)} off-screen" aria-label="${esc(nm)} off-screen">off</button></span>`;
+    };
+    const lead = many ? `<a class="lk wfocus" data-pgroup="${esc(g.key)}" tabindex="0" role="link" title="Rank the cards and places around this group">${focus ? 'Focused' : 'Focus'}</a>` : '';
+    return `<li class="wrow ${many && focus ? 'focus' : ''}" data-wrow="${esc(g.key)}"><span class="who">${g.pcs.map(chip).join('')}</span> <span class="at">at ${place}${from}</span>${lead ? ` ${lead}` : ''} <span class="wact">${moveBoxHTML(g.key, 'where')}${fight ? ` <span class="wbtns">${fight}</span>` : ''}</span></li>`;
+  }
+  // Off-screen PCs (asleep, elsewhere): a quiet line, each with "back" to the focused row.
+  function offHTML() {
+    const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; });
+    if (!off.length) return '';
+    return `<p class="woff note" id="woff">Off-screen: ${off.map((p) => `<span class="pchip">${face(p.note)}${esc(first(p.name))} <button type="button" class="mini" data-wback="${esc(p.note)}" title="Bring ${esc(p.name)} back to the focused group">back</button></span>`).join(' ')}</p>`;
   }
   function recordWhereHTML(d) {
     const rows = whereGroups();
-    if (!rows.length) return pcs().length ? '<p class="muted">Every PC is off-screen.</p>' : '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
-    const gs = groups();
-    const f = gs.length ? focusedGroup(gs) : CREW;
-    return `<ul class="where-rec">${rows.map((g) => whereRowHTML(g, d, rows.length > 1, g.key === f)).join('')}</ul>`;
+    if (!rows.length) return (pcs().length ? '<p class="muted">Every PC is off-screen.</p>' : '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>') + offHTML();
+    const f = recFocus();
+    return `<ul class="where-rec">${rows.map((g) => whereRowHTML(g, d, rows.length > 1, g.key === f)).join('')}</ul>${offHTML()}`;
+  }
+  // "back" for an off-screen PC: to the focused group's place (the Here strip's own `move`); to the crew not placed yet,
+  // where the record has them; with no group at all, where the record has the crew.
+  function bringBack(pc) {
+    const f = recFocus();
+    const g = f && f !== CREW ? groupByKey(f) : null;
+    if (g) {
+      const b = D().beats.find((x) => x.key === g.beat);
+      act({ type: 'move', pc, to: { beat: g.beat, spot: g.spot || null, title: b ? b.title : '' } });
+      return;
+    }
+    placeCrew([pc]);
   }
 
   const listHTML = (htmls) => `<ul>${htmls.map((x) => `<li>${x}</li>`).join('')}</ul>`;
@@ -1431,7 +1484,7 @@
   // Under the preview: each panel's Shown backdrop, with a way back to the group's own place.
   function previewControls(d) {
     const gs = groups();
-    if (!gs.length) return '<p class="note">No PC is at a beat yet: the players see the campaign\'s name.</p>';
+    if (!gs.length) return `<p class="note">${REC() ? 'Nobody is placed yet' : 'No PC is at a beat yet'}: the players see the campaign's name.</p>`;
     const f = focusedGroup(gs);
     return `<ul class="pvlist">${gs.map((g) => {
       const pn = panelOf(g.key);
@@ -2077,7 +2130,9 @@
     if (d.movenew !== undefined) { moveGroup(d.moveg, { name: d.movenew }); return; }
     if (d.move) { const to = JSON.parse(d.to); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'move', pc: d.move, to }); return; }
     if (d.all) { const to = JSON.parse(d.all); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'moveAll', pcs: pcs().map((p) => p.note), to }); return; }
-    if (d.off) { act({ type: 'move', pc: d.off, to: 'off' }); return; }
+    if (d.off) { if (G.ui.picked) delete G.ui.picked[d.off]; act({ type: 'move', pc: d.off, to: 'off' }); return; }
+    if (d.wpick) { G.ui.picked = G.ui.picked || {}; G.ui.picked[d.wpick] = !G.ui.picked[d.wpick]; update(); return; }
+    if (d.wback) { bringBack(d.wback); return; }
     if (d.pt) {
       const b = beatOfKey(d.beat);
       const p = b && b.points.find((x) => x.key === d.pt);
@@ -2199,8 +2254,6 @@
       G.ui.titleDraft = t.value;
       const bad = $('#rtbad');
       if (bad) bad.textContent = TITLE_BAD.test(t.value) ? TITLE_BAD_TEXT : '';
-      clearTimeout(G.titleTimer);
-      G.titleTimer = setTimeout(commitTitle, 600);
       return;
     }
     if (t.dataset && t.dataset.moveg !== undefined && t.tagName === 'INPUT') {
@@ -2278,7 +2331,12 @@
     }
     if (d.vcond) { act({ type: 'endSet', vitals: { [d.vcond]: { conditions: t.value.trim() } } }); return; }
     if (t.id === 'advance') act({ type: 'endSet', advancement: t.value });
-    if (t.id === 'rtitle') commitTitle();
+  });
+  // The title goes on Enter, or when the GM leaves the box; a redraw that replaces the box (another window's change)
+  // fires focusout and change while drawing, and is never a commit: the words typed so far are kept as a draft (fix
+  // round 1, minor 3). Any other action sends a draft first (`act`).
+  document.addEventListener('focusout', (ev) => {
+    if (ev.target && ev.target.id === 'rtitle' && !drawing && ev.target.isConnected) commitTitle();
   });
 
   // A header that wraps on a narrower window is taller: the jump offset follows it.

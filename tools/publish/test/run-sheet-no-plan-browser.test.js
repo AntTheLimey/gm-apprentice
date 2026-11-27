@@ -10,6 +10,7 @@
 const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession, stateFileFor } = require('../lib/run-sheet/sessions');
@@ -57,14 +58,19 @@ function tableFiler(vault) {
   return { calls, runFileLog };
 }
 
-async function startRec({ crlf = false } = {}) {
+async function startRec({ crlf = false, prepped = null } = {}) {
   const vault = copyRecordFixture({ crlf });
   made.push(vault);
+  // session-prep filed Session 15's index (no Plan, no Table Log): the sheet opens it, named
+  if (prepped) {
+    fs.mkdirSync(path.join(vault, S15), { recursive: true });
+    fs.writeFileSync(path.join(vault, S15, `${prepped}.md`), `---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\ndocuments:\n  plan: null\n  table_log: null\n  wrap_up: null\n---\n\n# ${prepped}\n`);
+  }
   const session = pickSession(listSessions(vault), null, vault).session;
   assert.ok(session && session.fromRecord, 'the record gives Session 15');
   const { file, stateId } = stateFileFor(vault, session);
   const filer = tableFiler(vault);
-  const t = createTableServer({ vaultPath: vault, session, stateFile: file, stateId, fileLog: { cmd: CMD, takesTitle: true },
+  const t = createTableServer({ vaultPath: vault, session, stateFile: file, stateId, fileLog: prepped ? ['gma', 'table-log-new'] : { cmd: CMD, takesTitle: true },
     deps: { delayMs: 50, log: () => {}, now: () => OPENED, runFileLog: filer.runFileLog } });
   const port = await listenLocal(t.server, 0);
   servers.push(t);
@@ -105,9 +111,10 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         const head = await page.evaluate('document.querySelector("#rhead").textContent');
         assert.match(head, /Session 15, no Plan: built from Session 14's Wrap-Up/);
         const row = await page.evaluate('document.querySelector("#where .wrow").textContent');
-        assert.match(row, /Joss, Mirren, Pell, Yarrow/);
+        for (const n of ['Joss', 'Mirren', 'Pell', 'Yarrow']) assert.match(row, new RegExp(n));
         assert.match(row, /The Salt Inn/);
-        for (const sel of ['#where .wrow .who', '#where .wrow [data-movebox]', `#where .wrow [data-fplace="${SALT}"]`, '#rtitle']) {
+        for (const sel of ['#where .wrow .who', '#where .wrow .pchip:first-child', '#where .wrow .pchip:last-child', '#where .wrow [data-movebox]',
+          `#where .wrow [data-fplace="${SALT}"]`, '#rtitle']) {
           const v = await inView(page, sel);
           assert.ok(v.found && v.whole && v.hit, `${sel} wholly on the first screen at ${width}: ${JSON.stringify(v)}`);
         }
@@ -118,6 +125,8 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         assert.match(await page.evaluate('document.querySelector("#rleft").textContent'), /^Points to land and If-they need a Plan\.$/);
         // the Plan sheet's sections are not drawn
         assert.strictEqual(await page.evaluate('Boolean(document.getElementById("run") || document.getElementById("handover"))'), false);
+        // the players' preview, with nobody placed, says so without the Plan's word "beat"
+        assert.match(await page.evaluate('document.getElementById("side").textContent'), /Nobody is placed yet: the players see the campaign's name\./);
         // the party came from the last Wrap-Up, not tonight's
         assert.match(await page.evaluate('document.querySelector("#pcs").textContent'), /from the last Wrap-Up/);
         // no D&D word on a GURPS sheet
@@ -136,11 +145,25 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await settled(page);
         assert.deepStrictEqual(await railNames(page), BEFORE_MOVE);
         assert.deepStrictEqual(await railInPageOrder(page), { ok: true });
-        // a rail card jumps to its card, the heading in view
-        await page.click('#rail a[data-go^="card:"]');
-        await page.sleep(150);
-        const v = await inView(page, '#scenes .card h3');
-        assert.ok(v.whole, `the card's heading is in view: ${JSON.stringify(v)}`);
+        // a rail card jumps to its card: out of view before, the press lands on the link, the page scrolls, the heading
+        // is then wholly in view. A Here card and a Could-come card.
+        const { model } = await api(run, '/api/model');
+        const idOf = (t) => model.record.cards.find((c) => c.title === t).id;
+        for (const t of ['Odalys Venn', 'Corvin Tash']) {
+          const head = `[id="card:${idOf(t)}"] h3`;
+          if (t === 'Corvin Tash') { await page.wheel(400, 400, -20000); }
+          const was = await inView(page, head);
+          assert.ok(was.found && !was.whole, `${t}'s card is out of view before the jump: ${JSON.stringify(was)}`);
+          const y0 = await page.evaluate('window.scrollY');
+          const hit = await page.click(`#rail a[data-go="card:${idOf(t)}"]`);
+          assert.ok(hit.inView && hit.hit, `the rail link takes the press: ${JSON.stringify(hit)}`);
+          await page.waitFor(`window.scrollY !== ${y0}`);
+          await page.sleep(100);
+          const v = await inView(page, head);
+          assert.ok(v.whole, `${t}'s heading is in view: ${JSON.stringify(v)}`);
+          assert.strictEqual(await page.evaluate(`document.querySelector(${JSON.stringify(head)}).textContent`), t);
+        }
+        await page.wheel(400, 400, -20000);
         // Move them, by the keyboard, to the other city
         await page.click('#where .wrow input[data-movebox]');
         await page.type('Marrow');
@@ -252,6 +275,134 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
       });
     });
 
+    // Review Focus 5 (fix round 1): a crew split across two places, then each group focused in turn. The cards, the
+    // places and the rail re-rank around the focused group's place, and the rail keeps the page's order.
+    it(`a split crew re-ranks around whichever group is focused (${width})`, async () => {
+      const run = await startRec({ crlf: width === 1100 });
+      const PELL = 'Characters/PCs/Pell Rowan.md';
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        // pick Pell, then Move them: Pell alone goes to Marrow Market
+        await page.click(`#where [data-wpick="${PELL}"]`);
+        await page.waitFor(`document.querySelector('#where [data-wpick="${PELL}"]').getAttribute('aria-pressed') === 'true'`);
+        await page.click(`#where [data-wrow="__crew"] input[data-movebox]`);
+        await page.type('Marrow');
+        await page.waitFor('document.querySelector("#where [data-movepick]")');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor('document.querySelectorAll("#where .wrow").length === 2');
+        const s = await stateOf(run);
+        assert.deepStrictEqual(Object.keys(s.positions), [PELL], 'only Pell moved');
+        const rows = await page.evaluate('Array.from(document.querySelectorAll("#where .wrow"), (r) => r.textContent)');
+        assert.match(rows.find((r) => /Pell/.test(r)), /Marrow Market/);
+        assert.match(rows.find((r) => /Joss/.test(r)), /The Salt Inn/);
+        assert.ok(!/Pell/.test(rows.find((r) => /Joss/.test(r))), 'Pell left the crew\'s row');
+        const marrow = async () => {
+          assert.deepStrictEqual(await cardTitles(page, 'here'), []);
+          assert.deepStrictEqual(await page.evaluate('Array.from(document.querySelectorAll("#places .place a.lk"), (a) => a.textContent)'), ['Marrow Market']);
+          assert.deepStrictEqual(await railNames(page), AFTER_MOVE);
+          assert.deepStrictEqual(await railInPageOrder(page), { ok: true });
+        };
+        const salt = async () => {
+          assert.deepStrictEqual(await cardTitles(page, 'here'), ['Odalys Venn', 'Harl Brannock']);
+          assert.deepStrictEqual(await page.evaluate('Array.from(document.querySelectorAll("#places .place a.lk"), (a) => a.textContent)'), ['The Salt Inn']);
+          assert.deepStrictEqual(await railNames(page), BEFORE_MOVE);
+          assert.deepStrictEqual(await railInPageOrder(page), { ok: true });
+        };
+        // the moved group is focused
+        await marrow();
+        // the rail shows the same two groups, with their faces
+        const rail = await page.evaluate('Array.from(document.querySelectorAll("#rail a[data-pgroup]"), (a) => a.textContent)');
+        assert.deepStrictEqual(rail.map((t) => t.replace(/[A-Z]+$/, '')), ['Marrow Market', 'The Salt Inn']);
+        // focus the crew still at the inn (its row's Focus), then Pell's group again (from the rail)
+        await page.click('#where [data-wrow="__crew"] [data-pgroup]');
+        await page.waitFor('document.querySelector("#where [data-wrow=__crew]").classList.contains("focus")');
+        await salt();
+        await page.click('#rail a[data-pgroup="pl-3b2cc69c"]');
+        await page.waitFor('document.querySelector("#where [data-wrow=pl-3b2cc69c]").classList.contains("focus")');
+        await marrow();
+        // Move them for one group moves that group alone: the crew at the inn goes to Dock Row; Pell stays
+        await page.click('#where [data-wrow="__crew"] input[data-movebox]');
+        await page.type('Dock Row');
+        await page.waitFor('document.querySelector("#where [data-wrow=__crew] [data-movepick]")');
+        await page.key('Enter');
+        await settled(page);
+        const after = await stateOf(run);
+        assert.strictEqual(after.positions[PELL].beat, 'pl-3b2cc69c');
+        assert.ok(['Joss Harker', 'Mirren Fell', 'Yarrow Tide'].every((n) => after.positions[`Characters/PCs/${n}.md`].beat === 'pl-dccbec2f'));
+        assert.deepStrictEqual(await cardTitles(page, 'here'), ['Odalys Venn', 'Harl Brannock'], 'Dock Row is focused now: the harbour cards');
+        assert.deepStrictEqual(await railInPageOrder(page), { ok: true });
+        assert.strictEqual(await noSideways(page), true);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`a PC goes off-screen and comes back (${width})`, async () => {
+      const run = await startRec();
+      const YARROW = 'Characters/PCs/Yarrow Tide.md';
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await page.click(`#where [data-off="${YARROW}"]`);
+        await page.waitFor('document.getElementById("woff")');
+        await settled(page);
+        assert.match(await page.evaluate('document.getElementById("woff").textContent'), /Off-screen: .*Yarrow/);
+        assert.ok(!/Yarrow/.test(await page.evaluate('document.querySelector("#where .wrow").textContent')), 'not in the crew\'s row');
+        assert.match(await page.evaluate('document.getElementById("rail").textContent'), /Off-screen/);
+        assert.deepStrictEqual((await stateOf(run)).positions[YARROW], { off: true });
+        const v = await inView(page, `#woff [data-wback="${YARROW}"]`);
+        assert.ok(v.whole && v.hit, JSON.stringify(v));
+        await page.click(`#woff [data-wback="${YARROW}"]`);
+        await page.waitFor('!document.getElementById("woff")');
+        await settled(page);
+        const s = await stateOf(run);
+        assert.deepStrictEqual(s.positions[YARROW], { beat: 'pl-dcecf058', spot: null }, 'back with the crew, at the inn');
+        assert.match(await page.evaluate('document.querySelector("#where .wrow").textContent'), /Yarrow/);
+        assert.ok(!s.events.some((l) => /\bmove/i.test(l.text || '')), `no move logged: ${JSON.stringify(s.events)}`);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`a Session 15 that session-prep filed is named, read-only (${width})`, async () => {
+      const run = await startRec({ prepped: 'Session 15 - The Lamp Fair' });
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.getElementById("rtitle")'), null, 'no title box');
+        assert.strictEqual(await page.evaluate('document.getElementById("rindex").textContent.replace(/\\s+/g, " ").trim()'), 'Named by session-prep: Session 15 - The Lamp Fair');
+        assert.doesNotMatch(await page.evaluate('document.querySelector(".rtop").textContent'), /Filed as/);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`a redraw from another window mid-title commits nothing; Enter does (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await page.click('#rtitle');
+        await page.type('The Lamp');
+        // another window writes the state: the page redraws while the box has focus
+        const got = await api(run, '/api/state');
+        await page.evaluate('window.__mark = document.getElementById("rtitle")');
+        const put = await fetch(`${run.base}api/state`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stateId: got.stateId, base: got.rev, state: got.state, clientId: 'another-window' }) });
+        assert.strictEqual(put.status, 200);
+        await page.waitFor('document.getElementById("rtitle") !== window.__mark', 5000);
+        await page.sleep(300);
+        assert.strictEqual((await stateOf(run)).title, '', 'nothing committed by the redraw');
+        assert.strictEqual(await page.evaluate('document.getElementById("rtitle").value'), 'The Lamp');
+        assert.strictEqual(await page.evaluate('document.activeElement.id'), 'rtitle', 'the box keeps focus');
+        await page.type(' Fair');
+        await page.key('Enter');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+        assert.strictEqual((await stateOf(run)).title, 'The Lamp Fair');
+        assert.deepStrictEqual(run.filer.calls, [], 'a title files nothing');
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
     it(`the players' screen shows no card text (${width})`, async () => {
       const run = await startRec();
       await withPage({ width, height: HEIGHT }, async (page) => {
@@ -259,6 +410,10 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await settled(page);
         const views = [];
         const look = async () => views.push(JSON.stringify(await api(run, '/api/players/view')));
+        // the players' own event stream, read the whole time
+        let streamed = '';
+        const stream = http.get(`${run.base}api/players/events`, (res) => { res.setEncoding('utf8'); res.on('data', (c) => { streamed += c; }); });
+        stream.on('error', () => {});
         await look();
         // open Background, a card's people in the drawer, a fight at the lead's place and back, Move them
         await page.click('#background summary');
@@ -279,7 +434,11 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await page.key('Enter');
         await settled(page);
         await look();
-        for (const v of views) for (const w of SECRET_WORDS) assert.ok(!v.toLowerCase().includes(w.toLowerCase()), `the players' view holds "${w}": ${v.slice(0, 400)}`);
+        await page.sleep(300);
+        stream.destroy();
+        assert.match(streamed, /event: (hello|view)/, `the stream was read: ${streamed.slice(0, 200)}`);
+        views.push(streamed);
+        for (const v of views) for (const w of SECRET_WORDS) assert.ok(!v.toLowerCase().includes(w.toLowerCase()), `the players' screen holds "${w}": ${v.slice(0, 400)}`);
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });

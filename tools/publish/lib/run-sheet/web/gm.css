@@ -588,3 +588,12 @@ ol.to .defs input.typed.sm { width: calc(6ch + 8px); }
 .card.lead .lbl { font: 600 .72rem var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .src { font-size: .75rem; color: var(--muted); white-space: nowrap; }
 #rleft { margin: 0 0 14px; }
+/* Where they are's PC chips (fix round 1): pick one to move it alone, or send it off-screen */
+.where-rec .who { flex-wrap: wrap; gap: 4px; }
+.pchip { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.pchip .pick { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 2px; border-radius: 999px; font-size: .86rem; }
+.pchip .pick .face { width: 20px; height: 20px; font-size: .62rem; }
+.pchip .off { font-size: .7rem; padding: 0 5px; color: var(--muted); }
+.where-rec .wfocus { font-size: .8rem; }
+.woff { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.rail .rg { display: flex; flex-wrap: wrap; align-items: center; }
