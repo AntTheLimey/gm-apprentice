@@ -3,6 +3,7 @@
 // one is tonight's. One rule for "played" and for a session's Table Log, shared with the reader's
 // walk back through earlier sessions (read.js readCarried).
 
+const fs = require('node:fs');
 const path = require('node:path');
 const pt = require('./plan-text');
 const { buildIndex, stemOf } = require('./notes');
@@ -50,6 +51,7 @@ function isPlayed(index, sessionPath) {
 // The session's Table Log: `documents.table_log`, else the one session-table-log note naming the session.
 // A link that is dead or names another type gives no log and a warning.
 function tableLogOf(index, sessionPath) {
+  if (sessionPath === null || sessionPath === undefined) return { log: null, warning: null }; // no session yet: no log is its own [B2]
   const t = fmTarget(docsOf(index, sessionPath).table_log);
   if (!t) {
     const named = index.notes().filter((n) => low(fmOf(index, n).type) === 'session-table-log' && index.resolve(fmTarget(fmOf(index, n).session) || null) === sessionPath);
@@ -124,6 +126,12 @@ const numberOf = (fm, stem) => {
   return m ? Number(m[1]) : null;
 };
 
+const playDateOf = (v) => {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
+  const t = v == null ? '' : String(v).trim();
+  return t || null;
+};
+
 function listSessions(vaultPath, { deps, index } = {}) {
   const idx = index || buildIndex(vaultPath, { deps });
   const pages = idx.notes().map((p) => ({
@@ -146,10 +154,50 @@ function listSessions(vaultPath, { deps, index } = {}) {
       wrapUp,
       tableLog: tableLogOf(idx, p).log,
       played: isPlayed(idx, p),
+      playDate: playDateOf(fm.play_date),
       open: plan !== null && wrapUp === null,
       label: number !== null ? `Session ${number}` : title,
     };
   });
+}
+
+// A session with no Plan, opened from the record. `s` is the vault's session whose index it is (its index already
+// exists: prep --upcoming, or one the GM named), or null for one not filed yet. `after` is the latest session with a Wrap-Up.
+function recordSession(sessions, s, number = null) {
+  const wrapped = sessions.map((x, i) => (x.wrapUp ? i : -1)).filter((i) => i >= 0);
+  const last = wrapped.length ? sessions[wrapped[wrapped.length - 1]] : null;
+  const n = s ? s.number : number;
+  const chapter = s ? s.chapter : (last ? last.chapter : null);
+  const label = n !== null && n !== undefined ? `Session ${n}` : (s ? s.label : 'Session');
+  return {
+    index: s ? s.index : null,
+    title: s ? s.title : label,
+    number: n === undefined ? null : n,
+    chapter: chapter || null,
+    plan: null,
+    wrapUp: null,
+    tableLog: s ? s.tableLog : null,
+    played: s ? Boolean(s.played) : false,
+    playDate: (s && s.playDate) || null,
+    open: false,
+    fromRecord: true,
+    after: last ? last.index : null,
+    label,
+    planVault: sessions.some((x) => x.plan),
+  };
+}
+
+// The session after the latest one with a Wrap-Up, in story order. If its index exists with no Plan and no Wrap-Up it is
+// the session, played or not (a night played but not wrapped up reopens); else a session not filed yet, numbered by the
+// one before it (by count when that has no number).
+function nextFromRecord(sessions) {
+  let at = -1;
+  sessions.forEach((x, i) => { if (x.wrapUp) at = i; });
+  const cand = sessions[at + 1];
+  if (cand && !cand.plan && !cand.wrapUp) return recordSession(sessions, cand);
+  let number = 1;
+  if (at >= 0) number = sessions[at].number !== null ? sessions[at].number + 1 : sessions.length + 1;
+  return recordSession(sessions, null, number);
 }
 
 // Which session to run. `asked` is an index stem, an index path, a Plan path, or a name two sessions may share.
@@ -174,11 +222,13 @@ function pickSession(sessions, asked, vaultPath) {
     if (hits.length > 1) return { error: `"${asked}" names more than one session: ${hits.map((s) => s.index).join(' and ')}. Name one by its path.` };
     const s = hits[0];
     if (s.wrapUp) return { error: `${s.label} is wrapped up; its record is the Wrap-Up${s.tableLog ? ', with its Table Log' : ''}.` };
-    if (!s.plan) return { error: `${s.label} has no Plan yet: prep it first.` };
+    // Ant, 2026-11-27: a session with no Plan opens from the record; it is no longer refused.
+    if (!s.plan) return { session: recordSession(sessions, s), others: [] };
     return { session: s, others: [] };
   }
   const open = sessions.filter((s) => s.open);
-  if (open.length === 0) return { error: 'No session is open for play: every session with a Plan has a Wrap-Up. Prep the next one first.' };
+  // Ant, 2026-11-27: every Plan wrapped up (or none made) opens the next session from the record.
+  if (open.length === 0) return { session: nextFromRecord(sessions), others: [] };
   const going = open.filter((s) => s.tableLog);
   if (going.length) return { session: going[0], others: going.slice(1) };
   return { session: open[0], others: [] };
@@ -187,9 +237,24 @@ function pickSession(sessions, asked, vaultPath) {
 const slug = (s) => canonicalNfc(String(s || '')).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
 
 // The state file's name: chapter stem (the session's folder when it has no chapter) and session index stem, so two Session 01s in two chapters differ.
+// A session opened from the record is named by its number, before filing and after (D1): the folder changes with the filing.
+const noPlanIdOf = (session) => `${session.chapter ? slug(stemOf(session.chapter)) : 'vault'}--session-${session.number !== null && session.number !== undefined ? session.number : slug(session.index ? stemOf(session.index) : session.label)}`;
 function stateIdOf(session) {
+  if (!session.plan && session.fromRecord) return noPlanIdOf(session);
   const where = session.chapter ? slug(stemOf(session.chapter)) : slug(path.posix.dirname(session.index));
   return `${where}--${slug(stemOf(session.index))}`;
 }
 
-module.exports = { listSessions, pickSession, tableLogOf, isPlayed, stateIdOf, wrapUpOf, playNotesOf };
+// The state file and its id. A Plan session with no state of its own name but one under its number (prep ran mid-play,
+// then a restart) takes that one (D1).
+function stateFileFor(vaultPath, session, { exists = fs.existsSync } = {}) {
+  const at = (id) => path.join(vaultPath, '_meta', 'table', `${id}.json`);
+  let stateId = stateIdOf(session);
+  if (session.plan && session.number !== null && session.number !== undefined && !exists(at(stateId))) {
+    const byNumber = noPlanIdOf(session);
+    if (exists(at(byNumber))) stateId = byNumber;
+  }
+  return { file: at(stateId), stateId };
+}
+
+module.exports = { listSessions, pickSession, nextFromRecord, stateFileFor, tableLogOf, isPlayed, stateIdOf, wrapUpOf, playNotesOf };

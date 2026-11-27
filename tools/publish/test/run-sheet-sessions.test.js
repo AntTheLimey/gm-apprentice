@@ -4,8 +4,10 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { listSessions, pickSession, stateIdOf, tableLogOf, isPlayed } = require('../lib/run-sheet/sessions');
+const { listSessions, pickSession, stateIdOf, tableLogOf, isPlayed, stateFileFor } = require('../lib/run-sheet/sessions');
 const { buildIndex } = require('../lib/run-sheet/notes');
+const { copyRecordFixture } = require('./helpers/record-fixture');
+const { removeFixture } = require('./helpers/systems-fixture');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
 const made = [];
@@ -150,15 +152,119 @@ describe('run sheet sessions', () => {
     assert.strictEqual(pickSession(list, list[1].plan).session.index, IDX.c1s2);
   });
 
-  it('no session open', () => {
-    const closed = list.map((s) => ({ ...s, open: false, wrapUp: s.wrapUp || 'x.md' }));
-    assert.deepStrictEqual(pickSession(closed),
-      { error: 'No session is open for play: every session with a Plan has a Wrap-Up. Prep the next one first.' });
+  // Changed on purpose (Ant, 2026-11-27): every Plan wrapped up opens the next session from the record, no error.
+  it('every Plan wrapped up opens the next session from the record', () => {
+    const closed = list.slice(0, 3).map((s) => ({ ...s, open: false, wrapUp: s.wrapUp || 'x.md' }));
+    const r = pickSession(closed);
+    assert.strictEqual(r.session.fromRecord, true);
+    assert.strictEqual(r.session.number, 4);
+    assert.strictEqual(r.session.after, IDX.c1s3);
+    assert.strictEqual(r.session.planVault, true);
+    assert.strictEqual(r.session.index, null);
+    assert.strictEqual(r.session.plan, null);
+    assert.strictEqual(r.session.label, 'Session 4');
+    assert.strictEqual(r.session.chapter, 'Chapters/Chapter 1/Chapter 1.md');
+    assert.deepStrictEqual(r.others, []);
   });
 
-  it('a session with no Plan', () => {
+  it('a Plan with no Wrap-Up still wins over a record session', () => {
+    const r = pickSession(list);
+    assert.strictEqual(r.session.index, IDX.c1s2);
+    assert.notStrictEqual(r.session.fromRecord, true);
+  });
+
+  it("the next session's index made by prep --upcoming is used", () => {
+    const l = list.slice(0, 3).map((s) => ({ ...s, open: false, wrapUp: s.index === IDX.c1s3 ? null : (s.wrapUp || 'x.md'), plan: s.index === IDX.c1s3 ? null : s.plan }));
+    const r = pickSession(l);
+    assert.strictEqual(r.session.fromRecord, true);
+    assert.strictEqual(r.session.index, IDX.c1s3);
+    assert.strictEqual(r.session.number, 3);
+    assert.strictEqual(r.session.after, IDX.c1s2);
+  });
+
+  // Changed on purpose (Ant, 2026-11-27): a session with no Plan opens from the record, no "prep it first".
+  it('--session naming an index with no Plan opens it from the record', () => {
     const noPlan = list.map((s) => (s.index === IDX.c1s3 ? { ...s, plan: null, open: false } : s));
-    assert.deepStrictEqual(pickSession(noPlan, IDX.c1s3), { error: 'Session 3 has no Plan yet: prep it first.' });
+    const r = pickSession(noPlan, IDX.c1s3);
+    assert.strictEqual(r.session.fromRecord, true);
+    assert.strictEqual(r.session.index, IDX.c1s3);
+    assert.strictEqual(r.session.plan, null);
+    assert.strictEqual(r.session.label, 'Session 3');
+  });
+
+  it('a wrapped-up session asked by name is still refused', () => {
+    assert.ok(pickSession(list, IDX.c1s1).error.includes('is wrapped up'));
+  });
+
+  it('a vault with nothing played opens Session 1', () => {
+    const r = pickSession([]);
+    assert.strictEqual(r.session.number, 1);
+    assert.strictEqual(r.session.after, null);
+    assert.strictEqual(r.session.index, null);
+    assert.strictEqual(r.session.planVault, false);
+    const first = { index: IDX.c1s1, title: 'Session 01 - The Start', number: 1, chapter: null, plan: null, wrapUp: null, tableLog: null, played: false, open: false, label: 'Session 1' };
+    const r2 = pickSession([first]);
+    assert.strictEqual(r2.session.index, IDX.c1s1);
+    assert.strictEqual(r2.session.after, null);
+  });
+
+  it('a night played but not wrapped up reopens, with its played date', () => {
+    const l = [{ index: 'a/Session 01.md', title: 'S1', number: 1, chapter: null, plan: null, wrapUp: 'w.md', tableLog: null, played: true, open: false, label: 'Session 1' },
+      { index: 'a/Session 02.md', title: 'S2', number: 2, chapter: null, plan: null, wrapUp: null, tableLog: 'a/log.md', played: true, playDate: '2026-11-22', open: false, label: 'Session 2' }];
+    const r = pickSession(l).session;
+    assert.strictEqual(r.index, 'a/Session 02.md');
+    assert.strictEqual(r.played, true);
+    assert.strictEqual(r.playDate, '2026-11-22');
+    assert.strictEqual(r.tableLog, 'a/log.md');
+  });
+
+  it('a last session with no number gives the next by count', () => {
+    const l = [1, 2, 3].map((n) => ({ index: `a/S${n}.md`, title: `S${n}`, number: n === 3 ? null : n, chapter: null, plan: null, wrapUp: 'w.md', tableLog: null, played: true, open: false, label: `S${n}` }));
+    assert.strictEqual(pickSession(l).session.number, 4);
+  });
+
+  it('stateIdOf names a no-Plan session by its number, before filing and after', () => {
+    const base = { chapter: 'Ch1/Ch1.md', plan: null, fromRecord: true, number: 15 };
+    assert.strictEqual(stateIdOf({ ...base, index: null }), 'ch1--session-15');
+    assert.strictEqual(stateIdOf({ ...base, index: 'Ch1/Sessions/Session 15 - 29 Nov 2026.md' }), 'ch1--session-15');
+    // [B3] filed in its own folder: the same id
+    assert.strictEqual(stateIdOf({ ...base, index: 'Ch1/Sessions/Session 15/Session 15 - 29 Nov 2026.md' }), 'ch1--session-15');
+    assert.strictEqual(stateIdOf({ ...base, chapter: null, index: null }), 'vault--session-15');
+  });
+
+  it('stateFileFor adopts the number-named state when a Plan appears, and returns its id', () => {
+    const planned = { index: IDX.c1s3, plan: 'p.md', number: 3, chapter: 'Chapters/Chapter 1/Chapter 1.md' };
+    const own = path.join('/v', '_meta', 'table', 'chapter-1--session-03-next.json');
+    const num = path.join('/v', '_meta', 'table', 'chapter-1--session-3.json');
+    assert.deepStrictEqual(stateFileFor('/v', planned, { exists: () => false }), { file: own, stateId: 'chapter-1--session-03-next' });
+    assert.deepStrictEqual(stateFileFor('/v', planned, { exists: (f) => f === num }), { file: num, stateId: 'chapter-1--session-3' });
+    assert.deepStrictEqual(stateFileFor('/v', planned, { exists: () => true }), { file: own, stateId: 'chapter-1--session-03-next' });
+    const rec = { index: null, plan: null, fromRecord: true, number: 3, chapter: 'Chapters/Chapter 1/Chapter 1.md' };
+    assert.deepStrictEqual(stateFileFor('/v', rec), { file: num, stateId: 'chapter-1--session-3' });
+  });
+
+  it("an orphan Table Log is no unfiled session's log [B2]", () => {
+    const dir = copy();
+    for (const [name, sess] of [['empty', ''], ['dead', '"[[Nowhere At All]]"']]) {
+      fs.writeFileSync(path.join(dir, `${S}orphan-${name}.md`), `---\ntype: session-table-log\nsession: ${sess}\n---\n\n## Log\n`);
+    }
+    assert.deepStrictEqual(tableLogOf(buildIndex(dir), null), { log: null, warning: null });
+  });
+
+  it('the record fixture copies: Sessions 13 and 14 are wrapped up with no Plan, and a missing drop throws', () => {
+    const dir = copyRecordFixture();
+    try {
+      const l = listSessions(dir);
+      assert.deepStrictEqual(l.map((s) => s.number), [13, 14]);
+      assert.ok(l.every((s) => s.plan === null && s.wrapUp));
+      const r = pickSession(l).session;
+      assert.strictEqual(r.fromRecord, true);
+      assert.strictEqual(r.number, 15);
+      assert.strictEqual(r.after, l[1].index);
+      assert.strictEqual(r.planVault, false);
+      assert.strictEqual(stateIdOf(r), 'chapter-3--session-15');
+    } finally { removeFixture(dir); }
+    assert.throws(() => copyRecordFixture({ drop: ['Nope/Missing.md'] }), /no Nope\/Missing\.md/);
   });
 
   it('an unknown name is refused', () => {
