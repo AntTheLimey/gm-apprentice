@@ -1156,5 +1156,50 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // S3: no find box anywhere outside a fight; People in Plan order, 2,640 px tall at 1100
+    it(`S3: one find box over people and places, near matches, Enter and the arrows; People A to Z; no datalist (${width})`, async () => {
+      const run = await startApp();
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.querySelectorAll("datalist, input[list]").length'), 0, 'no datalist in the page');
+        const names = await page.evaluate('Array.from(document.querySelectorAll("#people tbody tr td:first-child a[data-note]"), (a) => a.textContent.trim())');
+        assert.ok(names.length >= 3, names.join(", "));
+        assert.deepStrictEqual(names, [...names].sort((a, b) => a.localeCompare(b)), 'People A to Z');
+        // keyboard-reachable: from the rail's heading, Tab passes its fold and lands in the box
+        await page.click('#rail .rhd', { offsetX: 6 });
+        await page.key('Tab');
+        await page.key('Tab');
+        assert.strictEqual(await page.evaluate('document.activeElement.id'), 'find', 'Tab reaches the find box');
+        const box = await page.evaluate('(() => { const r = document.getElementById("find").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.width > 0; })()');
+        assert.strictEqual(box, true, 'the box is on the first screen');
+        const hits = () => page.evaluate('Array.from(document.querySelectorAll("#findHits [data-findhit]"), (b) => [b.querySelector(".n").textContent, b.querySelector(".k").textContent, b.classList.contains("sel")])');
+        // case and accents never matter; a word's start finds it; people and places together, by kind
+        await page.type('GÁTE');
+        await page.waitFor('document.querySelectorAll("#findHits [data-findhit]").length > 0');
+        assert.deepStrictEqual(await hits(), [['The Gate', 'place', true], ['The Gate House', 'place', false]]);
+        // the arrows move through the hits; Enter opens the one picked in the drawer
+        await page.key('ArrowDown');
+        assert.deepStrictEqual((await hits()).map((h) => h[2]), [false, true]);
+        await page.key('Enter');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Gate House"');
+        await page.key('Escape');
+        await page.waitFor('!document.getElementById("drawer").classList.contains("open")');
+        // Enter takes the first hit; a person and a creature carry their kind
+        await page.click('#find');
+        await page.type('fro');
+        await page.waitFor('document.querySelector("#findHits [data-findhit]") && /Frost/.test(document.querySelector("#findHits [data-findhit]").textContent)');
+        assert.deepStrictEqual((await hits())[0].slice(0, 2), ['Frost Wolf', 'creature']);
+        await page.key('Enter');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "Frost Wolf"');
+        await page.key('Escape');
+        await page.click('#find');
+        await page.type('ash');
+        await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+        assert.deepStrictEqual((await hits()).map((h) => h.slice(0, 2)), [['Brother Ash', 'person']]);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });

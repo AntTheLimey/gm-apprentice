@@ -830,6 +830,7 @@
     G.pane = null;
     for (const part of parts) if (!G.pane && part.pane) G.pane = part.pane(d) || null;
     $('#rail').innerHTML = railHTML(d);
+    placeFind();
     $('#sheet').innerHTML = sheetHTML(d);
     renderSide(d);
     if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
@@ -1121,6 +1122,7 @@
       for (const p of c.people || []) { if (!on.has(p)) { on.set(p, []); order.push(p); } on.get(p).push(c.title); }
     }
     if (!order.length) return '<p class="muted">Nobody on the record\'s cards.</p>';
+    order.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
     const at = r.peopleAt || {};
     return `<div class="tw"><table><thead><tr><th>Name</th><th>Where</th><th>On</th></tr></thead><tbody>${order.map((p) => `<tr><td>${face(p)} ${link(p)}</td><td>${at[p] ? link(at[p]) : '<span class="muted">—</span>'}</td><td>${esc([...new Set(on.get(p))].join(' · '))}</td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -1387,8 +1389,9 @@
     }).join('')}</ul>`;
   }
 
+  // People, A to Z (audit S3): a person is looked up by name, not by where the Plan first named them
   function peopleHTML(d) {
-    const list = G.model.people || [];
+    const list = (G.model.people || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     if (!list.length) return '<p class="muted">None listed.</p>';
     return `<div class="tw"><table><thead><tr><th>Name</th><th>Play as</th><th>Wants</th><th>Right now</th></tr></thead><tbody>${list.map((p) => {
       const um = p.note ? unmaskOf(p.note) : null;
@@ -1605,6 +1608,78 @@
     G.view = v;
     if (G.model && G.state) drawPreview();
     probe();
+  }
+
+  // ------------------------------------------------------------------ the find box (audit S3, P3, P4)
+  // One box over the vault's people and places, at the top of the rail on both sheets: near matches (case and accents
+  // never matter, a word's start finds it: "salt" is The Salt Inn), each hit labelled by kind. The arrows move through the
+  // hits, Enter opens the one picked (the first, unless the arrows moved) in the drawer, a click on a hit does too, Esc
+  // closes the list. Made once, like the preview's box, so a redraw never takes the words being typed.
+  const KIND = { npc: 'person', creature: 'creature', pc: 'PC', location: 'place' };
+  const findbox = document.createElement('div');
+  findbox.className = 'findw';
+  findbox.innerHTML = '<input id="find" type="search" placeholder="Find a person or place" aria-label="Find a person or place" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="findHits"><div class="findhits" id="findHits" role="listbox"></div>';
+  const findInput = findbox.querySelector('#find');
+  const findList = findbox.querySelector('#findHits');
+  const find = { hits: [], sel: 0 };
+  function findables() {
+    const out = [];
+    const seen = new Set();
+    for (const c of G.model.cast || []) {
+      if (!c.note || seen.has(c.note)) continue;
+      seen.add(c.note);
+      out.push({ note: c.note, name: nameOf(c.note), aliases: c.aliases || [], gmAliases: c.gmAliases || [], kind: KIND[c.type] || 'person' });
+    }
+    for (const p of knownPlaces()) if (!seen.has(p.note)) { seen.add(p.note); out.push({ note: p.note, name: p.name, aliases: p.aliases, kind: 'place' }); }
+    return out;
+  }
+  function drawFind() {
+    findList.innerHTML = find.hits.map((h, i) => `<button type="button" role="option" id="findHit${i}" class="${i === find.sel ? 'sel' : ''}" aria-selected="${i === find.sel}" data-findhit="${i}"><span class="n">${esc(h.name)}</span> <span class="k">${esc(h.kind)}</span></button>`).join('');
+    findInput.setAttribute('aria-expanded', String(find.hits.length > 0));
+    if (find.hits.length) findInput.setAttribute('aria-activedescendant', `findHit${find.sel}`); else findInput.removeAttribute('aria-activedescendant');
+  }
+  function findType() {
+    find.hits = G.model ? RS.castSearch(findables(), findInput.value, 8) : [];
+    find.sel = 0;
+    drawFind();
+  }
+  function findClose() { find.hits = []; find.sel = 0; drawFind(); }
+  function findOpen(i) {
+    const h = find.hits[i];
+    if (!h) return;
+    findInput.value = '';
+    findClose();
+    openNote(h.note);
+  }
+  findInput.addEventListener('input', findType);
+  findInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      if (!find.hits.length) { if (findInput.value.trim()) findType(); ev.preventDefault(); return; }
+      const n = find.hits.length;
+      find.sel = (find.sel + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+      drawFind();
+      ev.preventDefault();
+      return;
+    }
+    if (ev.key === 'Enter' && !ev.isComposing) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!find.hits.length && findInput.value.trim()) findType();
+      findOpen(find.sel);
+      return;
+    }
+    if (ev.key === 'Escape' && find.hits.length) { findClose(); ev.preventDefault(); ev.stopPropagation(); }
+  });
+  findInput.addEventListener('focus', () => { if (findInput.value.trim() && !find.hits.length) findType(); });
+  findList.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('[data-findhit]');
+    if (b) findOpen(Number(b.dataset.findhit));
+  });
+  // a press outside the box closes its list (the press goes on to do what it says)
+  document.addEventListener('pointerdown', (ev) => { if (find.hits.length && !findbox.contains(ev.target)) findClose(); }, true);
+  function placeFind() {
+    const head = $('#rail .rhd');
+    if (head && head.nextSibling !== findbox) head.after(findbox);
   }
 
   // ------------------------------------------------------------------ the drawer

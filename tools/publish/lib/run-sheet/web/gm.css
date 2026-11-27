@@ -612,3 +612,12 @@ ol.to .defs input.typed.sm { width: calc(6ch + 8px); }
 .where-rec .wfocus { font-size: .8rem; }
 .woff { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .rail .rg { display: flex; flex-wrap: wrap; align-items: center; }
+
+/* The find box (audit S3, P3, P4): under the rail's heading, its hits over the rail below it */
+.rail .findw { position: relative; margin: 4px 0 8px; }
+.rail .findw input { width: 100%; font-size: .82rem; }
+.rail .findhits { position: absolute; left: 0; top: 100%; z-index: 4; display: flex; flex-direction: column; gap: 2px; min-width: 100%; background: var(--panel); box-shadow: 0 4px 12px rgba(0, 0, 0, .15); }
+.rail .findhits:empty { display: none; }
+.rail .findhits button { display: flex; justify-content: space-between; gap: 6px; text-align: left; font-size: .82rem; }
+.rail .findhits button.sel { background: var(--ice-soft); border-color: var(--ice); }
+.rail .findhits .k { color: var(--muted); font: 500 .7rem var(--mono); align-self: center; }

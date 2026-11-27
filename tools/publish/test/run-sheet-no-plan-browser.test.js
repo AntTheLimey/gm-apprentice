@@ -594,5 +594,45 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // S3, P3, P4: no find box; People in card order; a place only by its exact name
+    it(`S3, P3, P4: the find box finds "salt" and "harb", Enter opens the first hit; People A to Z; no datalist (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.querySelectorAll("datalist, input[list]").length'), 0, 'no datalist in the page');
+        const names = await page.evaluate('Array.from(document.querySelectorAll("#people tbody tr td:first-child a[data-note]"), (a) => a.textContent.trim())');
+        assert.deepStrictEqual(names, ['Corvin Tash', 'Harl Brannock', 'Odalys Venn'], 'People A to Z');
+        const v = await inView(page, '#find');
+        assert.ok(v.whole && v.hit, `the find box is on the first screen: ${JSON.stringify(v)}`);
+        const hits = () => page.evaluate('Array.from(document.querySelectorAll("#findHits [data-findhit]"), (b) => [b.querySelector(".n").textContent, b.querySelector(".k").textContent])');
+        await tap(page, '#find');
+        await page.type('salt');
+        await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+        assert.deepStrictEqual((await hits())[0], ['The Salt Inn', 'place']);
+        // a hit is a real button: a held click opens it
+        await tap(page, '#findHits [data-findhit]');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Salt Inn"');
+        await page.key('Escape');
+        await tap(page, '#find');
+        await page.type('harb');
+        await page.waitFor('document.querySelectorAll("#findHits [data-findhit]").length >= 2');
+        assert.deepStrictEqual((await hits()).slice(0, 2), [['Harbour District', 'place'], ['Harbour Festival Grounds', 'place']]);
+        await page.key('Enter');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "Harbour District"');
+        await page.key('Escape');
+        await tap(page, '#find');
+        await page.type('venn');
+        await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+        assert.deepStrictEqual(await hits(), [['Odalys Venn', 'person']]);
+        // Esc in the box closes the list and leaves the words
+        await page.key('Escape');
+        assert.strictEqual(await page.evaluate('document.querySelectorAll("#findHits [data-findhit]").length'), 0);
+        assert.strictEqual(await page.evaluate('document.getElementById("find").value'), 'venn');
+        assert.strictEqual(await noSideways(page), true);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });
