@@ -1062,6 +1062,38 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
       });
     });
 
+    // S8, fix round 1: a held press on a button outside the open drawer closes it, and the button still acts
+    it(`S8: with the drawer open, Show and Fight here outside it close it and act (${width})`, async () => {
+      const run = await startApp();
+      const { model } = await api(run, 'GET', '/api/model');
+      const gate = model.beats[0];
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `${beatSel(gate.key)} [data-all]`);
+        await settled(page);
+        const openDrawer = async () => {
+          await tap(page, '#brief a.lk[data-note]');
+          await page.waitFor('document.querySelector("#drawer.open h2")');
+          await page.waitFor('Math.round(document.getElementById("drawer").getBoundingClientRect().right) === innerWidth');
+          await page.sleep(250);
+        };
+        const closed = () => page.waitFor('!document.getElementById("drawer").classList.contains("open")', 2000);
+        await openDrawer();
+        await tap(page, `${beatSel(gate.key)} .bbtns [data-showbeat]`);
+        await closed();
+        await settled(page);
+        const s = (await api(run, 'GET', '/api/state')).state;
+        assert.ok(Object.values(s.panels || {}).some((x) => (x.people || []).length), `Show acted: ${JSON.stringify(s.panels)}`);
+        await openDrawer();
+        // a Fight here clear of the drawer: the first place tile's (a beat's own sits under the drawer at 1100)
+        await tap(page, '#places .place [data-fplace]');
+        await closed();
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
     // S6: Enter on a typed new place did nothing (only a click on "+ New place" made it), and an empty box said nothing
     it(`S6: Enter in Move them makes a typed new place; with nothing typed it says why beside the box (${width})`, async () => {
       const run = await startApp();
