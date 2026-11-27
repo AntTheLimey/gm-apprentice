@@ -1145,3 +1145,67 @@ describe('side colours', () => {
   });
 
 });
+
+// The no-Plan core: readSheet reads a vault's record with no Plan (the record fixture: Sessions 13 and 14 wrapped up).
+describe('readSheet with no Plan', () => {
+  const { readSheet } = require('../lib/run-sheet/read');
+  const { copyRecordFixture } = require('./helpers/record-fixture');
+  const { removeFixture } = require('./helpers/systems-fixture');
+  const S13 = 'Chapters/Chapter 3/Sessions/Session 13/Session 13 - Unlit.md';
+  const S14 = 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger.md';
+  const CH3 = 'Chapters/Chapter 3/Chapter 3.md';
+  const PCS = ['Joss Harker', 'Mirren Fell', 'Pell Rowan', 'Yarrow Tide'].map((n) => `Characters/PCs/${n}.md`);
+  const CORVIN = 'Characters/NPCs/Corvin Tash.md';
+  // Corvin gets a stat block that says he fights as an ally, so the cast carries his vitals from the Table Log.
+  const opened = (crlf) => {
+    const dir = copyRecordFixture({ crlf });
+    made.push(dir);
+    const f = path.join(dir, CORVIN);
+    fs.appendFileSync(f, `${crlf ? '\r\n' : '\n'}<!-- gm-only -->\n\n## GM Notes\n\n### Stats\n\n**Corvin Tash**\n\nST 11 | DX 11 | IQ 10 | HT 11\nHP 10 · FP 10 · Basic Speed 5.5\nFights as an ally.\n\n<!-- /gm-only -->\n`.replace(/\n/g, crlf ? '\r\n' : '\n'));
+    return dir;
+  };
+
+  for (const crlf of [false, true]) {
+    it(`gives the party, cast, PCs, places and carried vitals${crlf ? ' (CRLF)' : ''}`, () => {
+      const dir = opened(crlf);
+      const m = readSheet(dir, { session: { index: null, title: 'Session 15', chapter: CH3, number: 15, after: S14 } });
+      assert.strictEqual(m.plan, null);
+      assert.deepStrictEqual(m.session, { index: null, title: 'Session 15', chapter: CH3, number: 15 });
+      assert.deepStrictEqual(m.pcs.map((p) => p.note), PCS);
+      assert.strictEqual(m.partyFrom, 'wrapup');
+      assert.deepStrictEqual([m.beats, m.people, m.handouts, m.prep, m.places, m.maps], [[], [], [], [], [], []]);
+      assert.deepStrictEqual(m.brief, { overview: '', world: '', stops: '' });
+      assert.deepStrictEqual(m.warnings.filter((w) => /the Plan|not on the page/.test(w.text)), []);
+      assert.ok(m.cast.length > 0 && Object.keys(m.placeKeys).length > 0 && Object.keys(m.notes).length > 0);
+      const corvin = m.cast.find((c) => c.note === CORVIN);
+      assert.ok(corvin, 'Corvin is in the cast');
+      assert.strictEqual(corvin.ally, true);
+      assert.deepStrictEqual([corvin.foe.hpNow, corvin.foe.fpNow, corvin.foe.carriedFrom],
+        [6, 8, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Table Log.md']);
+    });
+  }
+
+  it('carried vitals walk back from after when the session is not filed, and from the index when it is', () => {
+    const dir = opened(false);
+    const hp = (m) => `hpNow:${m.cast.find((c) => c.note === CORVIN).foe.hpNow}`;
+    const unfiled = readSheet(dir, { session: { index: null, title: 'Session 15', chapter: CH3, number: 15, after: S14 } });
+    assert.strictEqual(hp(unfiled), 'hpNow:6');
+    // from S13's own index, S14 is not earlier: its log does not count
+    const at13 = readSheet(dir, { session: { index: S13, title: 'Session 13', chapter: CH3, number: 13, after: S14 } });
+    assert.strictEqual(hp(at13), 'hpNow:null');
+    // no after and no index: nothing to walk back from
+    const none = readSheet(dir, { session: { index: null, title: '', chapter: CH3, number: 1, after: null } });
+    assert.strictEqual(hp(none), 'hpNow:null');
+    assert.strictEqual(none.session.title, 'Session 1');
+  });
+
+  it("every PC's open threads fill, bare label and list item both", () => {
+    const dir = opened(false);
+    const m = readSheet(dir, { session: { index: null, title: '', chapter: CH3, number: 15, after: S14 } });
+    const byName = Object.fromEntries(m.pcs.map((p) => [p.note.replace(/^.*\/|\.md$/g, ''), p.thread]));
+    assert.match(byName['Joss Harker'], /Return the ledger page/);
+    assert.match(byName['Mirren Fell'], /Find who paid for the unlit lamp/);
+    assert.strictEqual(byName['Pell Rowan'], '');
+    assert.strictEqual(byName['Yarrow Tide'], '');
+  });
+});
