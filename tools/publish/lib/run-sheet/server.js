@@ -248,13 +248,16 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   function startFiling() {
     if (filing || closed) return;
     const cmd = fileCommand();
-    filing = (async () => {
+    const p = (async () => {
+      // `filing` is set before any of this runs: a runFileLog that throws at once must still clear it
+      await null;
       let done;
       try { done = await runFileLog(cmd); } catch (err) { done = { ok: false, why: String((err && err.message) || err) }; }
       if (!done || typeof done !== 'object') done = { ok: false, why: 'the filing gave no answer' };
-      filing = null;
+      if (filing === p) filing = null;
       try { filed(done); } catch (err) { recordFailed(err); }
     })();
+    filing = p;
   }
   // The filing ended: take the index from its first CREATED or ADDED row (never a re-list), check the vault links its
   // Table Log, and write the log from the newest saved state.
@@ -282,7 +285,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     }
     log(`run sheet: filed the Table Log, ${rel}: the session is in play.`);
     try { loadModel(); } catch { /* the model re-reads on the next load */ }
-    store.setServer({ filed: { index: session.index, at: now().toISOString() } });
+    // only a session from the record: a Plan session is named by its Plan, and only a no-Plan state is adopted by it
+    if (session.fromRecord) store.setServer({ filed: { index: session.index, at: now().toISOString() } });
     // the title the vault filed it under (a title it could not hold files under the date, D8)
     const filedTitle = fileCmd.takesTitle ? stemOf(session.index).replace(/^Session\s+\d+\s+-\s+/i, '') : session.title;
     broadcast('record-filed', { path: rel, index: session.index, title: filedTitle });
@@ -859,13 +863,22 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     closing = (async () => {
       clearInterval(ping);
       let saveError = null;
-      // A filing running now ends first, so the log it files gets the play it was filed for.
-      if (filing) await filing;
+      // A filing running now ends first, so the log it files gets the play it was filed for, and no child is left
+      // writing the vault after the sheet has stopped.
+      let said = false;
+      const settle = async () => {
+        while (filing) {
+          if (!said) { said = true; log("Finishing the session's filing before stopping…"); }
+          await filing;
+        }
+      };
+      await settle();
       try { await store.close(); } catch (err) { saveError = err; } // the last write, and its record, land before the end
-      if (filing) await filing; // the last write may have started one
+      await settle(); // the last write may have started one
       // A record write still waiting on its retry gets one last try; if it fails, the next start's
       // reconcile brings the log up to date (it was the server's own last write, or the skeleton).
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; if (lastWritten) writeRecord(lastWritten); }
+      await settle(); // that last try may have started a filing too
       closed = true;
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
       for (const res of [...clients, ...playersClients]) res.end();

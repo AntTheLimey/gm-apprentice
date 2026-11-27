@@ -866,6 +866,12 @@ describe('the session title', () => {
     assert.ok(!isEmptySkeleton(tableLogBody(model, played, { linkFor: links })));
   });
 
+  it('upgrade (every PUT) keeps the title rule: trimmed, at most 80 characters, text only', () => {
+    assert.strictEqual(RS.upgrade({ title: `  ${'z'.repeat(90)} ` }, fresh()).title, 'z'.repeat(80));
+    assert.strictEqual(RS.upgrade({ title: 42 }, fresh()).title, '');
+    assert.strictEqual(RS.upgrade({}, fresh()).title, '');
+  });
+
   it('an empty state has a blank title and is not filed', () => {
     assert.strictEqual(fresh().title, '');
     assert.strictEqual(fresh().filed, null);

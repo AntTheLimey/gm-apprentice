@@ -1904,6 +1904,83 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     assert.strictEqual((await req(run.port, 'GET', '/api/model')).json.session.filed, true);
   });
 
+  it('a stop with a filing retry pending waits for the filing that last try starts: no child outlives the sheet', async () => {
+    const vault = recVault();
+    const lines = [];
+    const calls = [];
+    const f = tableFiler(vault);
+    // the first filing fails as a crash (a Ctrl+C reaching the child); the retry is a minute off, so only close() runs it
+    const runFileLog = async (cmd) => {
+      calls.push(cmd);
+      if (calls.length === 1) return { ok: false, why: 'stopped by SIGINT' };
+      await wait(400);
+      return f.runFileLog(cmd);
+    };
+    const run = await startRec(vault, { runFileLog, deps: { recordRetryMs: [60000], log: (l) => lines.push(l) } });
+    await jot(run, 'The crew lands.');
+    await waitFor(() => lines.some((l) => /stopped by SIGINT/.test(l)));
+    await run.close();
+    assert.strictEqual(calls.length, 2, 'the last try ran');
+    assert.ok(logHas(vault, '29 Nov 2026', /The crew lands\./), 'and finished before close() resolved');
+    assert.ok(lines.includes("Finishing the session's filing before stopping…"), lines.join('\n'));
+  });
+
+  it('a runFileLog that throws at once does not leave the filing stuck', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    let n = 0;
+    const runFileLog = (cmd) => { n++; if (n === 1) throw new Error('spawn EAGAIN'); return f.runFileLog(cmd); };
+    const run = await startRec(vault, { runFileLog });
+    await jot(run, 'The crew lands.');
+    await waitFor(() => logHas(vault, '29 Nov 2026', /The crew lands\./));
+    assert.strictEqual(n, 2, 'retried on the timer');
+  });
+
+  it('a title typed while the filing runs is not shown as the filed name', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault, { delayMs: 500 });
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    await title(run, 'The Lamp Fair');
+    await jot(run, 'The crew lands.');
+    await waitFor(() => f.calls.length === 1);
+    await title(run, 'Too Late');
+    await waitFor(() => logHas(vault, 'The Lamp Fair', /The crew lands\./));
+    const m = (await req(run.port, 'GET', '/api/model')).json;
+    assert.strictEqual(m.session.title, 'Session 15 - The Lamp Fair');
+    assert.strictEqual(f.calls.length, 1);
+  });
+
+  it('a page PUT before filing keeps the title rule: trimmed, at most 80 characters', async () => {
+    const vault = recVault();
+    const run = await startRec(vault, { runFileLog: tableFiler(vault).runFileLog });
+    const got = (await req(run.port, 'GET', '/api/state')).json;
+    const put = await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: { ...got.state, title: `  ${'y'.repeat(100)}  ` } } });
+    assert.strictEqual(put.status, 200);
+    assert.strictEqual((await req(run.port, 'GET', '/api/state')).json.state.title, 'y'.repeat(80));
+  });
+
+  it('a Plan session filing writes no filed into its state', async () => {
+    const vault = copyOf();
+    const session = pickSession(listSessions(vault), 'Session 03 - Next', vault).session;
+    const stem = path.basename(session.index, '.md');
+    const runFileLog = () => {
+      const rel = `${path.dirname(session.index)}/${stem} - Table Log.md`;
+      fs.writeFileSync(path.join(vault, rel), `---\ntype: session-table-log\nsession: "[[${stem}]]"\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
+      const idx = path.join(vault, session.index);
+      fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/^type: session$/m, `type: session\ndocuments:\n  table_log: "[[${stem} - Table Log]]"`));
+      return { ok: true };
+    };
+    const t = createTableServer({ vaultPath: vault, session, fileLog: ['gma'], deps: { delayMs: 20, retryMs: [20], runFileLog } });
+    const port = await listenLocal(t.server, 0);
+    const run = { ...t, port, session, stateId: stateIdOf(session) };
+    servers.push(run);
+    await act(run, [{ type: 'jot', id: 'p-1', text: 'The party camps.' }]);
+    const logFile = path.join(vault, path.dirname(session.index), `${stem} - Table Log.md`);
+    await waitFor(() => fs.existsSync(logFile) && /The party camps\./.test(fs.readFileSync(logFile, 'utf8')));
+    await wait(100);
+    assert.strictEqual((await req(port, 'GET', '/api/state')).json.state.filed, null);
+  });
+
   it('a page PUT never clears filed', async () => {
     const vault = recVault();
     const f = tableFiler(vault);
@@ -1938,5 +2015,22 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     assert.strictEqual(m.session.title, 'Session 15 - Prepped', 'named as the vault filed it');
     await waitFor(() => savedState(run).filed && savedState(run).filed.index === idx);
     assert.match(fs.readFileSync(path.join(vault, idx), 'utf8'), /table_log: "\[\[Session 15 - Prepped - Table Log\]\]"/);
+  });
+
+  it('a title the vault cannot use files under the open date, and record-filed says so (D8, the real gma table-file)', async (t) => {
+    if (spawnSync('python3', ['--version']).error) { t.skip('python3 is not installed: the real gma table-file cannot run'); return; }
+    const vault = recVault();
+    const run = await startRec(vault, { fileLog: { cmd: ['python3', GMA, 'table-file', vault, '--number', '15', '--chapter', 'Chapter 3'], takesTitle: true } });
+    const sse = listen(run.port);
+    try {
+      await title(run, 'A/B');
+      await jot(run, 'The crew lands.');
+      await waitFor(() => logHas(vault, '29 Nov 2026', /The crew lands\./), 30000);
+      assert.deepStrictEqual(session15(vault), ['Session 15 - 29 Nov 2026 - Table Log.md', 'Session 15 - 29 Nov 2026.md']);
+      const ev = await waitFor(() => sse.events.find((e) => e.event === 'record-filed'));
+      assert.strictEqual(ev.data.title, '29 Nov 2026');
+      assert.strictEqual(ev.data.index, `${S15}/Session 15 - 29 Nov 2026.md`);
+      assert.strictEqual((await req(run.port, 'GET', '/api/model')).json.session.title, 'Session 15 - 29 Nov 2026');
+    } finally { sse.close(); }
   });
 });

@@ -81,8 +81,14 @@
       entries(f.rows, `${where}.rows`);
     }
     for (const [id, v] of Object.entries(out.panels)) if (kind(v) !== 'object') throw bad(`panels.${id} is ${kind(v)}, not object`);
+    if (out.title !== undefined) out.title = cleanTitle(out.title);
     return out;
   }
+
+  // The session title as the state keeps it: text, trimmed, at most 80 characters. One rule for the action and for a
+  // whole state a page PUTs (upgrade runs on every PUT).
+  const TITLE_MAX = 80;
+  const cleanTitle = (v) => (typeof v === 'string' ? v.trim().slice(0, TITLE_MAX) : '');
 
   const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -112,9 +118,8 @@
 
   // Each handler changes the (already cloned) state `s`. `a.id` is made by the page; fields beyond
   // the action's own words (titles, text) are the words to keep for an orphan or the Log.
-  const TITLE_MAX = 80;
   const HANDLERS = {
-    setTitle(s, a) { s.title = String(a.title == null ? '' : a.title).trim().slice(0, TITLE_MAX); },
+    setTitle(s, a) { s.title = cleanTitle(a.title); },
     move(s, a, at) {
       if (!a.pc) return;
       const to = a.to;
@@ -964,5 +969,5 @@
     return left.length ? { fight: f.id, title: f.title || '', rows: left } : null;
   }
 
-  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight, fightFigures, endFigureProblem, vitalColumns, poolWords };
+  return { emptyState, upgrade, cleanTitle, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight, fightFigures, endFigureProblem, vitalColumns, poolWords };
 }));
