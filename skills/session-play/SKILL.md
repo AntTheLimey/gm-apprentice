@@ -56,7 +56,8 @@ wrap-up). Note a saved entity in the Play Notes too.
 **Capture notes** — write raw shorthand to the session's Play Notes
 file (`type: session-play-notes`). If none exists, file it with
 `gma vault-write <vault> play-notes-new --session "<index>"
---created-by session-play --write`, which links it from the index (the status stays: only wrap-up marks a session played);
+--created-by session-play --write`, which links it from the index
+(the status stays: only wrap-up marks a session played);
 never note anything in the index body (it publishes). An Export note (`type:
 session-export`) or a Table Log (`type: session-table-log`, the run
 sheet's) beside it is not Play Notes: leave it alone. Before play,

@@ -1630,10 +1630,10 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
       // a Pending Consequences line (a bare bullet under "## GM Notes" is never read: the first version missed it).
       const put = (t, from, to) => { assert.ok(t.includes(from), `the Wrap-Up holds ${from}`); return t.replace(from, to); };
       let edited = text;
-      edited = put(edited, 'Odalys Venn]] is upstairs and has heard all of it.', `Odalys Venn]] is upstairs and has heard all of it. Mind the ${WORD} wharf.`);
-      edited = put(edited, 'starts at midnight.', `starts at midnight, when the ${WORD} bell rings.`);
-      edited = put(edited, 'someone keeps slipping the crew notes with no name on them.', `someone keeps slipping the crew notes signed ${WORD}.`);
-      edited = put(edited, 'will blame the crew to his guild.', `will blame the crew to his guild, citing ${WORD}.`);
+      edited = put(edited, 'Odalys Venn]] is upstairs and has heard all of it.', `Odalys Venn]] is upstairs and has heard all of it. Mind the ${WORD}handoff wharf.`);
+      edited = put(edited, 'starts at midnight.', `starts at midnight, when the ${WORD}clock bell rings.`);
+      edited = put(edited, 'someone keeps slipping the crew notes with no name on them.', `someone keeps slipping the crew notes signed ${WORD}thread.`);
+      edited = put(edited, 'will blame the crew to his guild.', `will blame the crew to his guild, citing ${WORD}conseq.`);
       fs.writeFileSync(wrap, crlf ? edited.replace(/\n/g, '\r\n') : edited);
 
       const session = pickSession(listSessions(vault), null, vault).session;
@@ -1669,7 +1669,9 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
         // the control that matters: the word is in the GM's own model, so the players' filter is what keeps it back
         const gmModel = await req(port, 'GET', '/api/model');
         assert.equal(gmModel.status, 200, gmModel.text);
-        assert.ok(gmModel.text.includes(WORD), 'the word reaches the GM\'s own model');
+        for (const spot of ['handoff', 'clock', 'thread', 'conseq']) {
+          assert.ok(gmModel.text.includes(`${WORD}${spot}`), `the ${spot} marker reaches the GM's own model`);
+        }
         await look();
         noWord('before the page opens');
 
