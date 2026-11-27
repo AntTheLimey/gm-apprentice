@@ -634,5 +634,32 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // S2: the players' column was a fixed 400 px with no fold or grip; the sheet 480 at 1100
+    it(`S2: the players' column folds and drags on the no-Plan page as on the Plan sheet (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const col = () => page.evaluate(`({ side: Math.round(document.getElementById('side').getBoundingClientRect().width), sheet: Math.round(document.getElementById('sheet').getBoundingClientRect().width), folded: document.getElementById('app').classList.contains('sidef') })`);
+        let c = await col();
+        if (width === 1100) {
+          assert.deepStrictEqual([c.folded, c.side, c.sheet], [true, 40, 1100 - 220 - 40], 'folded by itself at 1100');
+          await tap(page, '#sideOpen');
+          c = await col();
+          assert.strictEqual(c.folded, false);
+        } else {
+          assert.deepStrictEqual([c.folded, c.side], [false, 400]);
+          const g = await page.box('#grip');
+          await page.drag(g.left + g.width / 2, 400, g.left + g.width / 2 - 60, 400);
+          assert.strictEqual((await col()).side, 460, 'the grip drags');
+          await tap(page, '#sideFold');
+          c = await col();
+          assert.deepStrictEqual([c.folded, c.side, c.sheet], [true, 40, width - 220 - 40]);
+        }
+        assert.strictEqual(await noSideways(page), true);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });

@@ -1517,7 +1517,7 @@
     }
     if (side.classList.contains('part') || !$('#pvctl')) {
       side.classList.remove('part');
-      side.innerHTML = '<div id="pvctl" class="pvctl"></div>';
+      side.innerHTML = '<button type="button" class="sidestrip" id="sideOpen" title="Open the players\' column" aria-label="Open the players\' column"><span aria-hidden="true">⟨</span><span class="vtitle">Players\' screen</span></button><div id="pvctl" class="pvctl"></div>';
     }
     $('#pvctl').innerHTML = previewControls(d);
   }
@@ -1526,7 +1526,7 @@
   const pvbox = document.createElement('div');
   pvbox.id = 'pvbox';
   pvbox.className = 'pvw';
-  pvbox.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button><button type="button" id="pvToggle" class="mini" aria-controls="pv"></button></div><div id="pv" class="pv"></div>';
+  pvbox.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button><button type="button" id="pvToggle" class="mini" aria-controls="pv"></button><button type="button" id="sideFold" class="mini" title="Fold the players\' column to a thin strip: the sheet takes the room">Fold ⟩</button></div><div id="pv" class="pv"></div>';
   const pvHost = pvbox.querySelector('#pv');
   // Under the preview: each panel's Shown backdrop, with a way back to the group's own place.
   function previewControls(d) {
@@ -1841,16 +1841,21 @@
   const PV_BESIDE_MIN = 300;
   const GRIP_TRAVEL = 120; // the grip hides with less travel than this
   const NARROW = 1000; // at this width and under, one column (gm.css)
+  // Out of a fight the players' column folds and drags the same way (audit S2): `sideFolded` is the GM's fold, null
+  // until the GM sets one (then the page folds it itself where the sheet would be short), and `sw` its width.
+  const SIDE_MIN = 300;
+  const SHEET_FLOOR = 560; // the sheet's least beside the players' column, out of a fight
+  const sideDefault = () => (window.innerWidth >= 1800 ? 560 : 400);
   const L = (() => {
-    const out = { railFolded: false, railFoldedFight: false, folded: false, rw: null, pv: false };
+    const out = { railFolded: false, railFoldedFight: false, folded: false, rw: null, pv: false, sideFolded: null, sw: null };
     try {
       const v = JSON.parse(window.localStorage.getItem(LKEY));
       if (v && typeof v === 'object') {
-        for (const k of ['railFolded', 'railFoldedFight', 'folded', 'pv']) if (typeof v[k] === 'boolean') out[k] = v[k];
-        if (typeof v.rw === 'number' && Number.isFinite(v.rw)) out.rw = v.rw;
+        for (const k of ['railFolded', 'railFoldedFight', 'folded', 'pv', 'sideFolded']) if (typeof v[k] === 'boolean') out[k] = v[k];
+        for (const k of ['rw', 'sw']) if (typeof v[k] === 'number' && Number.isFinite(v[k])) out[k] = v[k];
       }
     } catch (e) { /* nothing kept, or no storage */ }
-    out.auto = { rail: false, pane: false };
+    out.auto = { rail: false, pane: false, side: false };
     return out;
   })();
   // `opened`: a GM click opened an auto-folded column (and `paneW`, the width that pane got where 320 px did not
@@ -1860,7 +1865,7 @@
   const held = { rail: false, pane: false };
   const forget = () => { opened.rail = false; opened.pane = false; opened.paneW = null; held.rail = false; held.pane = false; };
   function saveLayout() {
-    try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv })); } catch (e) { /* not kept */ }
+    try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv, sideFolded: L.sideFolded, sw: L.sw })); } catch (e) { /* not kept */ }
   }
   G.lay = { rail: false, pane: false };
   G.om = ORDER_FLOOR;
@@ -1914,6 +1919,17 @@
     const w = want != null ? want : L.rw != null ? L.rw : def;
     return Math.round(Math.max(room.min, Math.min(room.max, w)));
   }
+  // Out of a fight: the players' column's room (from 300 px to what leaves the sheet 560) and its width.
+  function sideRoom() {
+    const max = Math.max(SIDE_MIN, appW() - railW() - GRIP_W - SHEET_FLOOR);
+    return { min: SIDE_MIN, max };
+  }
+  function sideWidth(want) {
+    const room = sideRoom();
+    const w = want != null ? want : L.sw != null ? L.sw : sideDefault();
+    return Math.round(Math.max(room.min, Math.min(room.max, w)));
+  }
+  const sideLayout = () => !G.pane && window.innerWidth > NARROW;
   // The folds, the widths and where the preview sits, from the GM's choices and the room there is.
   function applyLayout() {
     const app = $('#app');
@@ -1922,7 +1938,7 @@
     const narrow = window.innerWidth <= NARROW;
     let rail = !narrow && (G.pane ? L.railFoldedFight : L.railFolded);
     let pane = fight && L.folded;
-    L.auto = { rail: false, pane: false };
+    L.auto = { rail: false, pane: false, side: false };
     if (!fight) { held.rail = false; held.pane = false; }
     if (fight) {
       const w = appW();
@@ -1990,6 +2006,23 @@
       // one column in a fight: the preview tops the pane, as on a wide window
       pvAt = G.pane ? (L.pv ? $('#sheet') : null) : $('#side');
     }
+    // Out of a fight the players' column, as the fight's pane: folded by the GM, else by the page where its usual width
+    // would leave the sheet under its least (1100 wide with the rail open); a grip to drag it while there is room to.
+    let sideF = false;
+    if (sideLayout()) {
+      if (L.sideFolded === true) sideF = true;
+      else if (L.sideFolded == null && appW() - railW() - GRIP_W - sideDefault() < SHEET_FLOOR) { sideF = true; L.auto.side = true; }
+      const room = sideRoom();
+      const showGrip = !sideF && room.max - room.min >= GRIP_TRAVEL;
+      app.classList.toggle('nogrip', !showGrip);
+      app.style.setProperty('--gripw', `${showGrip ? GRIP_W : 0}px`);
+      app.style.setProperty('--sidew', `${sideF ? PANE_FOLDED : sideWidth()}px`);
+      if (grip) {
+        grip.title = `Drag to resize: the players' column ${room.min}-${room.max} px at this width · double-click to reset`;
+        grip.setAttribute('aria-label', 'Drag to resize the players\' column; double-click to reset');
+      }
+    } else if (grip && fight) grip.setAttribute('aria-label', 'Drag to resize the fight and its beat; double-click to reset');
+    app.classList.toggle('sidef', sideF);
     if (pvAt) {
       const bar = pvAt.id === 'sheet' ? pvAt.querySelector('.rbar') : null;
       // the open preview stays under the pane's bar while the pane scrolls, Hide with it (fix round 1, M4)
@@ -2029,6 +2062,9 @@
       // the last column opened wins: the other one folds again if the room is short
       if (L.auto.rail) { opened.rail = true; opened.pane = false; held.rail = false; }
     } else if (id === 'paneFold') { L.folded = true; opened.pane = false; } else if (id === 'paneOpen') openPane();
+    // the players' column out of a fight: the GM's fold either way is kept, and wins over the page's own (audit S2)
+    else if (id === 'sideFold') L.sideFolded = true;
+    else if (id === 'sideOpen') L.sideFolded = false;
     saveLayout();
     update();
   }
@@ -2042,7 +2078,8 @@
     return {
       grip: { left: r(g && g.left), width: r(g && g.width), shown: gripShown },
       railW: r(box($('#rail')).width), sheetW: r(box($('#sheet')).width), sideW: r(box($('#side')).width),
-      folded: G.lay.pane, railFolded: G.lay.rail, auto: { ...L.auto }, saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv },
+      folded: G.lay.pane, railFolded: G.lay.rail, sideFolded: $('#app').classList.contains('sidef'), auto: { ...L.auto },
+      saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv, sideFolded: L.sideFolded, sw: L.sw },
       pvOpen: Boolean(pv), pvTop: r(pv && pv.top), pvBottom: r(pv && pv.bottom), pvIn: pv ? (pvbox.parentElement.id || pvbox.parentElement.className) : null,
       paneTop: r($('#sheet').scrollTop), paneBox: (() => { const b = box($('#sheet')); return { top: r(b.top), bottom: r(b.bottom), left: r(b.left), right: r(b.right) }; })(),
       orderMin: G.om, gripMoves: G.gripMoves || 0, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
@@ -2057,14 +2094,17 @@
     let startX = 0;
     let startW = 0;
     let via = null; // 'pointer' or 'mouse': a pointer drag ignores the mouse events the browser also sends
-    const begin = (x) => { on = true; startX = x; startW = rightWidth(); grip.classList.add('drag'); document.body.classList.add('dragging'); };
+    // the fight's right pane, or out of a fight the players' column (audit S2): both sit right of the grip
+    let side = false;
+    const begin = (x) => { on = true; side = sideLayout(); startX = x; startW = side ? sideWidth() : rightWidth(); grip.classList.add('drag'); document.body.classList.add('dragging'); };
     const move = (x) => {
       if (!on) return;
       G.gripMoves = (G.gripMoves || 0) + 1;
-      L.rw = rightWidth(startW + (startX - x));
+      let w;
+      let room;
+      if (side) { L.sw = w = sideWidth(startW + (startX - x)); room = sideRoom(); } else { L.rw = w = rightWidth(startW + (startX - x)); room = rightRoom(); }
       applyLayout();
-      const room = rightRoom();
-      grip.classList.toggle('limit', L.rw <= room.min || L.rw >= room.max);
+      grip.classList.toggle('limit', w <= room.min || w >= room.max);
     };
     const stop = () => { if (!on) return; on = false; via = null; grip.classList.remove('drag', 'limit'); document.body.classList.remove('dragging'); saveLayout(); probe(); };
     grip.addEventListener('pointerdown', (ev) => { if (ev.button !== 0) return; ev.preventDefault(); via = 'pointer'; begin(ev.clientX); });
@@ -2075,7 +2115,7 @@
     document.addEventListener('mouseup', () => { if (via === 'mouse') stop(); });
     document.addEventListener('pointercancel', stop);
     window.addEventListener('blur', stop);
-    grip.addEventListener('dblclick', () => { L.rw = null; saveLayout(); applyLayout(); });
+    grip.addEventListener('dblclick', () => { if (sideLayout()) L.sw = null; else L.rw = null; saveLayout(); applyLayout(); });
   })();
   window.addEventListener('resize', () => {
     forget();
@@ -2232,7 +2272,7 @@
     if (!t || t.disabled) return;
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
-    if (t.id === 'railFold' || t.id === 'railOpen' || t.id === 'paneFold' || t.id === 'paneOpen') { foldClick(t.id); return; }
+    if (t.id === 'railFold' || t.id === 'railOpen' || t.id === 'paneFold' || t.id === 'paneOpen' || t.id === 'sideFold' || t.id === 'sideOpen') { foldClick(t.id); return; }
     if (t.id === 'pvToggle' || t.id === 'fPvShow') {
       L.pv = t.id === 'fPvShow' ? true : !L.pv;
       saveLayout();

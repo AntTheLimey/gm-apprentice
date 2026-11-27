@@ -59,7 +59,9 @@ img { max-width: 100%; }
 .hnote button { font-size: .75rem; padding: 0 6px; }
 
 /* the rail and the main column */
-.app { display: grid; grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--sidew, 400px); align-items: start; }
+/* Out of a fight: the rail | the sheet | the grip | the players' column (audit S2: it folds and drags as the fight's pane does;
+   gm.js sets --gripw, --sidew and the fold) */
+.app { display: grid; grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--gripw, 12px) var(--sidew, 400px); align-items: start; }
 /* the rail folds to a 28 px strip (plan 6a Task 10): the whole strip is the button that opens it */
 .app.railf { --railw: 28px; }
 .rail .rhd { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
@@ -235,12 +237,20 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
    the fight's beat cut, its own scroll, --rw wide or a 40 px strip. gm.js sets the widths and the folds. */
 .app.part-side { grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--gripw, 12px) var(--rw, 400px); }
 .app.part-side .side { order: 1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; display: flex; flex-direction: column; }
-.grip { display: none; }
-.app.part-side .grip { display: block; order: 2; align-self: stretch; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); cursor: col-resize; background: var(--line); touch-action: none; }
-.app.part-side .grip:hover, .app.part-side .grip.drag { background: var(--ice); }
-.app.part-side .grip.limit { background: var(--lamp); }
-.app.part-side .grip::after { content: ""; position: absolute; top: 50%; left: 4px; width: 4px; height: 36px; margin-top: -18px; border-left: 1px dotted var(--panel); border-right: 1px dotted var(--panel); }
-.app.part-side.nogrip .grip { visibility: hidden; pointer-events: none; }
+.grip { display: block; align-self: stretch; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); cursor: col-resize; background: var(--line); touch-action: none; }
+.app.part-side .grip { order: 2; }
+.grip:hover, .grip.drag { background: var(--ice); }
+.grip.limit { background: var(--lamp); }
+.grip::after { content: ""; position: absolute; top: 50%; left: 4px; width: 4px; height: 36px; margin-top: -18px; border-left: 1px dotted var(--panel); border-right: 1px dotted var(--panel); }
+.app.nogrip .grip { visibility: hidden; pointer-events: none; }
+/* the players' column folded out of a fight: a strip, as the fight's pane folds */
+.side .sidestrip { display: none; }
+.app.sidef:not(.part-side) .side { padding: 0; overflow: hidden; }
+.app.sidef:not(.part-side) .side > :not(.sidestrip) { display: none; }
+.app.sidef:not(.part-side) .side > .sidestrip { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; height: 100%; padding: 10px 0; border: 0; border-radius: 0; background: var(--panel); color: var(--ice); font-weight: 700; }
+.app.sidef:not(.part-side) .side > .sidestrip:hover { background: var(--ice-soft); }
+.sidestrip .vtitle { color: var(--ice); }
+.app.part-side #sideFold { display: none; }
 body.dragging, body.dragging * { cursor: col-resize !important; user-select: none !important; }
 .app.part-side .sheet { order: 3; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; padding: 0 16px 60px; }
 .rbar { position: sticky; top: 0; z-index: 3; display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px 0 6px; border-bottom: 1px solid var(--line); margin: 0 0 10px; }
@@ -460,7 +470,8 @@ ol.to .defres.failed { color: var(--bad); }
   .side { position: static; height: auto; border-left: none; border-top: 1px solid var(--line); }
   .app.part-side { grid-template-columns: 1fr; }
   .app.part-side .side { overflow: visible; }
-  .app.part-side .grip { display: none; }
+  .grip, .app.part-side .grip { display: none; }
+  #sideFold { display: none; }
   .app.part-side .sheet { position: static; height: auto; overflow: visible; padding: 14px 20px 120px; }
   .fview ol.to { overflow: visible; }
   /* one column: no folds, and the pane's bar sticks under the header */

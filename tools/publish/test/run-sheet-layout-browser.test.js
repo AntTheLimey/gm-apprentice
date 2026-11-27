@@ -1986,3 +1986,113 @@ describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input'
     });
   });
 });
+
+// Task 9, audit S2: outside a fight the players' column had no fold and no grip; it was a fixed 400 px, the sheet 480
+// at 1100, and a drag at its edge selected the page's text. It folds and drags as the fight's pane does, with the same
+// layout code and the same kept choices (`rs:layout`): it folds itself at 1100 unless the GM set a fold, and the GM's
+// fold, either way, is remembered.
+describe('S2: the players\' column outside a fight', { skip: browserSkip() }, () => {
+  const side = (page) => page.evaluate(`(() => { const r = (s) => Math.round(document.querySelector(s).getBoundingClientRect().width);
+    const app = document.getElementById('app'); return { side: r('#side'), sheet: r('#sheet'), rail: r('#rail'), folded: app.classList.contains('sidef'),
+      grip: getComputedStyle(document.getElementById('grip')).visibility !== 'hidden' && document.getElementById('grip').getBoundingClientRect().width > 0,
+      wide: document.documentElement.scrollWidth > innerWidth }; })()`);
+  const probe = (page) => page.evaluate(PROBE);
+  const reloaded = async (page) => {
+    await page.evaluate('window.__before = true');
+    await page.reload();
+    await until(page, '!window.__before && p.saved === "Saved" && p.pending === 0');
+  };
+
+  for (const w of [1449, 1280]) {
+    it(`${w}: the grip drags 60 px each way, Fold folds to a strip, and both are kept through a reload`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: 762 }, async (page) => {
+        await page.goto(`${run.base}/?probe=1`);
+        await settled(page);
+        let s = await side(page);
+        assert.deepStrictEqual([s.side, s.folded, s.grip, s.wide], [400, false, true, false], JSON.stringify(s));
+        assert.strictEqual(s.sheet, w - 220 - 12 - 400);
+        const g = await page.box('#grip');
+        await page.drag(g.left + g.width / 2, 400, g.left + g.width / 2 - 60, 400);
+        s = await side(page);
+        assert.strictEqual(s.side, 460, 'dragged 60 left: the column is 60 wider');
+        assert.strictEqual(await page.evaluate('String(getSelection())'), '', 'a drag selects no text');
+        const g2 = await page.box('#grip');
+        await page.drag(g2.left + g2.width / 2, 300, g2.left + g2.width / 2 + 120, 300);
+        s = await side(page);
+        assert.strictEqual(s.side, 340, 'and 120 back the other way');
+        await reloaded(page);
+        assert.strictEqual((await side(page)).side, 340, 'the width is kept');
+        await tap(page, '#sideFold');
+        s = await side(page);
+        assert.deepStrictEqual([s.folded, s.side, s.grip], [true, 40, false]);
+        assert.strictEqual(s.sheet, w - 220 - 40, 'the sheet takes the room');
+        await reloaded(page);
+        assert.strictEqual((await side(page)).folded, true, 'the fold is kept');
+        // the strip opens it from anywhere along its height
+        const strip = await page.box('#sideOpen');
+        await page.clickAt(strip.left + strip.width / 2, strip.bottom - 40);
+        s = await side(page);
+        assert.deepStrictEqual([s.folded, s.side], [false, 340]);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+  }
+
+  it('1100: the column folds itself; opened by hand it stays open, through a reload and a fight', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      let p = await settled(page);
+      let s = await side(page);
+      assert.deepStrictEqual([s.folded, s.side, s.wide], [true, 40, false], JSON.stringify(s));
+      assert.strictEqual(s.sheet, 1100 - 220 - 40, 'the sheet has the room it lacked (480 before)');
+      assert.strictEqual(p.layout.auto.side, true, 'folded by the page, not the GM');
+      assert.strictEqual(p.layout.saved.sideFolded, null, 'nothing kept');
+      await tap(page, '#sideOpen');
+      s = await side(page);
+      assert.strictEqual(s.folded, false);
+      p = await settled(page);
+      assert.strictEqual(p.layout.saved.sideFolded, false, 'the GM\'s open is kept');
+      await reloaded(page);
+      assert.strictEqual((await side(page)).folded, false, 'a fold the GM set wins over the page\'s own');
+      // a fight and back leaves it as the GM set it
+      p = await fightAt(page, run);
+      sane(p, '1100 fight');
+      await tap(page, '#fEnd');
+      await tap(page, '#fEnd');
+      await until(page, '!p.fight');
+      assert.strictEqual((await side(page)).folded, false);
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  it('a fold set at 1449 holds at 1100, and a window made wide again leaves the GM\'s fold alone', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      await tap(page, '#sideFold');
+      await page.resize(1100, 762);
+      await page.sleep(200);
+      let p = await probe(page);
+      assert.deepStrictEqual([(await side(page)).folded, p.layout.auto.side], [true, false], 'folded by the GM, not the page');
+      await page.resize(1449, 762);
+      await page.sleep(200);
+      assert.strictEqual((await side(page)).folded, true);
+      // never touched: folded at 1100 by the page, open again at 1449
+      await tap(page, '#sideOpen');
+      await page.evaluate('localStorage.removeItem("rs:layout")');
+      await page.reload();
+      await settled(page);
+      await page.resize(1100, 762);
+      await page.sleep(200);
+      assert.strictEqual((await side(page)).folded, true, 'the page folds it at 1100');
+      await page.resize(1449, 762);
+      await page.sleep(200);
+      p = await probe(page);
+      assert.deepStrictEqual([(await side(page)).folded, p.layout.auto.side], [false, false], 'and opens it with room again');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
