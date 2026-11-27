@@ -661,5 +661,28 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // P9 (pinned, never seen on this page): the prototype put a 20 x 17 px Show beside nearly every link, so a near miss on
+    // a link could put something on the players' screen. The cards carry no Show at all, and a press just beside a link
+    // opens nothing and shows nothing.
+    it(`P9: no Show beside the cards' links; a near miss shows the players nothing (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const cards = await page.evaluate(`(() => { const cs = Array.from(document.querySelectorAll('#scenes .card, #coming .card'));
+          return { cards: cs.length, links: cs.reduce((n, c) => n + c.querySelectorAll('a[data-note]').length, 0),
+            shows: cs.reduce((n, c) => n + Array.from(c.querySelectorAll('button')).filter((b) => /show/i.test(b.textContent + ' ' + b.title)).length, 0) }; })()`);
+        assert.ok(cards.cards >= 3 && cards.links >= 3, JSON.stringify(cards));
+        assert.strictEqual(cards.shows, 0, 'no Show on a card');
+        const a = await page.box('#scenes .card a[data-note]');
+        await page.clickAt(a.right + 3, a.top + a.height / 2);
+        await page.sleep(300);
+        assert.strictEqual(await page.evaluate('document.getElementById("drawer").classList.contains("open")'), false);
+        const s = await stateOf(run);
+        assert.deepStrictEqual(s.panels || {}, {}, 'nothing on any panel');
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });
