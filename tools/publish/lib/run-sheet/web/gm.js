@@ -1209,8 +1209,12 @@
       <td>${p.moment ? `<b>Moment:</b> ${md(p, 'moment')}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${md(p, 'touch')}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${md(p, 'arc')}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${md(p, 'thread')}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
+  // A point's box (and its words) marks it landed, and any mark goes back with one click (audit S7); missed and
+  // overtaken have a small button each, and a second click on the same one clears it.
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
-  const PT_TITLE = { '': 'Not marked. Click: landed ✓', landed: 'Landed ✓. Click: tried and missed ✗', missed: 'Tried and missed ✗. Click: overtaken ⊘', overtaken: 'Overtaken ⊘. Click: clear' };
+  const PT_TITLE = { '': 'Not marked. Click: landed ✓', landed: 'Landed ✓. Click: clear', missed: 'Tried and missed ✗. Click: clear', overtaken: 'Overtaken ⊘. Click: clear' };
+  const PT_ALT = [['missed', '✗', 'Tried and missed'], ['overtaken', '⊘', 'Overtaken']];
+  const ptAltHTML = (p, b, st) => `<span class="ptalt">${PT_ALT.map(([m, sym, words]) => `<button type="button" class="mini ${st === m ? 'on' : ''}" data-ptalt="${m}" data-ptkey="${esc(p.key)}" data-beat="${esc(b.key)}" aria-pressed="${st === m}" title="${st === m ? `${words} ${sym}. Click: clear` : `${words} ${sym}`}" aria-label="${words}">${sym}</button>`).join('')}</span>`;
 
   function beatHTML(b, d) {
     const lbl = b.contingency ? 'If triggered' : b.newPlace ? 'New place (typed tonight)' : b.placeBeat ? 'Place' : b.impro ? 'Improvised' : (b.place ? esc(nameOf(b.place)) : esc(b.placeText || ''));
@@ -1249,7 +1253,7 @@
     if ((b.points || []).length) {
       h += `<h4 class="lab">Points to land</h4><ul class="pts">${b.points.map((p) => {
         const st = (G.state.points[p.key] && G.state.points[p.key].mark) || '';
-        return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${PT_TITLE[st]}" aria-label="${esc(PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${p.textHtml || esc(p.text)}</span></li>`;
+        return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${PT_TITLE[st]}" aria-label="${esc(PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${p.textHtml || esc(p.text)}</span>${ptAltHTML(p, b, st)}</li>`;
       }).join('')}</ul>`;
     }
     // 3 Who's here
@@ -2094,7 +2098,9 @@
 
   document.addEventListener('click', (ev) => {
     for (const part of parts) if (part.click && part.click(ev)) return;
-    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup],a[data-pane]');
+    let t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup],a[data-pane]');
+    // a point's words take the click as its box does (audit S7); a link in them still opens its note
+    if (!t) { const w = ev.target.closest('.pt-t'); if (w && w.parentElement) t = w.parentElement.querySelector('button[data-pt]'); }
     if (!t || t.disabled) return;
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
@@ -2157,12 +2163,15 @@
       return;
     }
     if (d.wback) { bringBack(d.wback); return; }
-    if (d.pt) {
+    if (d.pt || d.ptalt) {
+      const key = d.pt || d.ptkey;
       const b = beatOfKey(d.beat);
-      const p = b && b.points.find((x) => x.key === d.pt);
-      const cur = G.state.points[d.pt] && G.state.points[d.pt].mark;
+      const p = b && b.points.find((x) => x.key === key);
+      const cur = (G.state.points[key] && G.state.points[key].mark) || '';
+      // the box: unmarked to landed, any mark back to none; a button: its mark, or none when it is already that
+      const want = d.pt ? (cur ? '' : 'landed') : (cur === d.ptalt ? '' : d.ptalt);
       G.ui.focus = d.beat;
-      act({ type: 'mark', point: d.pt, mark: RS.cyclePoint(cur), beat: d.beat, beatTitle: b ? b.title : '', text: p ? p.text : '' });
+      act({ type: 'mark', point: key, mark: want, beat: d.beat, beatTitle: b ? b.title : '', text: p ? p.text : '' });
       return;
     }
     if (d.hand) {

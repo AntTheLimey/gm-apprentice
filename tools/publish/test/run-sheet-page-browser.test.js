@@ -998,5 +998,44 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // S7: the box cycled landed, missed, overtaken, clear: three more clicks to undo a mistake, and only the 30 px box
+    // took the click
+    it(`S7: a point marked by mistake goes back with one click, and its words take the click (${width})`, async () => {
+      const run = await startApp();
+      const { model } = await api(run, 'GET', '/api/model');
+      const b = model.beats.find((x) => (x.points || []).length);
+      const pt = b.points[0];
+      const li = `${beatSel(b.key)} ul.pts li:first-child`;
+      const mark = async () => { await settled(page0); const s = (await api(run, 'GET', '/api/state')).state; return (s.points[pt.key] || {}).mark || ''; };
+      let page0;
+      await withPage({ width, height: 762 }, async (page) => {
+        page0 = page;
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `${li} .ptb[data-pt]`);
+        assert.strictEqual(await mark(), 'landed');
+        await tap(page, `${li} .ptb[data-pt]`);
+        assert.strictEqual(await mark(), '', 'a second click on the same mark clears it');
+        // the words take the click as well as the box
+        await tap(page, `${li} .pt-t`);
+        assert.strictEqual(await mark(), 'landed', 'a click on the words marks it');
+        await tap(page, `${li} .pt-t`);
+        assert.strictEqual(await mark(), '', 'and a second one clears it');
+        // missed and overtaken have their own buttons; one click on the box, or on the same button, clears either
+        await tap(page, `${li} [data-ptalt="missed"]`);
+        assert.strictEqual(await mark(), 'missed');
+        assert.strictEqual(await page.evaluate(`document.querySelector('${li} .ptb[data-pt]').textContent`), '✗');
+        await tap(page, `${li} .ptb[data-pt]`);
+        assert.strictEqual(await mark(), '', 'one click on the box clears a missed mark');
+        await tap(page, `${li} [data-ptalt="overtaken"]`);
+        assert.strictEqual(await mark(), 'overtaken');
+        await tap(page, `${li} [data-ptalt="missed"]`);
+        assert.strictEqual(await mark(), 'missed', 'the other button changes it');
+        await tap(page, `${li} [data-ptalt="missed"]`);
+        assert.strictEqual(await mark(), '', 'the same button again clears it');
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });

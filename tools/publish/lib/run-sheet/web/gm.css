@@ -153,6 +153,11 @@ ul.pts li { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; }
 .ptb.missed { border-color: var(--bad); color: var(--bad); }
 .ptb.overtaken { color: var(--muted); border-style: dashed; }
 ul.pts li > span { padding-top: 4px; }
+/* audit S7: the words take the click as the box does; missed and overtaken are a small button each, at the line's end */
+ul.pts .pt-t { cursor: pointer; flex: 1 1 auto; }
+ul.pts .ptalt { display: inline-flex; gap: 2px; flex: none; padding-top: 2px; }
+ul.pts .ptalt .mini { min-width: 24px; font-family: var(--mono); color: var(--muted); }
+ul.pts .ptalt .mini.on { color: var(--ink); border-color: var(--ink); }
 ul.pts li.landed .pt-t { color: var(--muted); text-decoration: line-through; }
 ul.pts li.missed .pt-t::after { content: " · tried, missed: still out there"; color: var(--bad); font-size: .8rem; }
 ul.pts li.overtaken .pt-t { color: var(--muted); }
