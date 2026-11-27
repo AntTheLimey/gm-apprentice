@@ -2126,3 +2126,27 @@ describe('the find box from the keyboard', { skip: browserSkip() }, () => {
     });
   });
 });
+
+// Task 9 fix round 1 (audit S7 in a fight): the cut's points take missed and overtaken as the beat's do
+describe('S7 in a fight: the cut\'s points', { skip: browserSkip() }, () => {
+  it('missed and overtaken are settable on the cut, and one click on the box clears either', async () => {
+    const run = await start();
+    const b = run.model.beats[0];
+    assert.ok((b.points || []).length, 'the first beat has points');
+    const key = b.points[0].key;
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightAt(page, run);
+      const li = '#fightCut ul.pts li:first-child';
+      const mark = async () => { await settled(page); const s = (await (await fetch(`${run.base}/api/state`)).json()).state; return (s.points[key] || {}).mark || ''; };
+      await tap(page, `${li} [data-ptalt="missed"]`);
+      assert.strictEqual(await mark(), 'missed');
+      await tap(page, `${li} [data-ptalt="overtaken"]`);
+      assert.strictEqual(await mark(), 'overtaken');
+      await tap(page, `${li} .ptb[data-pt]`);
+      assert.strictEqual(await mark(), '', 'one click on the box clears it');
+      await tap(page, `${li} .pt-t`);
+      assert.strictEqual(await mark(), 'landed', 'the words take the click');
+      sane(await P(page), 'cut points');
+    });
+  });
+});

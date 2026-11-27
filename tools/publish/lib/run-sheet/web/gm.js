@@ -2605,7 +2605,7 @@
     focusTo,
     parts,
     // helpers the parts share with the page
-    esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
+    esc, armBtn, armed, link, face, nameOf, getJson, ptAltHTML, PT_TITLE, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
     // the no-Plan page (Task 8): the crew the sheet has not placed stand where the record has them, before Fight here
     placeCrew,
     // the fight's layout (plan 6a Task 10)

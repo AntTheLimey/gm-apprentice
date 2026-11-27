@@ -2056,7 +2056,8 @@
   function pointsHTML(b, lit) {
     return `<ul class="pts">${(b.points || []).map((p) => {
       const st = (state().points[p.key] && state().points[p.key].mark) || '';
-      return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" aria-label="Mark this point">${PT[st]}</button><span class="pt-t">${lit.has(p.key) ? '<b class="now">NOW</b> ' : ''}${p.textHtml || esc(p.text)}</span></li>`;
+      // the beat's own marks (audit S7): the box lands or clears, missed and overtaken a small button each
+      return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${esc(RP.PT_TITLE[st])}" aria-label="${esc(RP.PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${lit.has(p.key) ? '<b class="now">NOW</b> ' : ''}${p.textHtml || esc(p.text)}</span>${RP.ptAltHTML(p, b, st)}</li>`;
     }).join('')}</ul>`;
   }
   function cutHTML(d) {
