@@ -156,35 +156,41 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
 
   function leadFrom({ clocks: cs, handoff: h, threats: ts, whereNow: where }) {
     const allPlaces = index.notes().filter(isPlace);
-    const wordsOf = (s) => uniq((String(s).match(/\p{L}{5,}/gu) || []).map((w) => w.toLowerCase())).sort((a, b) => b.length - a.length);
+    // Words that name a kind of place, never one place: they match nothing.
+    const GENERIC = new Set(['street', 'house', 'station', 'market', 'night', 'district', 'quarter', 'square', 'tower', 'hall',
+      'road', 'bridge', 'gate', 'city', 'town', 'village', 'building', 'north', 'south', 'east', 'west', 'upper', 'lower', 'great']);
+    const wordsOf = (s) => uniq((String(s).match(/\p{L}{5,}/gu) || []).map((w) => w.toLowerCase())).filter((w) => !GENERIC.has(w)).sort((a, b) => b.length - a.length);
     const nameWords = (p) => new Set(wordsOf(`${nameOf(p)} ${stemOf(p)}`));
     const area = where.place ? areaOf(index, where.place) : null;
+    // A clock word names a place only when it matches exactly one location, or exactly one inside the crew's area.
+    // Else there is no place from that word: the next word is tried, and if none gives one, no place (never a guess).
     let found = null;
     for (const clock of cs) {
       for (const w of wordsOf(clock)) {
         const named = allPlaces.filter((p) => nameWords(p).has(w));
-        if (!named.length) continue;
-        const inside = (p) => (area && chain(p).includes(area) ? 1 : 0);
-        named.sort((a, b) => inside(b) - inside(a) || depth(b) - depth(a) || a.localeCompare(b));
-        found = { clock, word: w, place: named[0] };
-        break;
+        const near = area ? named.filter((p) => chain(p).includes(area)) : [];
+        const one = named.length === 1 ? named : (near.length === 1 ? near : []);
+        if (one.length) { found = { clock, word: w, place: one[0] }; break; }
       }
       if (found) break;
     }
     const clock = found ? found.clock : cs[0];
     const place = found ? found.place : null;
     const people = uniq(pt.links(h).map((t) => index.resolve(t)).filter((p) => p && PEOPLE_TYPES.has(typeOf(p))));
-    // Threats whose own notes mention the clock's word or link the place: a threat names its note by a link, or by a
-    // word of its name (`Corvin's guild` is Corvin Tash).
+    // Threats tied to the clock: a threat reaches a note by a link, or by the note's full name or an alias; the note
+    // counts when it links the lead place or holds the key word that gave the place.
     let hits = [];
     if (found) {
-      const re = new RegExp(`\\b${found.word}\\b`, 'i');
+      const re = new RegExp(`(?<![\\p{L}\\p{N}])${found.word}(?![\\p{L}\\p{N}])`, 'iu');
+      const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const said = (t, name) => new RegExp(`(?<![\\p{L}\\p{N}])${esc(name)}(?![\\p{L}\\p{N}])`, 'iu').test(t);
       const named = new Set();
       for (const t of ts) {
         for (const p of pt.links(t).map((x) => index.resolve(x))) if (p && THREAT_TYPES.has(typeOf(p))) named.add(p);
         for (const p of index.notes().filter((n) => THREAT_TYPES.has(typeOf(n)))) {
-          const words = (String(nameOf(p)).match(/\p{L}{4,}/gu) || []);
-          if (words.some((w) => new RegExp(`\\b${w}(?:'s)?\\b`).test(t))) named.add(p);
+          const fm = fmOf(p);
+          const names = [nameOf(p), ...[fm.aliases, fm.gm_aliases].flat().filter((x) => typeof x === 'string' && x.trim())];
+          if (names.some((n) => said(t, n.trim()))) named.add(p);
         }
       }
       hits = [...named].filter((p) => {
