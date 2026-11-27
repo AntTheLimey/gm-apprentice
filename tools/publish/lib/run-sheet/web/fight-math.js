@@ -1020,6 +1020,26 @@
       .concat({ note: null, name: text, type: null, isNew: true, label: newLabel(text) });
   }
 
+  // What Enter takes in Move them (Task 9 fix round 1): the first of the list's known places that the typed words truly
+  // name, a word of it starting with them (castSearch's word-start hit) or a near typo of it (within nearCast's edits).
+  // A place that only shares the last word ("The Old Inn", The Salt Inn) stays in the list for a click, and Enter then
+  // makes the typed place. Null when none qualifies.
+  function enterChoice(cast, query, search) {
+    const text = String(query == null ? '' : query).replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+    const q = fold(text);
+    const k = nameKey(text);
+    const most = Math.min(2, Math.floor(k.length / 3));
+    const names = (c) => [c.name, ...(c.aliases || []), ...(c.gmAliases || [])].filter(Boolean);
+    const wordStart = (c) => names(c).some((n) => { const t = fold(n); return t.startsWith(q) || t.split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(q)); });
+    const typo = (c) => k.length >= 3 && names(c).some((n) => { const t = nameKey(n); return Boolean(t) && editDistance(k, t) <= most; });
+    const pick = addChoices(cast, text, search, Infinity).filter((x) => !x.isNew).find((x) => {
+      const c = (cast || []).find((y) => y.note === x.note);
+      return c && (wordStart(c) || typo(c));
+    });
+    return pick || null;
+  }
+
   // A row's group: its note plus its name without a trailing number (v8's groupOf). A PC or the Lair row has none.
   const groupKey = (r) => `${r.note || ''}|${String(r.name || '').replace(/\s+\d+$/, '')}`;
   const groupMates = (rows, r) => (r && r.kind !== 'pc' && r.kind !== 'lair' ? rows.filter((x) => x.kind !== 'pc' && x.kind !== 'lair' && groupKey(x) === groupKey(r)) : []);
@@ -1101,7 +1121,7 @@
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, copiesOf, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
-    addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched, copyHolds, copyFields, sameForAllTakers, sameForAllCount, FROM_KEY, SAME_KEYS,
+    addChoices, enterChoice, sameName, groupKey, groupMates, placeRow, undoable, untouched, copyHolds, copyFields, sameForAllTakers, sameForAllCount, FROM_KEY, SAME_KEYS,
     SIDES, isSide, noteSide, sideOfRow, isFoe,
   };
 }));

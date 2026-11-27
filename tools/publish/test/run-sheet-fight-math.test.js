@@ -486,6 +486,27 @@ test('near match comes first: Petr Goodwin finds Peter Goodwin, and New is last'
   assert.ok(!M.addChoices(cast, 'Ze', RS.castSearch).slice(0, -1).some((x) => x.note === 'N/Anna Goodwin.md'));
 });
 
+// Task 9 fix round 1: Enter in Move them takes a known place only on a word-start hit or a near typo, never on a shared
+// last word alone ("The Old Inn" is not The Salt Inn; "North Gate" is not The Gate). Such a place stays in the list.
+test('enterChoice: a word-start hit or a near typo wins on Enter; a shared last word never does', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const places = [
+    { note: 'L/The Salt Inn.md', name: 'The Salt Inn', type: 'location' },
+    { note: 'L/The Gate.md', name: 'The Gate', type: 'location' },
+    { note: 'L/Harbour District.md', name: 'Harbour District', type: 'location' },
+  ];
+  const at = (q) => { const c = M.enterChoice(places, q, RS.castSearch); return c && c.note; };
+  assert.equal(at('salt'), 'L/The Salt Inn.md', 'a word start');
+  assert.equal(at('harb'), 'L/Harbour District.md');
+  assert.equal(at('The Slat Inn'), 'L/The Salt Inn.md', 'a near typo');
+  assert.equal(at('gate'), 'L/The Gate.md');
+  assert.equal(at('The Old Inn'), null, 'a shared last word is not enough');
+  assert.equal(at('North Gate'), null);
+  assert.equal(at('alt'), null, 'inside a word is not a word start');
+  // the list still offers the last-word match for a click
+  assert.ok(M.addChoices(places, 'The Old Inn', RS.castSearch).some((c) => c.note === 'L/The Salt Inn.md'));
+});
+
 test('placeRow: one insert at the sorted place, the rest never re-sorted', () => {
   const r = (id, ini, o) => row({ id, ini, ...o });
   const rows = [r('a', 20), r('b', 5), r('c', 12), r('d', null), r('e', null)];

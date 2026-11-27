@@ -554,14 +554,17 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         const v = await inView(page, '#where [data-movesay]');
         assert.ok(v.whole, `beside the box, in view: ${JSON.stringify(v)}`);
         assert.deepStrictEqual((await stateOf(run)).positions, {}, 'nobody moved');
-        await page.type('The Old Pier');
+        // fix round 1: "The Old Inn" shares only its last word with The Salt Inn, which the list offers for a click; Enter
+        // makes the typed place
+        await page.type('The Old Inn');
+        await page.waitFor('Array.from(document.querySelectorAll("#where [data-movepick]"), (b) => b.textContent).includes("The Salt Inn")');
         await page.key('Enter');
         await settled(page);
         const s = await stateOf(run);
         const typed = s.improvised.find((i) => i.newPlace);
-        assert.strictEqual(typed && typed.title, 'The Old Pier');
+        assert.strictEqual(typed && typed.title, 'The Old Inn');
         assert.ok(Object.values(s.positions).length === 4 && Object.values(s.positions).every((x) => x.beat === typed.key), 'the crew went there');
-        assert.match(await page.evaluate('document.querySelector("#where .wrow").textContent'), /The Old Pier/);
+        assert.match(await page.evaluate('document.querySelector("#where .wrow").textContent'), /The Old Inn/);
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });

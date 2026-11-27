@@ -496,7 +496,7 @@
     return place ? link(place) : esc(groupLabel(g.key, d));
   }
   // The box: type a place (the page's own list under it offers the near ones; no browser datalist as well, final
-  // review P-A2). Enter takes the top known hit, and with none, makes the typed place, as "+ New place: <typed>" under
+  // review P-A2). Enter takes a known place its words truly name (FM.enterChoice), and with none, makes the typed place, as "+ New place: <typed>" under
   // it does (audit S6, which overturned P-S10's explicit choice only). Enter with nothing typed says so beside the box.
   // `where` tells a group's boxes apart (Hand over, a Here strip): each keeps its own focus and choices.
   function moveBoxHTML(group, where) {
@@ -2442,8 +2442,10 @@
     if (d.moveg !== undefined && t.tagName === 'INPUT') {
       ev.preventDefault();
       if (!t.value.trim()) { moveSay(d.movebox, MOVE_EMPTY); return; }
-      const top = placeChoices(t.value)[0];
-      if (top && !top.isNew) { moveGroup(d.moveg, { note: top.note }); return; }
+      // a known place only when the words truly name it (a word's start, a near typo); a shared last word alone stays a
+      // choice in the list (Task 9 fix round 1)
+      const top = FM ? FM.enterChoice(knownPlaces(), t.value, RS.castSearch) : null;
+      if (top) { moveGroup(d.moveg, { note: top.note }); return; }
       moveGroup(d.moveg, { name: t.value });
     }
   });

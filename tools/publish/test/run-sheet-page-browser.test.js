@@ -1091,6 +1091,18 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
         const typed = s.improvised.find((i) => i.newPlace);
         assert.strictEqual(typed && typed.title, 'Rusty Anchor');
         assert.ok(Object.values(s.positions).every((x) => x.beat === typed.key), 'both PCs went there');
+        // fix round 1: "North Gate" shares only its last word with The Gate: Enter makes the typed place, never The Gate
+        const nbox = `${beatSel(typed.key)} input[data-moveg]`;
+        await page.waitFor(`document.querySelector('${nbox}')`);
+        await tap(page, nbox);
+        await page.type('North Gate');
+        await page.waitFor(`document.querySelector('${beatSel(typed.key)} [data-movepick]')`);
+        await page.key('Enter');
+        await settled(page);
+        s = (await api(run, 'GET', '/api/state')).state;
+        const ng = s.improvised.find((i) => i.newPlace && i.title === 'North Gate');
+        assert.ok(ng, `North Gate made: ${JSON.stringify(s.improvised.map((i) => i.title))}`);
+        assert.ok(Object.values(s.positions).every((x) => x.beat === ng.key), 'both PCs went to North Gate');
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
