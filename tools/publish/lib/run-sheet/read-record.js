@@ -25,6 +25,14 @@ const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const said = (t, name, flags = 'iu') => new RegExp(`(?<![\\p{L}\\p{N}])${esc(name)}(?![\\p{L}\\p{N}])`, flags).exec(t);
 // Links and emphasis out, so a line reads as the words a GM would say.
 const stripMd = (s) => nl(s).replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, '$2').replace(/[*~`]/g, '');
+// A line that is one struck span and nothing else; "~~old~~ still true ~~maybe~~" is a live line.
+const STRUCK = /^\s*~~(?:(?!~~)[\s\S])+~~\s*$/;
+// The notes a card may be about (the ontology's entity types, subtypes included). Sessions, chapters, scenes, plans,
+// wrap-ups and other records never count as a subject.
+const ENTITY_TYPES = new Set(['npc', 'npc_group', 'creature', 'beast', 'undead', 'construct', 'spirit', 'deity', 'aberration',
+  'faction', 'organization', 'government', 'corporation', 'cult', 'guild', 'military', 'criminal', 'location',
+  'item', 'weapon', 'armor', 'vehicle', 'treasure', 'relic', 'tool', 'consumable', 'document', 'spell', 'map', 'letter', 'prophecy',
+  'contract', 'journal', 'prop', 'clue', 'event', 'battle', 'ritual', 'disaster', 'discovery', 'betrayal_event', 'celebration']);
 const HOP = /^(member_of|located_at|part_of|works_for|owned_by|based_at)$/i;
 // Words that say nothing about which item a Keeper Checklist line is.
 const STOP = new Set('that this with what whether from their they have been were will into which about there where when after before over under while still only also every each some more most other than then them your'.split(' '));
@@ -217,7 +225,7 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   // A ticked line drops at most one open item: the one sharing the most words with it (three or more). On a tie it drops
   // nothing: keeping a finished item costs a glance, dropping a live one loses it.
   const openTexts = ['unresolved threads', 'npcs needing follow-up', 'player-stated intentions', 'pending consequences', 'resolved threads']
-    .flatMap((n) => sectionBullets(new RegExp(`^${n}$`, 'i'))).filter((s) => !/^\s*~~[\s\S]*~~\s*$/.test(s));
+    .flatMap((n) => sectionBullets(new RegExp(`^${n}$`, 'i'))).filter((s) => !STRUCK.test(s));
   const ticked = new Set();
   for (const line of doneLines) {
     const scored = openTexts.map((s) => [s, [...wordSet(s)].filter((x) => line.has(x)).length]);
@@ -225,7 +233,7 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     const best = scored.filter((x) => x[1] === top);
     if (top >= 3 && best.length === 1) ticked.add(best[0][0]);
   }
-  const isDone = (s) => /^\s*~~[\s\S]*~~\s*$/.test(s) || ticked.has(s);
+  const isDone = (s) => STRUCK.test(s) || ticked.has(s);
   const lead = comingUp.lead;
   // An intention naming the lead card's key word is the lead's schedule, not a card.
   const onLead = (s) => Boolean(lead && lead.word) && said(s, lead.word) !== null;
@@ -274,7 +282,7 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   // and everything above it (they would join nearly every card).
   const broad = new Set(whereNow.place ? chain(areaOf(index, whereNow.place)) : []);
   const pcSet = new Set(pcNotes);
-  const keep = (n) => Boolean(n) && n !== (lead && lead.place) && !pcSet.has(n) && !broad.has(n) && typeOf(n) !== 'pc';
+  const keep = (n) => Boolean(n) && ENTITY_TYPES.has(typeOf(n)) && n !== (lead && lead.place) && !pcSet.has(n) && !broad.has(n);
   const subjectsOf = (list) => {
     const out = new Map();
     for (const it of list) for (const n of it.links) {
@@ -313,7 +321,9 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     else if (grp.joinedOn) {
       const count = new Map();
       for (const it of grp.items) for (const n of uniq([...it.links, ...subjectsOf([it]).keys()])) if (keep(n)) count.set(n, (count.get(n) || 0) + 1);
-      const best = [...count.entries()].sort((x, y) => y[1] - x[1] || (x[0] === grp.joinedOn ? -1 : y[0] === grp.joinedOn ? 1 : 0))[0];
+      // most items linking or reaching it (by link or one hop); a tie goes to the note first seen in the record, in item order
+      // (the sort is stable and the map is filled in that order)
+      const best = [...count.entries()].sort((x, y) => y[1] - x[1])[0];
       title = nameOf(best ? best[0] : grp.joinedOn);
     } else title = firstFive(grp.items[0].md);
     const texts = grp.items.map((it) => it.md).sort();

@@ -418,10 +418,41 @@ describe('the possible scenes', () => {
       const dir = open({ crlf });
       edit(dir, W14, link('[[Dock Row]]'));
       const m = readRecord(dir, session());
-      assert.deepStrictEqual(titles(m), ['Harl Brannock', 'Corvin Tash', 'Dock Row']);
+      // Dock Row and Odalys are each reached by two items; the tie goes to the note first seen in the record (Odalys)
+      assert.deepStrictEqual(titles(m), ['Harl Brannock', 'Corvin Tash', 'Odalys Venn']);
       assert.deepStrictEqual(m.record.cards[2].places, [loc('Dock Row')]);
     });
   }
+
+  it('a session note two items link is no subject: they do not join', () => {
+    const dir = open();
+    edit(dir, W14, (t) => t
+      .replace('so someone else did.', 'so someone else did. See [[Session 14 - Ledger]].')
+      .replace('with no name on them.', 'with no name on them. See [[Session 14 - Ledger]].'));
+    const m = readRecord(dir, session());
+    assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Harl Brannock', 'Corvin Tash']);
+    assert.deepStrictEqual(m.record.cards[0].notes, [ODALYS]);
+    // a chapter note neither
+    edit(dir, W14, (t) => t.split('[[Session 14 - Ledger]]').join('[[Chapter 3]]'));
+    assert.deepStrictEqual(titles(readRecord(dir, session())), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Harl Brannock', 'Corvin Tash']);
+  });
+
+  it('only an item that is one struck span drops; a partly struck item is live', () => {
+    const dir = open();
+    edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.',
+      '- ~~Old rumour~~ the crew still hear of a masked buyer ~~maybe~~\n- ~~**Dead lead:** nothing came of it.~~'));
+    const all = readRecord(dir, session()).record.cards.flatMap((c) => c.items.map((i) => i.md)).join('\n');
+    assert.match(all, /masked buyer/);
+    assert.doesNotMatch(all, /Dead lead/);
+  });
+
+  it('a title counts one-hop notes: the Guild, linked by one item, beats Corvin, linked by two', () => {
+    const dir = open();
+    edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps', '- **Unsigned notes:** someone from the [[Lamplighters Guild]] keeps'));
+    const m = readRecord(dir, session());
+    // Corvin's two items link Corvin twice; the Guild is reached by his two items (hop) and linked by the third: three
+    assert.strictEqual(m.record.cards.find((c) => c.items.length === 3).title, 'Lamplighters Guild');
+  });
 
   it('an intention naming no lead word is a card of its own, and a placeless lead has no schedule', () => {
     const dir = open();
