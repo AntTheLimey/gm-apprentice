@@ -1763,15 +1763,20 @@
     document.querySelectorAll('[data-noted]').forEach((e) => { e.textContent = notedText(e.dataset.noted); });
   }
   function clearNoted() { G.ui.noted = null; showNoted(); }
-  // Typing in the header's Jot box scrolled the page (Chrome brings the caret of a box in the sticky header into view
-  // as if the header sat at the page's top): the page is put back where the GM was reading (fix round 1).
+  // Typing in the header's Jot box scrolled the page about 44 px: `html`'s scroll-padding-top (gm.css, so Tab lands
+  // below the sticky header) covers the header itself, and the browser scrolls to bring the caret out of that band. A
+  // scroll-margin on the box does not cancel it (tried, Task 9 fix round 2), so the page is put back after each input,
+  // unless the GM scrolled meanwhile (the wheel, a touch, a scroll key).
   (() => {
     const box = $('#hjot');
     if (!box) return;
     let y = null;
     box.addEventListener('beforeinput', () => { y = window.scrollY; });
-    const back = () => { if (y !== null && window.scrollY !== y) window.scrollTo(window.scrollX, y); };
-    box.addEventListener('input', () => { back(); requestAnimationFrame(() => { back(); y = null; }); });
+    box.addEventListener('input', () => { if (y !== null && window.scrollY !== y) window.scrollTo(window.scrollX, y); y = null; });
+    const drop = () => { y = null; };
+    window.addEventListener('wheel', drop, { passive: true, capture: true });
+    window.addEventListener('touchmove', drop, { passive: true, capture: true });
+    box.addEventListener('keydown', (ev) => { if (/^(PageUp|PageDown|Home|End|ArrowUp|ArrowDown)$/.test(ev.key)) drop(); });
   })();
 
   function bring(beat, p) {
