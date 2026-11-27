@@ -4,6 +4,7 @@
 // card, and where the crew is. It shows what the record holds and never forecasts. A template placeholder (a line that
 // is only `{...}`, a checklist item `- [ ] {...}`, a label with nothing after it) reads as empty.
 
+const crypto = require('node:crypto');
 const pt = require('./plan-text');
 const { buildIndex, stemOf } = require('./notes');
 const { readSheet } = require('./read');
@@ -19,6 +20,15 @@ const THREAT_TYPES = new Set(['npc', 'creature', 'faction', 'organization']);
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
 const nl = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n');
 const uniq = (list) => [...new Set(list)];
+const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// A name said whole: not inside a longer word (Unicode letters and digits count as word characters).
+const said = (t, name, flags = 'iu') => new RegExp(`(?<![\\p{L}\\p{N}])${esc(name)}(?![\\p{L}\\p{N}])`, flags).exec(t);
+// Links and emphasis out, so a line reads as the words a GM would say.
+const stripMd = (s) => nl(s).replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, '$2').replace(/[*~`]/g, '');
+const HOP = /^(member_of|located_at|part_of|works_for|owned_by|based_at)$/i;
+// Words that say nothing about which item a Keeper Checklist line is.
+const STOP = new Set('that this with what whether from their they have been were will into which about there where when after before over under while still only also every each some more most other than then them your'.split(' '));
+const wordSet = (t) => new Set((stripMd(t).toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}']*/gu) || []).filter((w) => w.length > 3 && !STOP.has(w)));
 
 // A day and a short month, never the locale's ("29 Nov"); what is not a date reads as written.
 function shortDate(v) {
@@ -182,8 +192,6 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     let hits = [];
     if (found) {
       const re = new RegExp(`(?<![\\p{L}\\p{N}])${found.word}(?![\\p{L}\\p{N}])`, 'iu');
-      const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const said = (t, name) => new RegExp(`(?<![\\p{L}\\p{N}])${esc(name)}(?![\\p{L}\\p{N}])`, 'iu').test(t);
       const named = new Set();
       for (const t of ts) {
         for (const p of pt.links(t).map((x) => index.resolve(x))) if (p && THREAT_TYPES.has(typeOf(p))) named.add(p);
@@ -199,7 +207,127 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
         return re.test(raw) || pt.links(raw).some((t) => index.resolve(t) === place);
       }).sort();
     }
-    return { title: clock, clock, place, people, hits, md: h };
+    return { title: clock, clock, word: found ? found.word : null, place, people, hits, schedule: [], md: h };
+  }
+
+  // Possible scenes: the open items of the last Wrap-Up (rounds 8 and 9). Cards come only from Unresolved Threads, NPCs
+  // Needing Follow-Up and Player-Stated Intentions; PC Carry-Forward never makes one.
+  const sectionBullets = (re) => bulletsOf(sectionText(carries, 4, re));
+  const doneLines = nl(sectionText(gm, 3, /^keeper checklist$/i)).split('\n').filter((l) => /^\s*[-*+]\s*\[x\]/i.test(l)).map(wordSet);
+  const isDone = (s) => /^\s*~~[\s\S]*~~\s*$/.test(s) || doneLines.some((w) => [...wordSet(s)].filter((x) => w.has(x)).length >= 3);
+  const lead = comingUp.lead;
+  // An intention naming the lead card's key word is the lead's schedule, not a card.
+  const onLead = (s) => Boolean(lead && lead.word) && said(s, lead.word) !== null;
+  const items = [];
+  for (const [source, re] of [['Unresolved Threads', /^unresolved threads$/i], ['NPCs Needing Follow-Up', /^npcs needing follow-up$/i], ['Player-Stated Intentions', /^player-stated intentions$/i]]) {
+    for (const md of wrapUp ? sectionBullets(re) : []) {
+      if (isDone(md)) continue;
+      if (source === 'Player-Stated Intentions' && onLead(md)) { lead.schedule.push(md); continue; }
+      items.push({ md, source });
+    }
+  }
+
+  // People: NPC and creature notes. A full name, an alias or a link always names one; a first name or surname only when no
+  // other NPC note shares that word.
+  const npcs = index.notes().filter((n) => PEOPLE_TYPES.has(typeOf(n)));
+  const partsOf = (n) => nameOf(n).split(/\s+/).filter(Boolean);
+  const wordOwners = new Map();
+  for (const n of npcs) for (const w of new Set([...partsOf(n), ...stemOf(n).split(/\s+/)].map(low))) wordOwners.set(w, (wordOwners.get(w) || 0) + 1);
+  const namesFor = (n) => {
+    const fm = fmOf(n);
+    const whole = [nameOf(n), ...[fm.aliases, fm.gm_aliases].flat().filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim())];
+    const ps = partsOf(n);
+    const single = ps.length > 1 ? [ps[0], ps[ps.length - 1]].filter((w) => w.length >= 3 && wordOwners.get(low(w)) === 1) : [];
+    return { whole, single };
+  };
+  const peopleOf = (md) => {
+    const at = new Map();
+    const note = (n, pos) => { if (!at.has(n) || pos < at.get(n)) at.set(n, pos); };
+    for (const m of md.matchAll(/\[\[([^\]|#]+)/g)) { const n = index.resolve(m[1].trim()); if (n && PEOPLE_TYPES.has(typeOf(n))) note(n, m.index); }
+    for (const n of npcs) {
+      const { whole, single } = namesFor(n);
+      for (const w of whole) { const h = said(md, w.trim()); if (h) note(n, h.index); }
+      for (const w of single) { const h = said(md, w, 'u'); if (h) note(n, h.index); }
+    }
+    return [...at.entries()].sort((a, b) => a[1] - b[1]).map((e) => e[0]);
+  };
+  for (const it of items) {
+    it.links = uniq(pt.links(it.md).map((x) => index.resolve(x)).filter(Boolean));
+    it.people = peopleOf(it.md);
+    // a place said as "from [[X]]" is where something came from, not where it is
+    it.places = uniq([...it.md.matchAll(/(\bfrom\s+)?\[\[([^\]|#]+)/gi)].filter((m) => !m[1]).map((m) => index.resolve(m[2].trim())).filter(isPlace));
+  }
+
+  // Joins: cards sharing a subject note join, one hop, no chains. A card's subject notes are the notes its items link plus
+  // one hop through each linked note's own relationships. Left out: the lead card's place, the PCs, and the party's area
+  // and everything above it (they would join nearly every card).
+  const broad = new Set(whereNow.place ? chain(areaOf(index, whereNow.place)) : []);
+  const pcSet = new Set(pcNotes);
+  const keep = (n) => Boolean(n) && n !== (lead && lead.place) && !pcSet.has(n) && !broad.has(n) && typeOf(n) !== 'pc';
+  const subjectsOf = (list) => {
+    const out = new Map();
+    for (const it of list) for (const n of it.links) {
+      if (!keep(n)) continue;
+      out.set(n, true);
+      for (const r of Array.isArray(fmOf(n).relationships) ? fmOf(n).relationships : []) {
+        if (!r || !HOP.test(String(r.type || '').trim())) continue;
+        const t = index.resolve(pt.links(String(r.target || ''))[0] || String(r.target || '').trim());
+        if (keep(t)) out.set(t, true);
+      }
+    }
+    return out;
+  };
+  const groups = new Map();
+  items.forEach((it, i) => { const k = it.people[0] || `item:${i}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); });
+  let pool = [...groups.entries()].map(([k, g]) => ({ person: k.startsWith('item:') ? null : k, items: g, subj: subjectsOf(g), joinedOn: null }));
+  for (;;) {
+    const by = new Map();
+    pool.forEach((c, i) => { for (const n of c.subj.keys()) { if (!by.has(n)) by.set(n, []); by.get(n).push(i); } });
+    const cands = [...by.entries()].filter(([, ix]) => ix.length >= 2);
+    if (!cands.length) break;
+    // the note shared by the most cards first (ties: the pair sharing the most notes, then the note's path)
+    const score = ([, ix]) => ix.length * 1000 + Math.max(...ix.flatMap((i) => ix.filter((j) => j !== i).map((j) => [...pool[i].subj.keys()].filter((n) => pool[j].subj.has(n)).length)));
+    cands.sort((x, y) => score(y) - score(x) || (x[0] < y[0] ? -1 : 1));
+    const [note, ix] = cands[0];
+    const parts = ix.map((i) => pool[i]);
+    const subj = new Map(parts.flatMap((c) => [...c.subj]));
+    // a joined card does not join again: its subject notes are kept for the card, not for another join
+    pool = [...pool.filter((_, i) => !ix.includes(i)), { person: null, items: parts.flatMap((c) => c.items), subj: new Map(), frozen: subj, joinedOn: note }];
+  }
+  const firstFive = (md) => stripMd(md).split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
+  const cards = pool.map((grp) => {
+    const subj = grp.frozen || grp.subj;
+    let title;
+    if (grp.person) title = nameOf(grp.person);
+    else if (grp.joinedOn) {
+      const count = new Map();
+      for (const it of grp.items) for (const n of uniq([...it.links, ...subjectsOf([it]).keys()])) if (keep(n)) count.set(n, (count.get(n) || 0) + 1);
+      const best = [...count.entries()].sort((x, y) => y[1] - x[1] || (x[0] === grp.joinedOn ? -1 : y[0] === grp.joinedOn ? 1 : 0))[0];
+      title = nameOf(best ? best[0] : grp.joinedOn);
+    } else title = firstFive(grp.items[0].md);
+    const texts = grp.items.map((it) => it.md).sort();
+    return {
+      id: crypto.createHash('sha256').update(JSON.stringify(texts)).digest('hex').slice(0, 12),
+      title,
+      items: grp.items.map((it) => ({ md: it.md, source: it.source })),
+      notes: [...subj.keys()],
+      people: uniq([...grp.items.flatMap((it) => it.people), ...[...subj.keys()].filter((n) => PEOPLE_TYPES.has(typeOf(n)))]),
+      places: uniq([...grp.items.flatMap((it) => it.places), ...[...subj.keys()].filter(isPlace)]),
+    };
+  });
+
+  // Background: Pending Consequences, and Resolved Threads entries that say "carried", one line each. A carried entry takes
+  // the forward-looking sentence it holds, if it holds one.
+  const oneLine = (s) => nl(s).replace(/\s*\n\s*/g, ' ').trim();
+  const background = [];
+  if (wrapUp) {
+    for (const md of sectionBullets(/^pending consequences$/i)) if (!isDone(md)) background.push({ from: 'Pending Consequences', md: oneLine(md) });
+    for (const md of sectionBullets(/^resolved threads$/i)) {
+      if (!/\bcarried\b/i.test(md) || isDone(md)) continue;
+      const sentences = oneLine(md).split(/(?<=[.!?])\s+/);
+      const ahead = sentences.slice(1).find((x) => /\b(may|might|could|will)\b/i.test(x) && !/closed/i.test(x));
+      background.push({ from: 'Resolved Threads', md: sentences[0].replace(/\.$/, '') + (ahead ? ` (${ahead.replace(/\.$/, '')})` : '') });
+    }
   }
 
   model.record = {
@@ -210,8 +338,8 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     lastTime,
     world,
     comingUp,
-    cards: [],
-    background: [],
+    cards,
+    background,
     whereNow,
     leftOut: LEFT_OUT,
   };
