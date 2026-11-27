@@ -1631,6 +1631,14 @@
     dr.focus({ preventScroll: true });
   }
   const closeDrawer = () => { $('#drawer').classList.remove('open'); G.drawerNote = null; };
+  // A press anywhere outside the drawer closes it (audit S8), and the press goes on to do what it says. A note's link
+  // opens that note instead, and the prep notes' button its own list.
+  document.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || !$('#drawer').classList.contains('open')) return;
+    const t = ev.target;
+    if (t && t.closest && t.closest('#drawer, a[data-note], #warnBtn, dialog')) return;
+    closeDrawer();
+  }, true);
 
   // ------------------------------------------------------------------ actions from the page
   const beatOfKey = (key) => D().beats.find((b) => b.key === key) || null;

@@ -1037,5 +1037,32 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // S8: the drawer stayed open over the players' column and the sheet's right edge until Esc or Close
+    it(`S8: a click on the sheet outside the drawer closes it (${width})`, async () => {
+      const run = await startApp();
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const open = () => page.evaluate('document.getElementById("drawer").classList.contains("open")');
+        await tap(page, '#brief a.lk[data-note]');
+        await page.waitFor('document.querySelector("#drawer.open h2")');
+        // the drawer slides in (0.18 s): a hand waits for it to stop
+        await page.waitFor('Math.round(document.getElementById("drawer").getBoundingClientRect().right) === innerWidth');
+        await page.sleep(250);
+        // a click inside the drawer keeps it
+        await tap(page, '#drawer h2');
+        assert.strictEqual(await open(), true, 'a click inside keeps it open');
+        // another note's link opens that note
+        const r = await page.click('#handover a.lk[data-note]', { offsetX: 4 });
+        assert.ok(r.inView && r.hit, JSON.stringify(r));
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "Ash\'s Note"');
+        // a click on the sheet, left of the drawer
+        const h = await page.click('#pcs h2', { offsetX: 6 });
+        assert.ok(h.inView && h.hit, `the heading is clear of the drawer: ${JSON.stringify(h)}`);
+        await page.waitFor('!document.getElementById("drawer").classList.contains("open")', 2000);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });

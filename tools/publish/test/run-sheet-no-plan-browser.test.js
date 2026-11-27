@@ -513,3 +513,33 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
     });
   }
 });
+
+// Task 9: the frustration audit's items on the no-Plan page (docs/superpowers/plans/2026-11-22-run-sheet-no-plan-ux-audit.md),
+// each named by its number, by real input only, at 1449, 1280 and 1100 wide, 762 high.
+describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: browserSkip() }, () => {
+  const tap = async (page, sel, opts) => {
+    const r = await page.click(sel, opts);
+    assert.ok(r.inView && r.hit, `click ${sel}: ${JSON.stringify(r)}`);
+    return r;
+  };
+  for (const width of WIDTHS) {
+    // S8: the drawer stayed open until Esc or Close
+    it(`S8: a click on the sheet outside the drawer closes it (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `#where a.lk[data-note="${SALT}"]`);
+        await page.waitFor('document.querySelector("#drawer.open h2")');
+        // the drawer slides in (0.18 s): a hand waits for it to stop
+        await page.waitFor('Math.round(document.getElementById("drawer").getBoundingClientRect().right) === innerWidth');
+        await page.sleep(250);
+        await tap(page, '#drawer h2');
+        assert.strictEqual(await page.evaluate('document.getElementById("drawer").classList.contains("open")'), true, 'a click inside keeps it open');
+        await tap(page, '#where h2', { offsetX: 6 });
+        await page.waitFor('!document.getElementById("drawer").classList.contains("open")', 2000);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+  }
+});
