@@ -1,7 +1,7 @@
 'use strict';
 // The run sheet's play state on disk: `_meta/table/<session id>.json` (spec §6.7). One state in memory,
 // written at most once per `delayMs` through a temp file beside it and a rename, so only the whole old
-// file or the whole new one is ever there. `rev`, `stateId` and `recordHash` belong to the store: a
+// file or the whole new one is ever there. `rev`, `stateId`, `recordHash` and `filed` belong to the store: a
 // page's PUT never sets them (plan decision 16, re-check R2). Only an accepted PUT bumps `rev`;
 // `setServer` (the server's `recordHash`) does not, but it still schedules a write.
 //
@@ -19,7 +19,9 @@ const nodeFs = require('node:fs');
 const path = require('node:path');
 const { runCommand } = require('../run-command');
 
-const SERVER_KEYS = ['recordHash'];
+// `filed` ({ index, at }) is set by the server once it has filed a no-Plan session (Task 7): a page's PUT never changes
+// it, and once it is set the PUT never changes the session's `title` either (renaming a filed note is wrap-up's).
+const SERVER_KEYS = ['recordHash', 'filed'];
 const REV_GAP = 1000;
 const LOCK_FRESH_MS = 60 * 1000;
 const SF_DATALESS = 0x40000000;
@@ -228,8 +230,11 @@ function createStore({
       const sent = { ...state };
       for (const k of Object.keys(cur || {})) if (!Object.prototype.hasOwnProperty.call(sent, k)) sent[k] = cur[k];
       const whole = upgrade(sent); // throws, code BAD_STATE, for a key of the wrong kind
+      const prev = cur;
       rev++;
-      cur = own(whole, rev, cur.recordHash);
+      cur = own(whole, rev, prev.recordHash);
+      if (Object.prototype.hasOwnProperty.call(prev, 'filed')) cur.filed = prev.filed; else delete cur.filed;
+      if (prev.filed && Object.prototype.hasOwnProperty.call(prev, 'title')) cur.title = prev.title;
       changed();
       return { rev };
     },
@@ -260,7 +265,7 @@ function createStore({
       changed();
       return { rev, state: cur, rejected };
     },
-    // Server-owned keys only (`recordHash`); no rev bump, but a write is scheduled so a kill before the
+    // Server-owned keys only (`recordHash`, `filed`); no rev bump, but a write is scheduled so a kill before the
     // next click cannot leave a stale recordHash on disk.
     setServer(patch = {}) {
       ensure();

@@ -182,6 +182,34 @@ describe('gm-publish table: a session from the record', () => {
     assert.deepStrictEqual(seen[0].fileLog, { cmd: ['x'], takesTitle: true });
   });
 
+  it('a record session not filed yet is served by the real server, with its own line, and filed on the first thing (Task 7)', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const a = await start({ vault, fileLog: { cmd: ['gma-never-run'], takesTitle: true } });
+    assert.ok(a.h && a.h.url, a.errs.join('\n'));
+    const text = a.lines.join('\n');
+    assert.ok(text.includes('Session 15 is not in the vault yet: it is filed with its Table Log on the first thing that happens at the table, so a look leaves nothing.'), text);
+    assert.ok(!/No Table Log/.test(text), text);
+    const body = await (await fetch(`${a.h.url}api/model`)).json();
+    assert.strictEqual(body.session.fromRecord, true);
+    assert.strictEqual(body.session.filed, false);
+    assert.ok(body.model.record);
+
+    const v2 = copyRecordFixture();
+    after(() => removeFixture(v2));
+    const b = await start({ vault: v2 });
+    assert.ok(b.lines.join('\n').includes('Session 15 is not in the vault yet: start it with `gma table` to have it filed and the record written.'), b.lines.join('\n'));
+  });
+
+  it('a record that cannot be read is refused in its own words (Task 7)', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const { deps, errs } = quiet({ server: { readRecord: () => { throw new Error('the Wrap-Up is torn'); } } });
+    const rc = await runTable({ vault, port: await freePort(), open: false }, deps);
+    assert.strictEqual(rc, 1);
+    assert.strictEqual(errs.join('\n'), 'The record for Session 15 cannot be read: the Wrap-Up is torn');
+  });
+
   it('a state iCloud has taken is found under the number name (the lock and iCloud checks use stateFileFor)', async () => {
     const vault = copyRecordFixture();
     after(() => removeFixture(vault));

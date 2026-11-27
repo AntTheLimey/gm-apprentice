@@ -829,3 +829,62 @@ describe("vitals: each system's pools (Task 20)", () => {
     assert.strictEqual(RS.endFigureProblem(model, ADA, 'hp', 999), null);
   });
 });
+
+// The no-Plan sheet (Task 7, D2): the title box names the session until it is filed. Typing a title is not something
+// happening at the table: it never makes the Table Log hold anything, so it never files.
+describe('the session title', () => {
+  const { tableLogBody, isEmptySkeleton } = require('../lib/run-sheet/record');
+  const links = (p) => `[[${String(p).split('/').pop().replace(/\.md$/, '')}]]`;
+
+  it('setTitle trims and keeps at most 80 characters', () => {
+    assert.strictEqual(run([{ type: 'setTitle', title: '  The Lamp Fair  ' }]).title, 'The Lamp Fair');
+    assert.strictEqual(run([{ type: 'setTitle', title: 'x'.repeat(120) }]).title, 'x'.repeat(80));
+    assert.strictEqual(run([{ type: 'setTitle', title: 'A' }, { type: 'setTitle', title: '' }]).title, '');
+    assert.strictEqual(run([{ type: 'setTitle', title: null }]).title, '');
+  });
+
+  it('setTitle is refused after filing: the state is left as it was', () => {
+    const filed = { ...run([{ type: 'setTitle', title: 'The Lamp Fair' }]), filed: { index: 'S/Session 15 - The Lamp Fair.md', at: T0 } };
+    const after = RS.reduce(filed, act({ type: 'setTitle', title: 'Something else' }), at(5));
+    assert.strictEqual(after, filed, 'the same state: nothing changed, not even applied');
+    assert.strictEqual(after.title, 'The Lamp Fair');
+  });
+
+  it('a page never changes filed: it is the server\'s', () => {
+    const s = { ...fresh(), filed: { index: 'S/x.md', at: T0 } };
+    const a = RS.reduce(s, act({ type: 'jot', text: 'hello' }), at(1));
+    assert.deepStrictEqual(a.filed, s.filed);
+    const b = RS.reduce(fresh(), act({ type: 'jot', text: 'hello' }), at(1));
+    assert.strictEqual(b.filed, null);
+  });
+
+  it('a state with only a title is still the empty skeleton, and sets no start time', () => {
+    const s = run([{ type: 'setTitle', title: 'The Lamp Fair' }]);
+    assert.strictEqual(s.startedAt, null, 'a title is not play');
+    assert.ok(isEmptySkeleton(tableLogBody(model, s, { linkFor: links })));
+    const played = run([{ type: 'setTitle', title: 'The Lamp Fair' }, { type: 'jot', text: 'The crew lands.' }]);
+    assert.ok(!isEmptySkeleton(tableLogBody(model, played, { linkFor: links })));
+  });
+
+  it('an empty state has a blank title and is not filed', () => {
+    assert.strictEqual(fresh().title, '');
+    assert.strictEqual(fresh().filed, null);
+  });
+
+  it('upgrade keeps an adopted no-Plan state when a Plan session opens it (its session and plan null)', () => {
+    // prep ran mid-play: the Plan session takes the number-named state the no-Plan sheet filed
+    const saved = {
+      ...RS.emptyState({ stateId: 'chapter-3--session-15' }),
+      jots: [{ id: 'j1', beat: null, spot: null, text: 'The crew lands.', at: T0 }],
+      title: 'The Lamp Fair',
+      filed: { index: 'Chapters/Chapter 3/Sessions/Session 15/Session 15 - The Lamp Fair.md', at: T0 },
+    };
+    const up = RS.upgrade(saved, RS.emptyState({ stateId: 'chapter-3--session-15', session: 'Chapters/Chapter 3/Sessions/Session 15/Session 15 - The Lamp Fair.md', plan: PLAN }));
+    assert.strictEqual(up.session, null);
+    assert.strictEqual(up.plan, null);
+    assert.deepStrictEqual(up.jots, saved.jots);
+    assert.strictEqual(up.title, 'The Lamp Fair');
+    assert.deepStrictEqual(up.filed, saved.filed);
+    assert.doesNotThrow(() => RS.derive(model, up));
+  });
+});

@@ -279,7 +279,11 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
     if (!res.ok) out(res.why === 'timeout' ? `Flush took over 20 s and was stopped: ${TAIL}` : `Flush failed (${res.why}): ${TAIL}`);
   }
 
-  if (!chosen.tableLog) {
+  if (!chosen.index) {
+    // a session from the record that is not in the vault yet: it is filed with its Table Log (Task 7)
+    out(fileLog ? `${chosen.label} is not in the vault yet: it is filed with its Table Log on the first thing that happens at the table, so a look leaves nothing.`
+      : `${chosen.label} is not in the vault yet: start it with \`gma table\` to have it filed and the record written.`);
+  } else if (!chosen.tableLog) {
     out(fileLog ? 'No Table Log yet: it is filed on the first thing that happens at the table, so a look leaves nothing.'
       : 'No Table Log note yet: start it with `gma table` to have the record written.');
   }
@@ -304,7 +308,8 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   const model = await fetchModel(bound);
   if (model.status !== 200) {
     await app.close();
-    return refuse(`The Plan for ${chosen.label} cannot be read: ${(model.body && model.body.error) || 'no answer'}`);
+    const what = chosen.plan ? 'The Plan' : 'The record';
+    return refuse(`${what} for ${chosen.label} cannot be read: ${(model.body && model.body.error) || 'no answer'}`);
   }
 
   out(`Run sheet for ${chosen.title}: ${url}`);

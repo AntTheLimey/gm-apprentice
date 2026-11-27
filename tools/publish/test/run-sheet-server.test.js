@@ -1621,3 +1621,322 @@ describe('the side-colours setting', () => {
     assert.strictEqual((await post(bare, { preset: 'colour_blind' })).status, 200);
   });
 });
+
+// Task 7: a session with no Plan, opened from the record (test/fixtures/run-sheet-record: Sessions 13 and 14 wrapped up,
+// Session 15 not in the vault yet). The session and its Table Log are filed on the first thing that happens at the table,
+// in the background, one filing at a time, with the title the GM typed or the date the sheet opened (D2, D3, D9).
+describe('run sheet server: a session from the record (Task 7)', () => {
+  const { copyRecordFixture } = require('./helpers/record-fixture');
+  const { stateFileFor } = require('../lib/run-sheet/sessions');
+  const { spawnSync } = require('node:child_process');
+  const GMA = path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'scripts', 'gma.py');
+  const CH3 = 'Chapters/Chapter 3/Sessions';
+  const S15 = `${CH3}/Session 15`;
+  // the night the sheet opens, in local time: its date is the play date, whatever the clock says later (D3)
+  const OPENED = new Date(2026, 10, 29, 20, 15);
+  const CMD = ['gma', 'table-file', 'VAULT', '--number', '15', '--chapter', 'Chapter 3'];
+  const FILE_CMD = { cmd: CMD, takesTitle: true };
+
+  const recVault = (opts) => { const v = copyRecordFixture(opts); made.push(v); return v; };
+  // every file in the vault but the sheet's own state folder, with its bytes
+  const fingerprint = (vault) => {
+    const out = {};
+    for (const n of fs.readdirSync(vault, { recursive: true }).map(String).sort()) {
+      if (n.startsWith(`_meta${path.sep}table`)) continue;
+      const f = path.join(vault, n);
+      if (fs.statSync(f).isFile()) out[n] = fs.readFileSync(f, 'utf8');
+    }
+    return out;
+  };
+  const session15 = (vault) => fs.existsSync(path.join(vault, S15)) ? fs.readdirSync(path.join(vault, S15)).sort() : [];
+  const argOf = (cmd, name) => { const a = cmd.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : null; };
+
+  // Stands in for `gma table-file`: the index and its empty Table Log, the index's CREATED row first, as the real one prints.
+  const tableFiler = (vault, { delayMs = 0, failFirst = false, writeThenTimeOut = false } = {}) => {
+    const calls = [];
+    const runFileLog = async (cmd) => {
+      calls.push(cmd);
+      if (delayMs) await wait(delayMs);
+      if (failFirst && calls.length === 1) return { ok: false, why: 'the vault was busy' };
+      const title = argOf(cmd, 'title');
+      const stem = `Session 15 - ${title}`;
+      const idx = `${S15}/${stem}.md`;
+      const log = `${S15}/${stem} - Table Log.md`;
+      if (fs.existsSync(path.join(vault, log))) {
+        return { ok: false, refused: true, why: `${idx}: already has a Table Log: ${log}`, out: `ERROR\t\t\t${idx}: already has a Table Log: ${log}\n` };
+      }
+      fs.mkdirSync(path.join(vault, S15), { recursive: true });
+      fs.writeFileSync(path.join(vault, idx), `---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nplay_date: "${cmd[cmd.indexOf('--play-date') + 1]}"\nstatus: planned\ndocuments:\n  plan: null\n  table_log: "[[${stem} - Table Log]]"\n  wrap_up: null\n---\n\n# ${stem}\n`);
+      fs.writeFileSync(path.join(vault, log), `---\ntype: session-table-log\nsession: "[[${stem}]]"\ncreated_by: run-sheet\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
+      if (writeThenTimeOut && calls.length === 1) return { ok: false, why: 'timed out' };
+      return { ok: true, out: `CREATED\t${idx}\t\tsession template\nCREATED\t${log}\t\tthe Table Log's 18 sections, empty\n# written: 2 files\n` };
+    };
+    return { calls, runFileLog };
+  };
+
+  async function startRec(vault, { fileLog = FILE_CMD, runFileLog, deps = {} } = {}) {
+    const session = pickSession(listSessions(vault), null, vault).session;
+    const { file, stateId } = stateFileFor(vault, session);
+    const t = createTableServer({ vaultPath: vault, session, stateFile: file, stateId, fileLog,
+      deps: { delayMs: 20, retryMs: [20], recordRetryMs: [20], now: () => OPENED, ...(runFileLog ? { runFileLog } : {}), ...deps } });
+    const port = await listenLocal(t.server, 0);
+    const run = { ...t, port, session, stateId, stateFile: file };
+    servers.push(run);
+    return run;
+  }
+  let actN = 0;
+  const actions = (run, list) => req(run.port, 'POST', '/api/actions', { body: { stateId: run.stateId, actions: list.map((a) => ({ id: `t7-${++actN}`, ...a })), clientId: 'c1' } });
+  const jot = (run, text) => actions(run, [{ type: 'jot', text }]);
+  const title = (run, t) => actions(run, [{ type: 'setTitle', title: t }]);
+  const savedState = (run) => (fs.existsSync(run.stateFile) ? JSON.parse(fs.readFileSync(run.stateFile, 'utf8')) : {});
+  const logFileOf = (vault, t) => path.join(vault, S15, `Session 15 - ${t} - Table Log.md`);
+  const logHas = (vault, t, re) => fs.existsSync(logFileOf(vault, t)) && re.test(fs.readFileSync(logFileOf(vault, t), 'utf8'));
+
+  it('opening a record session files nothing', async () => {
+    const vault = recVault();
+    const before = fingerprint(vault);
+    const f = tableFiler(vault);
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    const m = (await req(run.port, 'GET', '/api/model')).json;
+    assert.ok(m.model && m.model.record, 'the record model is served');
+    assert.strictEqual(m.session.fromRecord, true);
+    assert.strictEqual(m.session.filed, false);
+    assert.strictEqual(m.session.index, null);
+    assert.strictEqual(m.tableLog, null);
+    assert.strictEqual((await req(run.port, 'GET', '/players')).status, 200);
+    assert.strictEqual((await req(run.port, 'GET', '/api/players/view')).status, 200);
+    const got = (await req(run.port, 'GET', '/api/state')).json;
+    await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: got.state } });
+    // a title is not something happening (D2)
+    assert.strictEqual((await title(run, 'The Lamp Fair')).status, 200);
+    await wait(200);
+    assert.deepStrictEqual(f.calls, []);
+    assert.deepStrictEqual(fingerprint(vault), before, 'the vault is byte-identical');
+    assert.strictEqual(savedState(run).title, 'The Lamp Fair', 'the title is kept in the state');
+  });
+
+  for (const crlf of [false, true]) {
+    it(`the first jot files index and log once, with the typed title${crlf ? ' (CRLF vault)' : ''}`, async () => {
+      const vault = recVault({ crlf });
+      const f = tableFiler(vault);
+      const run = await startRec(vault, { runFileLog: f.runFileLog });
+      const sse = listen(run.port);
+      try {
+        await title(run, '  The Lamp Fair ');
+        await jot(run, 'The crew lands at Dock Row.');
+        await waitFor(() => logHas(vault, 'The Lamp Fair', /The crew lands at Dock Row\./));
+        assert.deepStrictEqual(f.calls, [[...CMD, '--title=The Lamp Fair', '--play-date', '2026-11-29']]);
+        const idx = `${S15}/Session 15 - The Lamp Fair.md`;
+        const ev = await waitFor(() => sse.events.find((e) => e.event === 'record-filed'));
+        assert.deepStrictEqual(ev.data, { path: `${S15}/Session 15 - The Lamp Fair - Table Log.md`, index: idx, title: 'The Lamp Fair' });
+        const m = (await req(run.port, 'GET', '/api/model')).json;
+        assert.strictEqual(m.session.filed, true);
+        assert.strictEqual(m.session.index, idx);
+        assert.strictEqual(m.tableLog, `${S15}/Session 15 - The Lamp Fair - Table Log.md`);
+        await waitFor(() => savedState(run).filed && savedState(run).filed.index === idx);
+        assert.strictEqual(savedState(run).filed.at, OPENED.toISOString());
+        await jot(run, 'Odalys sends word.');
+        await waitFor(() => logHas(vault, 'The Lamp Fair', /Odalys sends word\./));
+        assert.strictEqual(f.calls.length, 1, 'filed once');
+        assert.deepStrictEqual(session15(vault), ['Session 15 - The Lamp Fair - Table Log.md', 'Session 15 - The Lamp Fair.md']);
+        // a title after filing is refused: the filed note is not renamed from here
+        await title(run, 'Renamed');
+        assert.strictEqual((await req(run.port, 'GET', '/api/state')).json.state.title, 'The Lamp Fair');
+      } finally { sse.close(); }
+    });
+  }
+
+  it('a blank title files under the date the sheet opened', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    let clock = OPENED;
+    const run = await startRec(vault, { runFileLog: f.runFileLog, deps: { now: () => clock } });
+    await title(run, '   ');
+    clock = new Date(2026, 10, 30, 0, 40); // the night runs past midnight: it keeps its date
+    await jot(run, 'The crew lands.');
+    await waitFor(() => logHas(vault, '29 Nov 2026', /The crew lands\./));
+    assert.deepStrictEqual(f.calls, [[...CMD, '--title=29 Nov 2026', '--play-date', '2026-11-29']]);
+  });
+
+  it('two actions 50 ms apart file once and the log holds both (Review Focus 1)', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault, { delayMs: 2000 });
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    const sse = listen(run.port);
+    try {
+      await title(run, 'The Lamp Fair');
+      await jot(run, 'The crew lands at Dock Row.');
+      await waitFor(() => f.calls.length === 1); // the filing is running
+      await wait(50);
+      await actions(run, [{ type: 'jot', text: 'They move on to the market.' }]);
+      await waitFor(() => logHas(vault, 'The Lamp Fair', /The crew lands at Dock Row\./) && logHas(vault, 'The Lamp Fair', /They move on to the market\./), 8000);
+      await wait(200);
+      assert.strictEqual(f.calls.length, 1, 'one filing, no second batch');
+      assert.deepStrictEqual(session15(vault), ['Session 15 - The Lamp Fair - Table Log.md', 'Session 15 - The Lamp Fair.md'], 'one index, one Table Log');
+      assert.ok(!sse.events.some((e) => e.event === 'record-failed'), JSON.stringify(sse.events.filter((e) => e.event === 'record-failed')));
+    } finally { sse.close(); }
+  });
+
+  // The default filing runs the command as a child (spawn, D9): a script stands in for `gma table-file`.
+  const script = (body) => {
+    const d = tmp('rs-filer-');
+    const file = path.join(d, 'filer.js');
+    fs.writeFileSync(file, body);
+    return { file, runs: path.join(d, 'runs.txt') };
+  };
+
+  it('a refused filing does not retry until the next action', async () => {
+    const vault = recVault();
+    const s = script(`require('fs').appendFileSync(process.argv[2], 'x\\n');
+process.stdout.write('ERROR\\t\\t\\tno session 14 index found\\n');
+process.exit(1);
+`);
+    const run = await startRec(vault, { fileLog: { cmd: [process.execPath, s.file, s.runs], takesTitle: true } });
+    const sse = listen(run.port);
+    const runs = () => (fs.existsSync(s.runs) ? fs.readFileSync(s.runs, 'utf8').split('\n').filter(Boolean).length : 0);
+    try {
+      await jot(run, 'The crew lands.');
+      const ev = await waitFor(() => sse.events.find((e) => e.event === 'record-failed'), 10000);
+      assert.match(ev.data.error, /no session 14 index found/);
+      // the retry timer is 20 ms: a refusal that used it would have run many times by now
+      await wait(600);
+      assert.strictEqual(runs(), 1, 'a refusal waits for the GM');
+      const m = (await req(run.port, 'GET', '/api/model')).json;
+      assert.ok(m.notices.some((n) => n.kind === 'record-failing' && /no session 14 index found/.test(n.error)), JSON.stringify(m.notices));
+      await jot(run, 'Dawn comes.');
+      await waitFor(() => runs() === 2, 10000);
+      await wait(400);
+      assert.strictEqual(runs(), 2);
+      assert.deepStrictEqual(session15(vault), []);
+      assert.ok(savedState(run).jots.length === 2, 'the state is kept');
+    } finally { sse.close(); }
+  });
+
+  it('the server answers /api/model while a filing runs', async () => {
+    const vault = recVault();
+    const s = script(`require('fs').writeFileSync(process.argv[2], 'started');
+setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); process.exit(1); }, 2500);
+`);
+    const run = await startRec(vault, { fileLog: { cmd: [process.execPath, s.file, s.runs], takesTitle: true } });
+    await jot(run, 'The crew lands.');
+    await waitFor(() => fs.existsSync(s.runs), 10000);
+    const t0 = Date.now();
+    const m = await req(run.port, 'GET', '/api/model');
+    assert.strictEqual(m.status, 200);
+    assert.ok(Date.now() - t0 < 1500, `answered in ${Date.now() - t0} ms, during the filing`);
+    assert.strictEqual(m.json.session.filed, false);
+  });
+
+  it('a restart after filing keeps the state and files nothing (Review Focus 2)', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    const a = await startRec(vault, { runFileLog: f.runFileLog });
+    await title(a, 'The Lamp Fair');
+    await jot(a, 'The crew lands at Dock Row.');
+    const idx = `${S15}/Session 15 - The Lamp Fair.md`;
+    await waitFor(() => logHas(vault, 'The Lamp Fair', /Dock Row/) && savedState(a).filed);
+    await wait(100);
+    await a.close();
+    const logFile = logFileOf(vault, 'The Lamp Fair');
+    const before = { vault: fingerprint(vault), mtime: fs.statSync(logFile).mtimeMs };
+
+    const again = tableFiler(vault);
+    const b = await startRec(vault, { runFileLog: again.runFileLog });
+    assert.strictEqual(b.stateId, a.stateId, 'the same state file (D1)');
+    assert.strictEqual(b.session.index, idx);
+    const m = (await req(b.port, 'GET', '/api/model')).json;
+    assert.strictEqual(m.session.filed, true);
+    const st = (await req(b.port, 'GET', '/api/state')).json.state;
+    assert.strictEqual(st.title, 'The Lamp Fair');
+    assert.strictEqual(st.jots.length, 1);
+    await wait(150);
+    assert.deepStrictEqual(again.calls, []);
+    assert.deepStrictEqual(fingerprint(vault), before.vault);
+    assert.strictEqual(fs.statSync(logFile).mtimeMs, before.mtime, 'the log is not rewritten');
+    await b.close();
+
+    // the state write after the filing was lost: the vault still says it is filed
+    const lost = JSON.parse(fs.readFileSync(b.stateFile, 'utf8'));
+    delete lost.filed;
+    fs.writeFileSync(b.stateFile, JSON.stringify(lost));
+    const third = tableFiler(vault);
+    const c = await startRec(vault, { runFileLog: third.runFileLog });
+    assert.strictEqual((await req(c.port, 'GET', '/api/model')).json.session.filed, true);
+    await waitFor(() => savedState(c).filed && savedState(c).filed.index === idx);
+    await jot(c, 'Odalys sends word.');
+    await waitFor(() => logHas(vault, 'The Lamp Fair', /Odalys sends word\./));
+    assert.deepStrictEqual(third.calls, []);
+    assert.deepStrictEqual(session15(vault), ['Session 15 - The Lamp Fair - Table Log.md', 'Session 15 - The Lamp Fair.md']);
+    await c.close();
+
+    // a log left behind the state (the skeleton again) is brought up to date at start, still with no filing
+    fs.writeFileSync(logFile, fs.readFileSync(logFile, 'utf8').replace(/## Log[\s\S]*$/, '## Log\n'));
+    const fourth = tableFiler(vault);
+    await startRec(vault, { runFileLog: fourth.runFileLog });
+    await waitFor(() => logHas(vault, 'The Lamp Fair', /Odalys sends word\./));
+    assert.deepStrictEqual(fourth.calls, []);
+  });
+
+  it('a failed filing is reported and retried', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault, { failFirst: true });
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    const sse = listen(run.port);
+    try {
+      await jot(run, 'The crew lands.');
+      const ev = await waitFor(() => sse.events.find((e) => e.event === 'record-failed'));
+      assert.match(ev.data.error, /the vault was busy/);
+      await waitFor(() => logHas(vault, '29 Nov 2026', /The crew lands\./));
+      assert.strictEqual(f.calls.length, 2, 'retried on the timer');
+      await waitFor(() => sse.events.find((e) => e.event === 'record-ok'));
+    } finally { sse.close(); }
+  });
+
+  it('a filing that wrote and then timed out is taken from the refusal that follows: no second index', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault, { writeThenTimeOut: true });
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    await title(run, 'The Lamp Fair');
+    await jot(run, 'The crew lands.');
+    await waitFor(() => logHas(vault, 'The Lamp Fair', /The crew lands\./));
+    assert.strictEqual(f.calls.length, 2);
+    assert.deepStrictEqual(session15(vault), ['Session 15 - The Lamp Fair - Table Log.md', 'Session 15 - The Lamp Fair.md']);
+    assert.strictEqual((await req(run.port, 'GET', '/api/model')).json.session.filed, true);
+  });
+
+  it('a page PUT never clears filed', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    const stale = (await req(run.port, 'GET', '/api/state')).json; // the page's copy, from before the filing
+    await jot(run, 'The crew lands.');
+    await waitFor(() => savedState(run).filed);
+    const now = (await req(run.port, 'GET', '/api/state')).json;
+    const put = await req(run.port, 'PUT', '/api/state', { body: { stateId: now.stateId, base: now.rev, state: { ...now.state, filed: stale.state.filed, title: 'Renamed' } } });
+    assert.strictEqual(put.status, 200);
+    const after = (await req(run.port, 'GET', '/api/state')).json.state;
+    assert.ok(after.filed && after.filed.index, 'filed stands');
+    assert.strictEqual(after.title, '', 'the title is not changed once filed');
+  });
+
+  it('an index that appeared meanwhile gets the log beside it (Review Focus 4, the real gma table-file)', async (t) => {
+    if (spawnSync('python3', ['--version']).error) { t.skip('python3 is not installed: the real gma table-file cannot run'); return; }
+    const vault = recVault();
+    const run = await startRec(vault, { fileLog: { cmd: ['python3', GMA, 'table-file', vault, '--number', '15', '--chapter', 'Chapter 3'], takesTitle: true } });
+    assert.strictEqual((await req(run.port, 'GET', '/api/model')).json.session.index, null);
+    // prep files Session 15 in another window, mid-play
+    const prep = spawnSync('python3', [GMA, 'vault-write', vault, 'session-new', '--number', '15', '--title=Prepped', '--chapter', 'Chapter 3', '--upcoming', '--created-by', 'manual', '--write'], { encoding: 'utf8' });
+    assert.strictEqual(prep.status, 0, prep.stdout + prep.stderr);
+    await title(run, 'Something Else');
+    await jot(run, 'The crew lands at Dock Row.');
+    const idx = `${S15}/Session 15 - Prepped.md`;
+    await waitFor(() => logHas(vault, 'Prepped', /The crew lands at Dock Row\./), 30000);
+    assert.deepStrictEqual(session15(vault), ['Session 15 - Prepped - Table Log.md', 'Session 15 - Prepped.md'], 'no second index');
+    const m = (await req(run.port, 'GET', '/api/model')).json;
+    assert.strictEqual(m.session.index, idx);
+    assert.strictEqual(m.session.filed, true);
+    assert.strictEqual(m.session.title, 'Session 15 - Prepped', 'named as the vault filed it');
+    await waitFor(() => savedState(run).filed && savedState(run).filed.index === idx);
+    assert.match(fs.readFileSync(path.join(vault, idx), 'utf8'), /table_log: "\[\[Session 15 - Prepped - Table Log\]\]"/);
+  });
+});
