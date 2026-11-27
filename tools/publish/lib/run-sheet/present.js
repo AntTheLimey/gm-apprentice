@@ -99,6 +99,21 @@ function present(model, { index }) {
   // the PCs table's words (Task 34): a Thread or a Moment's `**bold**` and `[[link]]` shown as such, not as markup
   for (const p of m.pcs || []) addHtml(p, ['moment', 'touch', 'arc', 'thread'], index, true);
   for (const p of m.people || []) addHtml(p, ['playAs', 'wants', 'now', 'where'], index, true);
+  // the no-Plan sheet's record (Task 8): each markdown field gains its `…Html`, so a `[[link]]` opens the drawer
+  const r = m.record;
+  if (r) {
+    addHtml(r.lastTime, ['recap'], index, false);
+    addHtml(r.world, ['md'], index, false);
+    const cu = r.comingUp || {};
+    addHtml(cu, ['handoff'], index, false);
+    if (Array.isArray(cu.intentions)) cu.intentionsHtml = cu.intentions.map((t) => toHtml(t, index, { inline: true }));
+    if (cu.lead) {
+      addHtml(cu.lead, ['md'], index, false);
+      if (Array.isArray(cu.lead.schedule)) cu.lead.scheduleHtml = cu.lead.schedule.map((t) => toHtml(t, index, { inline: true }));
+    }
+    for (const c of r.cards || []) for (const it of c.items || []) addHtml(it, ['md'], index, true);
+    for (const b of r.background || []) addHtml(b, ['md'], index, true);
+  }
   return m;
 }
 

@@ -252,7 +252,10 @@ function readSheet(vaultPath, { planRel = null, fm = {}, body = '', session = nu
   const sidesCarried = carried ? carried.sides() : {};
   // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given, and the
   // Plan's NPC Quick Reference: what a row's starting side reads (sides.js). Their warnings are added below.
-  const own = sessionParty({ index, sessionPath: sessionIndex || given.after || null, planBody: body, given: party, planPath: plan });
+  let own = sessionParty({ index, sessionPath: sessionIndex || given.after || null, planBody: body, given: party, planPath: plan });
+  // A no-Plan session filed tonight: its new index names no party of its own, so the party stays the one the record gave
+  // (the latest Wrap-Up's), and the PCs the GM placed before the filing stay on the sheet (Task 8).
+  if (!plan && sessionIndex && given.after && own.from === 'given') own = sessionParty({ index, sessionPath: given.after, planBody: body, given: party, planPath: plan });
   add(own.warnings);
   const peopleRead = readPeople(body, index);
   const quickRef = new Map();

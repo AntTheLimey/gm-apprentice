@@ -1,0 +1,287 @@
+'use strict';
+// The no-Plan run sheet's GM page (plan Task 8) in a real browser, against the real server on the record fixture
+// (test/fixtures/run-sheet-record: Sessions 13 and 14 wrapped up, Session 15 not in the vault yet). Real input only:
+// a held mouse press, key events and Input.insertText (helpers/cdp.js), never dispatchEvent or .click(). Every test runs
+// at 1449, 1280 and 1100 wide, 762 high. The filing (`gma table-file`) is faked through deps.runFileLog, as the server
+// tests fake it. What is checked: where the crew is, Move them and Fight here on the first screen (audit P1, P6); the
+// rail in the page's order, again after a move (P2, P5); Move them re-ranking the cards; Fight here ticking the crew in
+// once and never an empty chip (P7); the title box before and after the filing (D2, D8); nothing new on the players'
+// screen; and no sideways scroll.
+const { describe, it, after } = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
+const { listSessions, pickSession, stateFileFor } = require('../lib/run-sheet/sessions');
+const { browserSkip } = require('./helpers/browser');
+const { withPage } = require('./helpers/cdp');
+const { copyRecordFixture } = require('./helpers/record-fixture');
+const { removeFixture } = require('./helpers/systems-fixture');
+
+const PROBE = 'JSON.parse(document.body.dataset.probe || "null")';
+const WIDTHS = [1449, 1280, 1100];
+const HEIGHT = 762;
+const SHOTS = path.join(__dirname, '..', '..', '..', 'tests', 'proof-runs', 'run-sheet-no-plan', 'shots');
+const S15 = 'Chapters/Chapter 3/Sessions/Session 15';
+const SALT = 'Locations/The Salt Inn.md';
+const FESTIVAL = 'Locations/Harbour Festival Grounds.md';
+const CMD = ['gma', 'table-file', 'VAULT', '--number', '15', '--chapter', 'Chapter 3'];
+// the night the sheet opens, in local time (D3)
+const OPENED = new Date(2026, 10, 29, 20, 15);
+// Words of the fixture's cards, Coming up, Background and Last time: none may reach the players' screen.
+const SECRET_WORDS = ['swears she never paid', 'hides the crew', 'slipping the crew notes', 'does with the page', 'learns of the scuffle',
+  'Lamplighters Guild hall', 'arguing over', 'heard all of it', 'port evidence', 'blame the crew', "chandler's safe", 'lamp oil',
+  'Festival schedule', 'opens at dusk', 'lamplighters starts at midnight', 'Unsigned notes', 'Possible scenes', 'Coming up'];
+
+const made = [];
+const servers = [];
+after(async () => {
+  for (const s of servers) await s.close();
+  for (const d of made) removeFixture(d);
+});
+
+// Stands in for `gma table-file`: the index and its empty Table Log, the index's CREATED row first (the server tests' own).
+function tableFiler(vault) {
+  const calls = [];
+  const runFileLog = async (cmd) => {
+    calls.push(cmd);
+    const a = cmd.find((x) => x.startsWith('--title='));
+    const stem = `Session 15 - ${a ? a.slice('--title='.length) : 'untitled'}`;
+    const idx = `${S15}/${stem}.md`;
+    const log = `${S15}/${stem} - Table Log.md`;
+    fs.mkdirSync(path.join(vault, S15), { recursive: true });
+    fs.writeFileSync(path.join(vault, idx), `---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nplay_date: "${cmd[cmd.indexOf('--play-date') + 1]}"\nstatus: planned\ndocuments:\n  plan: null\n  table_log: "[[${stem} - Table Log]]"\n  wrap_up: null\n---\n\n# ${stem}\n`);
+    fs.writeFileSync(path.join(vault, log), `---\ntype: session-table-log\nsession: "[[${stem}]]"\ncreated_by: run-sheet\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
+    return { ok: true, out: `CREATED\t${idx}\t\tsession template\nCREATED\t${log}\t\tthe Table Log's 18 sections, empty\n` };
+  };
+  return { calls, runFileLog };
+}
+
+async function startRec({ crlf = false } = {}) {
+  const vault = copyRecordFixture({ crlf });
+  made.push(vault);
+  const session = pickSession(listSessions(vault), null, vault).session;
+  assert.ok(session && session.fromRecord, 'the record gives Session 15');
+  const { file, stateId } = stateFileFor(vault, session);
+  const filer = tableFiler(vault);
+  const t = createTableServer({ vaultPath: vault, session, stateFile: file, stateId, fileLog: { cmd: CMD, takesTitle: true },
+    deps: { delayMs: 50, log: () => {}, now: () => OPENED, runFileLog: filer.runFileLog } });
+  const port = await listenLocal(t.server, 0);
+  servers.push(t);
+  return { ...t, vault, port, filer, base: `http://127.0.0.1:${port}/` };
+}
+const api = async (run, url) => (await fetch(`${run.base.slice(0, -1)}${url}`)).json();
+const stateOf = async (run) => (await api(run, '/api/state')).state;
+const probe = (page) => page.evaluate(PROBE);
+const settled = (page) => page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && document.getElementById('where') && p; })()`);
+
+// An element wholly in the window (both edges, both ways) and the thing under its centre is itself.
+const inView = (page, sel) => page.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return { found: false };
+  const r = e.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return { found: true, left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+    whole: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && r.width > 0 && r.height > 0,
+    hit: Boolean(top) && (top === e || e.contains(top)) }; })()`);
+const noSideways = (page) => page.evaluate('document.documentElement.scrollWidth <= window.innerWidth');
+// The rail's links in order, and whether their targets stand in the same order down the page.
+const railNames = (page) => page.evaluate('Array.from(document.querySelectorAll("#rail a[data-go]"), (a) => a.textContent.trim())');
+const railInPageOrder = (page) => page.evaluate(`(() => { const ids = Array.from(document.querySelectorAll('#rail a[data-go]'), (a) => a.dataset.go);
+  const els = ids.map((id) => document.getElementById(id)); if (els.some((e) => !e)) return { ok: false, missing: ids.filter((id, i) => !els[i]) };
+  for (let i = 1; i < els.length; i++) if (!(els[i - 1].compareDocumentPosition(els[i]) & Node.DOCUMENT_POSITION_FOLLOWING)) return { ok: false, at: ids[i] };
+  return { ok: true }; })()`);
+const cardTitles = (page, group) => page.evaluate(`Array.from(document.querySelectorAll('#scenes [data-cards="${group}"] .card h3'), (h) => h.textContent.trim())`);
+
+const BEFORE_MOVE = ['Where they are', 'Coming up', 'Odalys Venn', 'Harl Brannock', 'Unsigned notes: someone keeps slipping', 'Corvin Tash',
+  'Places', 'People', 'The PCs', 'End of the night'];
+const AFTER_MOVE = ['Where they are', 'Coming up', 'Unsigned notes: someone keeps slipping', 'Corvin Tash', 'Places', 'People', 'The PCs', 'End of the night'];
+
+describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
+  for (const width of WIDTHS) {
+    it(`the first screen holds where they are, Move them and Fight here (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('window.scrollY'), 0);
+        const head = await page.evaluate('document.querySelector("#rhead").textContent');
+        assert.match(head, /Session 15, no Plan: built from Session 14's Wrap-Up/);
+        const row = await page.evaluate('document.querySelector("#where .wrow").textContent');
+        assert.match(row, /Joss, Mirren, Pell, Yarrow/);
+        assert.match(row, /The Salt Inn/);
+        for (const sel of ['#where .wrow .who', '#where .wrow [data-movebox]', `#where .wrow [data-fplace="${SALT}"]`, '#rtitle']) {
+          const v = await inView(page, sel);
+          assert.ok(v.found && v.whole && v.hit, `${sel} wholly on the first screen at ${width}: ${JSON.stringify(v)}`);
+        }
+        assert.strictEqual(await noSideways(page), true, 'no sideways scroll');
+        // the title box: optional, with the date the sheet opened as its placeholder
+        assert.strictEqual(await page.evaluate('document.getElementById("rtitle").placeholder'), '29 Nov 2026');
+        assert.match(await page.evaluate('document.querySelector("label[for=rtitle]").textContent'), /Tonight's title \(optional\)/);
+        assert.match(await page.evaluate('document.querySelector("#rleft").textContent'), /^Points to land and If-they need a Plan\.$/);
+        // the Plan sheet's sections are not drawn
+        assert.strictEqual(await page.evaluate('Boolean(document.getElementById("run") || document.getElementById("handover"))'), false);
+        // the party came from the last Wrap-Up, not tonight's
+        assert.match(await page.evaluate('document.querySelector("#pcs").textContent'), /from the last Wrap-Up/);
+        // no D&D word on a GURPS sheet
+        const text = await page.evaluate('document.getElementById("sheet").textContent');
+        assert.doesNotMatch(text, /\b(AC|Long rest|initiative|level \d)\b/);
+        fs.mkdirSync(SHOTS, { recursive: true });
+        await page.screenshot(path.join(SHOTS, `task-8-first-screen-${width}.png`));
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`the rail matches the page's order, and again after Move them (${width})`, async () => {
+      const run = await startRec({ crlf: width === 1280 });
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.deepStrictEqual(await railNames(page), BEFORE_MOVE);
+        assert.deepStrictEqual(await railInPageOrder(page), { ok: true });
+        // a rail card jumps to its card, the heading in view
+        await page.click('#rail a[data-go^="card:"]');
+        await page.sleep(150);
+        const v = await inView(page, '#scenes .card h3');
+        assert.ok(v.whole, `the card's heading is in view: ${JSON.stringify(v)}`);
+        // Move them, by the keyboard, to the other city
+        await page.click('#where .wrow input[data-movebox]');
+        await page.type('Marrow');
+        await page.waitFor('document.querySelector("#where [data-movepick]")');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor('/Marrow Market/.test(document.querySelector("#where .wrow").textContent)');
+        assert.deepStrictEqual(await railNames(page), AFTER_MOVE);
+        assert.deepStrictEqual(await railInPageOrder(page), { ok: true });
+        assert.strictEqual(await noSideways(page), true);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`Move them to the other city re-ranks: Here empties (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.deepStrictEqual(await cardTitles(page, 'here'), ['Odalys Venn', 'Harl Brannock']);
+        assert.deepStrictEqual(await cardTitles(page, 'could'), ['Unsigned notes: someone keeps slipping', 'Corvin Tash']);
+        // every card names where its bullets came from
+        assert.match(await page.evaluate('document.querySelector("#scenes .card").textContent'), /Unresolved Threads/);
+        assert.deepStrictEqual(await page.evaluate('Array.from(document.querySelectorAll("#places .place a.lk"), (a) => a.textContent)'), ['The Salt Inn']);
+        await page.click('#where .wrow input[data-movebox]');
+        await page.type('Marrow Mar');
+        await page.waitFor('document.querySelector("#where [data-movepick]")');
+        await page.click('#where [data-movepick]');
+        await settled(page);
+        await page.waitFor('/Marrow Market/.test(document.querySelector("#where .wrow").textContent)');
+        assert.deepStrictEqual(await cardTitles(page, 'here'), []);
+        assert.match(await page.evaluate('document.querySelector("#scenes [data-cards=here]").textContent'), /Nothing on the record is here/);
+        assert.deepStrictEqual(await cardTitles(page, 'elsewhere'), ['Odalys Venn', 'Harl Brannock']);
+        assert.strictEqual(await page.evaluate('document.querySelector("#scenes details[data-cards=elsewhere]").open'), false, 'Elsewhere is folded');
+        assert.deepStrictEqual(await page.evaluate('Array.from(document.querySelectorAll("#places .place a.lk"), (a) => a.textContent)'), ['Marrow Market']);
+        const s = await stateOf(run);
+        assert.ok(Object.values(s.positions).every((p) => p && p.beat === 'pl-3b2cc69c'), JSON.stringify(s.positions));
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`Fight here at the Salt Inn ticks the crew in once (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await page.click(`#where .wrow [data-fplace="${SALT}"]`);
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+        await page.waitFor('document.querySelector("#side .fin .gchip")');
+        const p = await probe(page);
+        assert.deepStrictEqual(p.fight.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [true, true, true, true], 'the four stand there');
+        const chips = await page.evaluate('Array.from(document.querySelectorAll("#side .fin .gchip"), (c) => c.textContent)');
+        assert.strictEqual(chips.length, 1, `one chip: ${chips.join(' | ')}`);
+        assert.match(chips[0], /Joss, Mirren, Pell, Yarrow · The Salt Inn/);
+        assert.deepStrictEqual(await page.evaluate('Array.from(document.querySelectorAll("#side [data-faddgroup]"), (b) => b.textContent)'), [], 'nobody left to add');
+        const s = await stateOf(run);
+        assert.ok(!s.events.some((l) => /\bmove/i.test(l.text || '')), `placing the crew where the record has them logs no move: ${JSON.stringify(s.events)}`);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`Fight here away from the crew offers the crew once, with no empty chip (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await page.click(`#coming .lead [data-fplace="${FESTIVAL}"]`);
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+        await page.waitFor('document.querySelector("#side .fadd")');
+        const p = await probe(page);
+        assert.deepStrictEqual(p.fight.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [false, false, false, false], 'nobody stands there');
+        const adds = await page.evaluate('Array.from(document.querySelectorAll("#side [data-faddgroup]"), (b) => b.textContent)');
+        assert.deepStrictEqual(adds, ['+ the crew at The Salt Inn']);
+        const chips = await page.evaluate('Array.from(document.querySelectorAll("#side .fin .gchip"), (c) => c.textContent)');
+        assert.ok(chips.every((c) => !c.startsWith('—')), `no empty chip: ${chips.join(' | ')}`);
+        await page.click('#side [data-faddgroup]');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.fight.rows.filter((r) => r.kind === 'pc' && r.in).length === 4 && p; })()`);
+        const after = await page.evaluate('Array.from(document.querySelectorAll("#side .fin .gchip"), (c) => c.textContent)');
+        assert.strictEqual(after.filter((c) => /Joss/.test(c)).length, 1, `the crew once: ${after.join(' | ')}`);
+        assert.ok(after.every((c) => !c.startsWith('—')), `no empty chip: ${after.join(' | ')}`);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`typing a title then a jot files under that title, and the box then says Filed as (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        // a title the vault can't use is named while the box holds it (D8)
+        await page.click('#rtitle');
+        await page.type('Lamp/Fair');
+        await page.waitFor('/A title can\'t hold/.test(document.getElementById("rtbad").textContent)');
+        assert.strictEqual(await page.evaluate('document.getElementById("rtbad").textContent'), 'A title can\'t hold \\ / : * ? " < > | # ^ [ ]');
+        for (let i = 0; i < 'Lamp/Fair'.length; i++) await page.key('Backspace');
+        await page.waitFor('document.getElementById("rtbad").textContent === ""');
+        await page.type('The Lamp Fair');
+        // the jot box, then a line and Enter
+        await page.click('#hjot');
+        await page.type('The crew lands at Dock Row.');
+        await page.key('Enter');
+        await page.waitFor('/Filed as Session 15 - The Lamp Fair/.test((document.getElementById("rfiled") || {}).textContent || "")');
+        assert.strictEqual(await page.evaluate('document.getElementById("rtitle")'), null, 'the box is gone once filed');
+        assert.strictEqual(run.filer.calls.length, 1);
+        assert.ok(run.filer.calls[0].includes('--title=The Lamp Fair'), JSON.stringify(run.filer.calls[0]));
+        const v = await inView(page, '#rfiled');
+        assert.ok(v.whole, JSON.stringify(v));
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`the players' screen shows no card text (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const views = [];
+        const look = async () => views.push(JSON.stringify(await api(run, '/api/players/view')));
+        await look();
+        // open Background, a card's people in the drawer, a fight at the lead's place and back, Move them
+        await page.click('#background summary');
+        await page.click('#scenes .card a.lk');
+        await page.waitFor('document.querySelector("#drawer.open")');
+        await page.key('Escape');
+        await look();
+        await page.click(`#coming .lead [data-fplace="${FESTIVAL}"]`);
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+        await look();
+        await page.click('#fEnd');
+        await page.click('#fEnd');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
+        await settled(page);
+        await page.click('#where .wrow input[data-movebox]');
+        await page.type('Marrow');
+        await page.waitFor('document.querySelector("#where [data-movepick]")');
+        await page.key('Enter');
+        await settled(page);
+        await look();
+        for (const v of views) for (const w of SECRET_WORDS) assert.ok(!v.toLowerCase().includes(w.toLowerCase()), `the players' view holds "${w}": ${v.slice(0, 400)}`);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+  }
+});

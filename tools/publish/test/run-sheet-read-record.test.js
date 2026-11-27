@@ -49,6 +49,19 @@ const TEMPLATE_WRAP = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'sk
   .replace(/\r\n/g, '\n').replace(/^session:.*$/m, 'session: "[[Session 14 - Ledger]]"');
 
 describe('readRecord', () => {
+  // Task 8: the sheet re-reads the model once the session is filed. The new index names no party of its own, so the
+  // party stays the one the record gave (the latest Wrap-Up's), not an empty list: the PCs the GM placed stay on the page.
+  for (const crlf of [false, true]) {
+    it(`a session filed tonight keeps the record's party${crlf ? ' (CRLF)' : ''}`, () => {
+      const dir = open({ crlf });
+      const before = readRecord(dir, session());
+      put(dir, S15, '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\n---\n\n# Session 15 - Next\n');
+      const m = readRecord(dir, session({ index: S15, title: 'Session 15 - Next' }));
+      assert.ok(before.pcs.length > 0);
+      assert.deepStrictEqual(m.pcs.map((p) => p.note), before.pcs.map((p) => p.note));
+      assert.strictEqual(m.partyFrom, before.partyFrom);
+    });
+  }
   it('the header and the no-Plan line', () => {
     const dir = open();
     const m = readRecord(dir, session({ planVault: true }));

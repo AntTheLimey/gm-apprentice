@@ -508,7 +508,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     res.end(data);
   }
   const vaultFiles = serve.handler(vaultRoot, { notFound: NO_PAGE });
-  const sessionInfo = (idx) => ({ label, index: session.index, plan: session.plan, title: session.title, number: session.number, fromRecord: Boolean(session.fromRecord), filed: isFiled(idx) });
+  const sessionInfo = (idx) => ({ label, index: session.index, plan: session.plan, title: session.title, number: session.number, fromRecord: Boolean(session.fromRecord), filed: isFiled(idx), openTitle: opened.title });
 
   function readBody(req, done) {
     const chunks = [];

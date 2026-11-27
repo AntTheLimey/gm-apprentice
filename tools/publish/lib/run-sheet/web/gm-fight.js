@@ -261,6 +261,8 @@
   function fightHere(note) {
     const key = (model().placeKeys || {})[note];
     if (!key || state().fight) return;
+    // a night with no Plan: the crew the sheet has not placed stand where the record has them first (Task 8, P7)
+    if (model().record && RP.placeCrew) RP.placeCrew();
     // the beat or spot where a PC of the focused group stands now, else the first unvisited (final review O2)
     const plan = RS.planTarget(model(), state(), note, groupPcs(RP.focusedGroup()));
     if (plan) { startFight(plan.beat, { at: plan.spot || plan.beat, place: note }); return; }
@@ -1957,9 +1959,14 @@
     const inFight = FM.fightGroupKeys(f, RP.groups());
     // a group nobody stands in any more (its people joined another) goes once someone is in (PRENTICE's review 2)
     const someone = inFight.filter((g) => groupWho(g));
-    h += `<div class="fin"><span class="muted">In this fight:</span> ${(someone.length ? someone : inFight).map((g) => `<span class="gchip">${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}</span>`).join(' ')}</div>`;
+    // a night with no Plan (Task 8, P7): a place nobody stands at yet reads as the place alone, never "— · <place>", and a
+    // group holding every PC is "the crew"
+    const rec = Boolean(model().record);
+    const chip = (g) => (rec && !groupWho(g) ? esc(RP.groupLabel(g, d)) : `${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}`);
+    const addWho = (k) => (rec && groupPcs(k).length && groupPcs(k).length === (model().pcs || []).length ? 'the crew' : groupWho(k));
+    h += `<div class="fin"><span class="muted">In this fight:</span> ${(someone.length ? someone : inFight).map((g) => `<span class="gchip">${chip(g)}</span>`).join(' ')}</div>`;
     const others = RP.groups().filter((g) => !inFight.includes(g.key));
-    h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(groupWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
+    h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(addWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
       + contingencyAdds(f, d)
       + `<span class="addname"><input id="fAddName" value="${esc(ui.addText)}" placeholder="anyone, by name" autocomplete="off" aria-label="Add anyone in the cast to the fight"><span class="fhits" id="fHits">${hitsHTML()}</span></span>`
       + `<input id="fAddCount" type="number" min="1" max="20" value="${esc(ui.addCount)}" aria-label="How many"><button type="button" id="fAddGo">Add</button></div>`;

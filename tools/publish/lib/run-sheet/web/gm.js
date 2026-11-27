@@ -194,6 +194,8 @@
   // Every change: reduce, redraw, send.
   function act(a) {
     if (G.switching) return; // the sheet is changing session: nothing is done to the old one
+    // a title still being typed goes first: the filing the next action may start takes it (D2)
+    if (a.type !== 'setTitle' && G.ui.titleDraft != null) commitTitle();
     a.id = `${G.clientId}-${++G.seq}`;
     const at = new Date().toISOString();
     a.at = at; // the server keeps the action's own time (Review L2), so a queued action logs when it was done
@@ -379,7 +381,12 @@
       refresh();
     });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
-    es.addEventListener('record-filed', (ev) => { const d = data(ev); if (d.path && !G.tableLog) { G.tableLog = d.path; update(); } });
+    es.addEventListener('record-filed', (ev) => {
+      const d = data(ev);
+      if (d.path && !G.tableLog) { G.tableLog = d.path; update(); }
+      // a session from the record is named now: the model says under what (the title box's "Filed as")
+      if (G.session && G.session.fromRecord) getJson('/api/model').then((m) => { takeModel(m); update(); }).catch(() => { /* the next load reads it */ });
+    });
     es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
     es.addEventListener('record-ok', () => recordOk());
     es.onerror = () => { if (!G.down) lost(); };
@@ -501,7 +508,7 @@
       ? `<button type="button" class="new" data-movenew="${esc(c.name)}" data-moveg="${esc(group)}">${esc(c.label)}</button>`
       : `<button type="button" data-movepick="${esc(c.note)}" data-moveg="${esc(group)}">${esc(c.name)}</button>`)).join('');
   }
-  const groupWho = (key) => ((groups().find((g) => g.key === key) || {}).pcs || []).map((p) => first(nameOf(p))).join(', ');
+  const groupWho = (key) => ((groupByKey(key) || {}).pcs || []).map((p) => first(nameOf(p))).join(', ');
   // The Move list closes on Esc and on any press outside its box (final review P-A1), as the Colours menu does: the
   // press goes on to do what it says, and the typed words stay in the box. `keep` is the box pressed in, if any.
   function closeMoveLists(keep = null) {
@@ -546,8 +553,8 @@
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches('input[data-movebox]')) reopenMoveList(ev.target); });
   // Move a group's PCs to a known place (`note`) or a typed one (`name`). The place's beat becomes the focus.
   function moveGroup(group, { note, name }) {
-    const g = groups().find((x) => x.key === group);
-    if (!g) return;
+    const g = groupByKey(group);
+    if (!g || !g.pcs.length) return;
     if (G.ui.moveHits) for (const k of Object.keys(G.ui.moveHits)) if (k.endsWith(`|${group}`)) delete G.ui.moveHits[k];
     document.querySelectorAll(`input[data-moveg="${CSS.escape(group)}"]`).forEach((box) => { box.value = ''; });
     const names = g.pcs.map((p) => first(nameOf(p)));
@@ -577,9 +584,65 @@
     G.ui.focus = key;
     touch(key);
     update();
-    // the sheet (the pane, in a fight) goes to where they went (final review P4.5)
-    goTo(`beat:${key}`);
+    // the sheet (the pane, in a fight) goes to where they went (final review P4.5); the no-Plan page stays where the GM
+    // is, with Where they are at its top
+    if (!REC()) goTo(`beat:${key}`);
   }
+  // ------------------------------------------------------------------ the no-Plan page (plan Task 8)
+  // A night with no Plan reads `model.record` (read-record.js): where the crew is, Coming up, the cards ranked around the
+  // focused group's place (record-rank.js), Background, Last time and World. The PCs the sheet has not placed yet stand
+  // where the record has them (`whereNow`): one row, `CREW`, whose Move them moves them all. Nothing is placed on open:
+  // opening files nothing (#855).
+  const REC = () => (G.model && G.model.record) || null;
+  const RR = window.RunSheetRecordRank;
+  const CREW = '__crew';
+  const unplacedCrew = () => pcs().filter((p) => !posOf(p.note)).map((p) => p.note);
+  function groupByKey(key) {
+    if (key === CREW) return REC() ? { key: CREW, beat: null, spot: null, pcs: unplacedCrew() } : null;
+    return groups().find((g) => g.key === key) || null;
+  }
+  // A group's place note: its spot's or beat's place; null for a place typed tonight (no note, so nothing ranks Here).
+  function groupPlaceNote(g, d = D()) {
+    if (g.key === CREW) return (REC() && REC().whereNow && REC().whereNow.place) || null;
+    const b = d.beats.find((x) => x.key === g.beat);
+    const spot = b && g.spot ? (b.spots || []).find((x) => x.key === g.spot) : null;
+    return (spot && spot.note) || (b && b.place) || null;
+  }
+  // The rows of Where they are: every placed group, then the crew the sheet has not placed, if any.
+  function whereGroups() {
+    const out = groups().slice();
+    if (unplacedCrew().length) out.push(groupByKey(CREW));
+    return out;
+  }
+  // The focused group's place, what the cards and places rank by.
+  function rankPlace(d) {
+    const gs = groups();
+    if (gs.length) {
+      const g = gs.find((x) => x.key === focusedGroup(gs));
+      return g ? groupPlaceNote(g, d) : null;
+    }
+    return groupPlaceNote(groupByKey(CREW), d);
+  }
+  function ranked(d) {
+    const r = REC();
+    const where = rankPlace(d);
+    const out = RR ? RR.rankCards(r.cards || [], where, r.loc || {}, r.peopleAt || {}) : { here: [], could: r.cards || [], elsewhere: [] };
+    return { ...out, where, places: RR ? RR.placesFor(where, r.loc || {}, out.here) : [] };
+  }
+  // Fight here on the no-Plan page (gm-fight.js asks first): the crew the sheet has not placed stand where the record has
+  // them, so they are put there quietly (no move is logged: they did not move), and the fight finds them standing there,
+  // or offers them on Add when it is elsewhere.
+  function placeCrew() {
+    const r = REC();
+    const at = r && r.whereNow ? r.whereNow.place : null;
+    const key = at ? (G.model.placeKeys || {})[at] : null;
+    const crew = unplacedCrew();
+    if (!key || !crew.length) return;
+    if (!D().beats.some((b) => b.key === key)) act({ type: 'improvise', key, title: nameOf(at), place: at, quiet: true });
+    act({ type: 'moveAll', pcs: crew, to: { beat: key, spot: null, title: nameOf(at) } });
+    touch(key);
+  }
+
   // "Where the party is" (F13): one row per group at the top of Hand over, with its place and Move them.
   function partyWhereHTML(d) {
     const gs = groups();
@@ -780,6 +843,7 @@
   const RAIL_TOP = [['handover', 'Hand over'], ['pcs', 'The PCs'], ['run', 'The run']];
   const RAIL_END = [['people', 'People'], ['places', 'Places and maps'], ['threads', 'Threads'], ['long', 'If you run long'], ['end', 'End of the night'], ['prep', "Prep's working"]];
   function railHTML(d) {
+    if (REC()) return recordRailHTML(d);
     const faces = (list) => (list.length ? `<span class="fc">${list.map((p) => face(p.note)).join('')}</span>` : '');
     const beats = d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency));
     const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; });
@@ -823,6 +887,7 @@
     return `${strip}${bar}${body}<p class="wholelink"><a class="lk" id="paneWhole" data-pane="whole">Whole run sheet</a> <span class="note">the brief, every beat, people, places and the end of the night</span></p>`;
   }
   function wholeHTML(d) {
+    if (REC()) return recordHTML(d);
     const m = G.model;
     let h = '';
     for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
@@ -845,6 +910,159 @@
     const prep = m.prep || [];
     const open = mem.get('fold:prep') === '1';
     h += `<section class="s" id="prep"><details class="fold" data-fold="prep" ${open ? 'open' : ''}><summary>Prep's working (not for the table)${prep.length ? `: ${esc(prep.map((p) => p.title).join(' · '))}` : ''}</summary>${prep.map((p) => `<h3>${esc(p.title)}</h3>${p.mdHtml || ''}`).join('') || '<p class="muted">None.</p>'}</details></section>`;
+    return h;
+  }
+
+  // ------------------------------------------------------------------ the no-Plan page, drawn (plan Task 8)
+  // Top to bottom: the header and the title box; Where they are, with Move them and Fight here on each row (audit P1,
+  // P6); Coming up; the cards, Here, Could come to them, then Elsewhere folded; Background, folded; Last time and World;
+  // Places, People and the PCs; the one line on what needs a Plan; End of the night. The rail lists the same, in the
+  // same order (P2, P5). Every word comes from `model.record` and `model.rules.words`.
+  const TITLE_BAD = /[\\/:*?"<>|#^[\]]/;
+  const TITLE_BAD_TEXT = 'A title can\'t hold \\ / : * ? " < > | # ^ [ ]';
+  const RAIL_REC_END = [['places', 'Places'], ['people', 'People'], ['pcs', 'The PCs'], ['end', 'End of the night']];
+  function recordRailHTML(d) {
+    const rk = ranked(d);
+    const card = (c) => `<a class="b" data-go="card:${esc(c.id)}">${esc(c.title)}</a>`;
+    let h = '<button type="button" class="railstrip" id="railOpen" title="Open the run list" aria-label="Open the run list">⟩</button>';
+    h += '<div class="hd rhd">Run sheet<button type="button" id="railFold" title="Fold the run list to a thin strip" aria-label="Fold the run list">⟨</button></div>';
+    h += '<a data-go="where">Where they are</a><a data-go="coming">Coming up</a>';
+    if (rk.here.length) h += `<div class="hd">Here</div>${rk.here.map(card).join('')}`;
+    if (rk.could.length) h += `<div class="hd">Could come to them</div>${rk.could.map(card).join('')}`;
+    h += RAIL_REC_END.map(([id, t]) => `<a data-go="${id}">${t}</a>`).join('');
+    return h;
+  }
+
+  const filedNow = () => Boolean((G.session && G.session.filed) || (G.state && G.state.filed));
+  // The title box (D2, D8): typed before the filing, the index's name once there is an index, "Filed as" once filed.
+  function titleHTML() {
+    const ses = G.session || {};
+    if (filedNow() && ses.filed) return `<div class="rtitle" id="rfiled"><span class="muted">Filed as</span> <b>${esc(ses.title || ses.label || '')}</b></div>`;
+    if (ses.index) return `<div class="rtitle" id="rindex"><span class="muted">Filed as</span> <b>${esc(ses.title || stem(ses.index))}</b> <span class="note">by session-prep</span></div>`;
+    if (filedNow()) return '<div class="rtitle"><span class="muted">Filing…</span></div>';
+    const v = G.ui.titleDraft != null ? G.ui.titleDraft : (G.state.title || '');
+    return `<div class="rtitle"><label for="rtitle">Tonight's title (optional)</label> <input id="rtitle" value="${esc(v)}" placeholder="${esc(ses.openTitle || '')}" maxlength="80" autocomplete="off">`
+      + ` <span class="warn" id="rtbad" role="status">${TITLE_BAD.test(v) ? esc(TITLE_BAD_TEXT) : ''}</span>`
+      + '<span class="note">The session is filed on the first thing that happens at the table.</span></div>';
+  }
+  function commitTitle() {
+    const v = G.ui.titleDraft;
+    G.ui.titleDraft = null;
+    clearTimeout(G.titleTimer);
+    G.titleTimer = null;
+    if (v == null || filedNow() || RS.cleanTitle(v) === (G.state.title || '')) return;
+    act({ type: 'setTitle', title: v });
+  }
+
+  // Fight here for a place note: the fight part's own button (data-fplace), or nothing (no fights, a fight running).
+  const fightAt = (note) => (note ? parts.map((x) => (x.placeButtons && x.placeButtons(note)) || '').join('') : '');
+  function whereRowHTML(g, d, many, focus) {
+    const note = groupPlaceNote(g, d);
+    const b = g.key === CREW ? null : d.beats.find((x) => x.key === g.beat);
+    let place;
+    if (note) place = link(note);
+    else if (b) place = esc(b.title);
+    else place = '<span class="muted">a place the record does not name</span>';
+    // a place typed tonight has no note: its beat's own Fight
+    const fight = note ? fightAt(note) : (b ? parts.map((x) => (x.beatButtons && x.beatButtons(b)) || '').join('') : '');
+    const from = g.key === CREW && note ? ' <span class="note">from the record</span>' : '';
+    const who = `<span class="fc">${g.pcs.map((p) => face(p)).join('')}</span> ${many && g.key !== CREW ? `<a class="lk" data-pgroup="${esc(g.key)}">${esc(groupWho(g.key))}</a>` : `<b>${esc(groupWho(g.key))}</b>`}`;
+    return `<li class="wrow ${many && focus ? 'focus' : ''}"><span class="who">${who}</span> <span class="at">at ${place}${from}</span> <span class="wact">${moveBoxHTML(g.key, 'where')}${fight ? ` <span class="wbtns">${fight}</span>` : ''}</span></li>`;
+  }
+  function recordWhereHTML(d) {
+    const rows = whereGroups();
+    if (!rows.length) return pcs().length ? '<p class="muted">Every PC is off-screen.</p>' : '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
+    const gs = groups();
+    const f = gs.length ? focusedGroup(gs) : CREW;
+    return `<ul class="where-rec">${rows.map((g) => whereRowHTML(g, d, rows.length > 1, g.key === f)).join('')}</ul>`;
+  }
+
+  const listHTML = (htmls) => `<ul>${htmls.map((x) => `<li>${x}</li>`).join('')}</ul>`;
+  function comingHTML() {
+    const cu = REC().comingUp || {};
+    const w = REC().world || {};
+    let h = '';
+    const lead = cu.lead;
+    if (lead) {
+      const people = (lead.people || []).map((p) => link(p)).join(' · ');
+      const hits = (lead.hits || []).map((p) => link(p)).join(' · ');
+      const sched = lead.scheduleHtml || (lead.schedule || []).map(esc);
+      h += `<div class="card lead"><div class="bh"><span class="lbl">The clock</span><h3>${esc(lead.title)}</h3>${lead.place ? `<span class="at">at ${link(lead.place)}</span>` : ''}${fightAt(lead.place)}</div>`
+        + (sched.length ? `<h4 class="lab">Schedule</h4>${listHTML(sched)}` : '')
+        + (people ? `<h4 class="lab">People</h4><p>${people}</p>` : '')
+        + `<h4 class="lab">What could hit this</h4><p>${hits || '<span class="muted">Nothing on the record.</span>'}</p></div>`;
+    }
+    if (cu.handoff) h += `<h4 class="lab">Handoff</h4>${cu.handoffHtml || `<p>${esc(cu.handoff)}</p>`}`;
+    if (cu.empty) h += `<p class="muted">${esc(cu.empty)}</p>`;
+    const kv = [];
+    if (w.date) kv.push(`<b>In-game date</b><span>${esc(w.date)}</span>`);
+    if ((w.clocks || []).length) kv.push(`<b>Clocks</b><span>${w.clocks.map(esc).join('<br>')}</span>`);
+    if (kv.length) h += `<div class="kv">${kv.join('')}</div>`;
+    const inSched = new Set((lead && lead.schedule) || []);
+    const ints = (cu.intentions || []).map((t, i) => [t, (cu.intentionsHtml || [])[i] || esc(t)]).filter(([t]) => !inSched.has(t));
+    if (ints.length) h += `<h4 class="lab">What the players said they'd do</h4>${listHTML(ints.map((x) => x[1]))}`;
+    return h || '<p class="muted">Nothing on the record.</p>';
+  }
+
+  function cardHTML(c) {
+    return `<div class="card" id="card:${esc(c.id)}"><h3>${esc(c.title)}</h3><ul>${(c.items || []).map((it) => `<li>${it.mdHtml || esc(it.md)} <span class="src">${esc(it.source)}</span></li>`).join('')}</ul></div>`;
+  }
+  function scenesHTML(rk) {
+    const here = rk.here.length ? rk.here.map(cardHTML).join('')
+      : `<p class="muted">${rk.where ? 'Nothing on the record is here.' : 'The crew stands nowhere the record knows: every card could come to them.'}</p>`;
+    let h = `<div data-cards="here"><h4 class="lab">Here</h4>${here}</div>`;
+    h += `<div data-cards="could"><h4 class="lab">Could come to them</h4>${rk.could.length ? rk.could.map(cardHTML).join('') : '<p class="muted">None.</p>'}</div>`;
+    if (rk.elsewhere.length) {
+      const open = mem.get('fold:rec-else') === '1';
+      h += `<details class="fold" data-cards="elsewhere" data-fold="rec-else" ${open ? 'open' : ''}><summary>Elsewhere (${rk.elsewhere.length})</summary>${rk.elsewhere.map(cardHTML).join('')}</details>`;
+    }
+    return h;
+  }
+  function recordPeopleHTML(rk) {
+    const r = REC();
+    const order = [];
+    const on = new Map();
+    const lead = (r.comingUp && r.comingUp.lead) || null;
+    for (const p of (lead && lead.people) || []) { if (!on.has(p)) { on.set(p, []); order.push(p); } on.get(p).push('Coming up'); }
+    for (const c of [...rk.here, ...rk.could, ...rk.elsewhere]) {
+      for (const p of c.people || []) { if (!on.has(p)) { on.set(p, []); order.push(p); } on.get(p).push(c.title); }
+    }
+    if (!order.length) return '<p class="muted">Nobody on the record\'s cards.</p>';
+    const at = r.peopleAt || {};
+    return `<div class="tw"><table><thead><tr><th>Name</th><th>Where</th><th>On</th></tr></thead><tbody>${order.map((p) => `<tr><td>${face(p)} ${link(p)}</td><td>${at[p] ? link(at[p]) : '<span class="muted">—</span>'}</td><td>${esc([...new Set(on.get(p))].join(' · '))}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function recordPlacesHTML(rk) {
+    if (!rk.places.length) return `<p class="muted">${rk.where ? 'None on the record.' : 'No place for the crew yet.'}</p>`;
+    const tile = (p) => {
+      const pic = portraitOf(p);
+      const btns = fightAt(p);
+      return `<div class="place"><div class="im">${pic ? `<img src="${esc(picUrl(pic))}" alt="">` : 'no picture yet'}</div><div class="cap">${link(p)}${btns ? ` ${btns}` : ''}</div></div>`;
+    };
+    return `<div class="places">${rk.places.map(tile).join('')}</div>`;
+  }
+  function recordHTML(d) {
+    const r = REC();
+    const rk = ranked(d);
+    let h = '';
+    for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
+    if (d.orphans.length) h += changedHTML(d);
+    h += `<div class="rtop"><div class="rhead" id="rhead">${esc(r.header || '')}</div>${r.noPlanLine ? `<div class="note">${esc(r.noPlanLine)}</div>` : ''}${titleHTML()}</div>`;
+    h += sec('where', 'Where they are', recordWhereHTML(d));
+    h += sec('coming', 'Coming up', comingHTML());
+    h += sec('scenes', 'Possible scenes', scenesHTML(rk));
+    const bg = r.background || [];
+    const bgOpen = mem.get('fold:rec-bg') === '1';
+    h += `<section class="s" id="background"><details class="fold" data-fold="rec-bg" ${bgOpen ? 'open' : ''}><summary>Background${bg.length ? ` (${bg.length})` : ''}</summary>${bg.length ? `<ul>${bg.map((b) => `<li>${b.mdHtml || esc(b.md)} <span class="src">${esc(b.from || b.source || '')}</span></li>`).join('')}</ul>` : '<p class="muted">None.</p>'}</details></section>`;
+    const lt = r.lastTime || {};
+    const w = r.world || {};
+    const last = (lt.recap ? `<h4 class="lab">Last time${lt.playDate ? `, played ${esc(lt.playDate)}` : ''}</h4>${lt.recapHtml || `<p>${esc(lt.recap)}</p>`}` : '')
+      + (w.md ? `<h4 class="lab">World</h4>${w.mdHtml || `<p>${esc(w.md)}</p>`}` : '');
+    h += sec('last', 'Last time · World', last || '<p class="muted">No record yet.</p>');
+    h += sec('places', 'Places', recordPlacesHTML(rk));
+    h += sec('people', 'People', recordPeopleHTML(rk));
+    h += sec('pcs', 'The PCs', pcsHTML());
+    if (r.leftOut) h += `<p class="note" id="rleft">${esc(r.leftOut)}</p>`;
+    h += sec('end', 'End of the night', endHTML(d));
     return h;
   }
 
@@ -914,7 +1132,7 @@
   const md = (o, f) => (typeof o[`${f}Html`] === 'string' ? o[`${f}Html`] : esc(o[f]));
   function pcsHTML() {
     if (!pcs().length) return '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
-    const src = { index: "the session's list", wrapup: "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
+    const src = { index: "the session's list", wrapup: REC() ? 'the last Wrap-Up' : "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
     return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
       <td>${p.moment ? `<b>Moment:</b> ${md(p, 'moment')}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${md(p, 'touch')}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${md(p, 'arc')}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${md(p, 'thread')}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -1953,6 +2171,7 @@
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && (d.go || d.pane)) { ev.preventDefault(); t.click(); return; }
     if (ev.key !== 'Enter' || ev.isComposing) return;
+    if (t.id === 'rtitle') { ev.preventDefault(); commitTitle(); return; }
     if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v); return; }
     if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v); return; }
     if (d.bring !== undefined) {
@@ -1974,6 +2193,16 @@
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
+    // the title box: kept as typed, sent a moment after the typing stops (or first, before any other action), and a
+    // character the vault can't hold named beside it (D8)
+    if (t.id === 'rtitle') {
+      G.ui.titleDraft = t.value;
+      const bad = $('#rtbad');
+      if (bad) bad.textContent = TITLE_BAD.test(t.value) ? TITLE_BAD_TEXT : '';
+      clearTimeout(G.titleTimer);
+      G.titleTimer = setTimeout(commitTitle, 600);
+      return;
+    }
     if (t.dataset && t.dataset.moveg !== undefined && t.tagName === 'INPUT') {
       const id = t.dataset.movebox;
       G.ui.moveHits = G.ui.moveHits || {};
@@ -2049,6 +2278,7 @@
     }
     if (d.vcond) { act({ type: 'endSet', vitals: { [d.vcond]: { conditions: t.value.trim() } } }); return; }
     if (t.id === 'advance') act({ type: 'endSet', advancement: t.value });
+    if (t.id === 'rtitle') commitTitle();
   });
 
   // A header that wraps on a narrower window is taller: the jump offset follows it.
@@ -2101,6 +2331,8 @@
     parts,
     // helpers the parts share with the page
     esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
+    // the no-Plan page (Task 8): the crew the sheet has not placed stand where the record has them, before Fight here
+    placeCrew,
     // the fight's layout (plan 6a Task 10)
     layout: L, rightRoom, rightWidth, orderMin: () => G.om, paneTop, layoutProbe,
     OTHER_STATUS_PLACEHOLDER, SIDE_PRESETS, sideCss, swatches,
