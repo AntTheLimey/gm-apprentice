@@ -51,6 +51,18 @@ const isPlaceholder = (s) => {
   const t = String(s || '').trim();
   return t === '' || /^\{[\s\S]*\}$/.test(t);
 };
+// An item that only says there is nothing (Task 11b, F4 and F6): "none.", "Nothing.", "n/a", "—", "None left open by the
+// story." (its first sentence says so, whatever follows), or a whole item "No open threads". An item that only starts
+// with such a word ("Nothing stops the deputy…", "No one knows…") says something, and stays.
+const NOTHING_WORD = /^(?:none|nothing|nil|n\/a|—|–|-+)$/;
+const NOTHING_OPEN = /^(?:none|nothing)\s+(?:(?:is|are)\s+)?(?:left\s+)?(?:open|outstanding|pending|active|running|ticking|carried|new|yet|pressing|on the record)\b/;
+const NO_KIND = /^no\s+(?:(?:open|new|active|further|other|outstanding|unresolved|pending|live|current|more)\s+)*(?:threads?|clocks?|threats?|intentions?|consequences?|follow-?ups?|npcs?|items?|changes?|deadlines?|timers?|plans?)\b(?:\s+[\p{L}\p{N}'-]+){0,4}$/u;
+const isNothing = (s) => {
+  const t = stripMd(s).replace(/\s+/g, ' ').trim().toLowerCase();
+  const first = t.split(/(?<=[.!?])\s+/)[0].replace(/[.!?]+$/, '').trim();
+  const whole = t.replace(/[.!?]+$/, '').trim();
+  return NOTHING_WORD.test(first) || NOTHING_OPEN.test(first) || (first === whole && NO_KIND.test(whole));
+};
 const stripComments = (s) => nl(s).replace(/<!--[\s\S]*?-->/g, '');
 // Text read as prose: comments gone, placeholder paragraphs gone, blank edges trimmed.
 const prose = (s) => stripComments(s).split(/\n\s*\n/).map((p) => p.trim()).filter((p) => !isPlaceholder(p)).join('\n\n');
@@ -59,7 +71,7 @@ const sectionText = (body, level, re) => {
   const hit = pt.sections(body, level).find((s) => re.test(s.title));
   return hit ? hit.text : '';
 };
-const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.trim()).filter((t) => !isPlaceholder(t));
+const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.trim()).filter((t) => !isPlaceholder(t) && !isNothing(t));
 
 // A sentence end: a stop and a space, but never the dot after a lone capital ("P.E.T.A. Council", "J. Smith"), which is
 // an initialism's or an initial's, not a sentence's end (Task 11b, F1).
@@ -80,9 +92,9 @@ function labelItems(text, name) {
     else if (/^\s+\S/.test(lines[i])) parts[parts.length - 1] += ` ${lines[i].trim()}`;
     else break;
   }
-  return parts.filter((p) => !isPlaceholder(p))
+  return parts.filter((p) => !isPlaceholder(p) && !isNothing(p))
     .flatMap((p) => p.split(ITEM_BREAK))
-    .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p));
+    .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p) && !isNothing(p));
 }
 const labelValue = (text, name) => labelItems(text, name).join(' ');
 

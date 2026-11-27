@@ -562,6 +562,31 @@ describe('real-vault shapes (Task 11b)', () => {
       ]);
     });
 
+    // F4 / F6: an item that only says there is nothing reads as empty: no lead from "none.", no card from "None left open".
+    it(`F4: a World State value of "none." is empty: no clock, no threat, no lead${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** none.\n')
+        .replace(/- \*\*Active threats:\*\*.*\n/, '- **Active threats:** None.\n'));
+      const r = readRecord(dir, session()).record;
+      assert.deepStrictEqual([r.world.clocks, r.world.threats], [[], []]);
+      assert.strictEqual(r.comingUp.lead, null);
+      assert.doesNotMatch(r.world.md, /none/i);
+      // the Festival schedule intention is no lead's schedule now: it is a card of its own
+      assert.ok(r.cards.some((c) => c.items.some((i) => /Festival schedule/.test(i.md))));
+    });
+
+    it(`F6: an item that says nothing is open makes no card; one that only starts with a "no" word does${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+        '- **None left open by the quay.** The lamp is lit again and the guild has gone quiet. The ledger is the port\'s.\n'
+        + '- Nothing.\n- n/a\n- —\n- No open threads this session.\n'
+        + '- Nothing stops the deputy from reading the page aloud.\n- No one knows who rang the bell.\n'));
+      const all = readRecord(dir, session()).record.cards.flatMap((c) => c.items.map((i) => i.md));
+      assert.ok(!all.some((m) => /None left open|^Nothing\.$|^n\/a$|^—$|No open threads/.test(m)), all.join('\n'));
+      assert.ok(all.includes('Nothing stops the deputy from reading the page aloud.'));
+      assert.ok(all.includes('No one knows who rang the bell.'));
+    });
+
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Q.R.L. Council marches on the Harbour Festival Grounds at noon. The bell rings at dusk.\n'));
