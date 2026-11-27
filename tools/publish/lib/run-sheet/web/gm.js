@@ -1276,7 +1276,7 @@
     if ((b.points || []).length) {
       h += `<h4 class="lab">Points to land</h4><ul class="pts">${b.points.map((p) => {
         const st = (G.state.points[p.key] && G.state.points[p.key].mark) || '';
-        return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${PT_TITLE[st]}" aria-label="${esc(PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${p.textHtml || esc(p.text)}</span>${ptAltHTML(p, b, st)}</li>`;
+        return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${esc(PT_TITLE[st])}" aria-label="${esc(PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${p.textHtml || esc(p.text)}</span>${ptAltHTML(p, b, st)}</li>`;
       }).join('')}</ul>`;
     }
     // 3 Who's here
