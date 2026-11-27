@@ -262,14 +262,15 @@ describe('the possible scenes', () => {
 
     it(`cards come only from the three sources, one per person${tag}`, () => {
       const m = readRecord(open({ crlf }), session());
-      // The ledger-page thread and Harl's follow-up share three words with the ticked checklist line (decide, ledger, page),
-      // the ferry toll is struck, so what is left: Who paid (Odalys), Unsigned notes, the three follow-ups' Odalys and
-      // Corvin, and the Guildhall visit. The Festival schedule is the lead's, not a card.
-      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Corvin Tash']);
-      assert.deepStrictEqual(m.record.cards.map((c) => c.items.length), [2, 1, 2]);
+      // The ledger-page thread alone shares three words with the ticked checklist line (ledger, page, safe), and the ferry
+      // toll is struck, so what is left: Who paid (Odalys), Unsigned notes, and the follow-ups for
+      // Odalys, Harl and Corvin, and the Guildhall visit. The Festival schedule is the lead's, not a card.
+      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Harl Brannock', 'Corvin Tash']);
+      assert.deepStrictEqual(m.record.cards.map((c) => c.items.length), [2, 1, 1, 2]);
       assert.deepStrictEqual(m.record.cards[0].items.map((i) => i.source), ['Unresolved Threads', 'NPCs Needing Follow-Up']);
       assert.deepStrictEqual(m.record.cards[1].items.map((i) => i.source), ['Unresolved Threads']);
-      assert.deepStrictEqual(m.record.cards[2].items.map((i) => i.source), ['NPCs Needing Follow-Up', 'Player-Stated Intentions']);
+      assert.deepStrictEqual(m.record.cards[2].items.map((i) => i.source), ['NPCs Needing Follow-Up']);
+      assert.deepStrictEqual(m.record.cards[3].items.map((i) => i.source), ['NPCs Needing Follow-Up', 'Player-Stated Intentions']);
       const all = m.record.cards.flatMap((c) => c.items.map((i) => i.md)).join('\n');
       // PC Carry-Forward never makes a card
       assert.doesNotMatch(all, /guild's mark|Faced down|Talked Corvin|upside down|Keep watch on the Salt Inn/);
@@ -281,8 +282,7 @@ describe('the possible scenes', () => {
       const dir = open({ crlf });
       const all = readRecord(dir, session()).record.cards.flatMap((c) => c.items.map((i) => i.md)).join('\n');
       assert.doesNotMatch(all, /ferry toll/i); // struck through
-      assert.doesNotMatch(all, /Ledger page:/); // ticked: ledger, page, safe shared with the [x] line
-      assert.doesNotMatch(all, /what he does with the ledger page/);
+      assert.doesNotMatch(all, /Ledger page:/); // ticked: ledger, page, safe shared with the [x] line, and no other item shares as many
       // un-tick the checklist line and both come back. Ledger page links Odalys first, so it is hers; Harl's follow-up is a
       // card that shares the Harl Brannock note with it, so the two join, titled by the note linked most (Odalys).
       edit(dir, W14, (t) => t.replace('- [x] ~~Decide', '- [ ] ~~Decide'));
@@ -290,6 +290,26 @@ describe('the possible scenes', () => {
       assert.deepStrictEqual(titles(m), ['Unsigned notes: someone keeps slipping', 'Corvin Tash', 'Odalys Venn']);
       assert.deepStrictEqual(m.record.cards[2].items.map((i) => i.md.replace(/\*\*/g, '').split(':')[0]), ['Ledger page', 'Who paid the guild', '[[Odalys Venn]]', '[[Harl Brannock]]']);
       assert.doesNotMatch(m.record.cards.flatMap((c) => c.items.map((i) => i.md)).join('\n'), /ferry toll/i);
+    });
+
+    it(`a ticked line drops one item, the closer one, and on a tie drops neither${tag}`, () => {
+      const dir = open({ crlf });
+      const textOf = (m) => m.record.cards.flatMap((c) => c.items.map((i) => i.md)).join('\n');
+      // Tie: Harl's follow-up also shares three words with the ticked line (decide, ledger, page), as the Ledger page
+      // thread does (ledger, page, safe). Neither goes.
+      edit(dir, W14, (t) => t.replace('decide what he does with the page tonight.', 'decide what he does with the ledger page tonight.'));
+      let m = readRecord(dir, session());
+      assert.match(textOf(m), /\*\*Ledger page:\*\*/);
+      assert.match(textOf(m), /what he does with the ledger page/);
+      // the two share Harl's note, so they join on it
+      assert.deepStrictEqual(titles(m), ['Unsigned notes: someone keeps slipping', 'Corvin Tash', 'Odalys Venn']);
+      // Harl's line now shares four (decide, ledger, page, safe): the closer one goes, the Ledger page thread stays
+      edit(dir, W14, (t) => t.replace('with the ledger page tonight.', 'with the ledger page and the safe tonight.'));
+      m = readRecord(dir, session());
+      assert.match(textOf(m), /\*\*Ledger page:\*\*/);
+      assert.doesNotMatch(textOf(m), /what he does with/);
+      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Corvin Tash']);
+      assert.strictEqual(m.record.cards[0].items.length, 3);
     });
 
     it(`two items about one NPC make one card with two bullets${tag}`, () => {
@@ -317,7 +337,7 @@ describe('the possible scenes', () => {
       assert.strictEqual(lead.schedule.length, 1);
       assert.match(lead.schedule[0], /^\*\*Festival schedule:\*\*/);
       assert.ok(m.record.cards.every((c) => c.items.every((i) => !/Festival schedule/.test(i.md))));
-      assert.ok(m.record.cards[2].items.some((i) => /^\*\*Guildhall visit:\*\*/.test(i.md)));
+      assert.ok(m.record.cards[3].items.some((i) => /^\*\*Guildhall visit:\*\*/.test(i.md)));
     });
 
     it(`Background holds the consequences and the carried item${tag}`, () => {
@@ -345,8 +365,8 @@ describe('the possible scenes', () => {
       // Unsigned notes links the Guild; Corvin's note is member_of it, so his card reaches it by one hop
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps', '- **Unsigned notes:** someone from the [[Lamplighters Guild]] keeps'));
       const m = readRecord(dir, session());
-      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Lamplighters Guild']);
-      const j = m.record.cards[1];
+      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Harl Brannock', 'Lamplighters Guild']);
+      const j = m.record.cards[2];
       assert.deepStrictEqual(j.items.map((i) => i.source), ['Unresolved Threads', 'NPCs Needing Follow-Up', 'Player-Stated Intentions']);
       assert.deepStrictEqual(j.notes.slice().sort(), [CORVIN, GUILD]);
       assert.deepStrictEqual(j.people, [CORVIN]);
@@ -362,8 +382,8 @@ describe('the possible scenes', () => {
       const m = readRecord(dir, session());
       // Guild: Unsigned notes, Lamp oil and Corvin's card (3 cards) joins first. Dock levy shares the Charter only with a
       // card that has already joined, so it stays alone.
-      assert.deepStrictEqual(titles(m), ['Odalys Venn', "Dock levy: the harbourmaster's clerk", 'Lamplighters Guild']);
-      assert.deepStrictEqual(m.record.cards.map((c) => c.items.length), [2, 1, 4]);
+      assert.deepStrictEqual(titles(m), ['Odalys Venn', "Dock levy: the harbourmaster's clerk", 'Harl Brannock', 'Lamplighters Guild']);
+      assert.deepStrictEqual(m.record.cards.map((c) => c.items.length), [2, 1, 1, 4]);
       assert.deepStrictEqual(m.record.cards[1].notes, ['Items/Ferry Charter.md']);
     });
 
@@ -371,12 +391,12 @@ describe('the possible scenes', () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps', '- **Unsigned notes:** Venn keeps'));
       // Venn is only Odalys's: the item is hers
-      assert.deepStrictEqual(titles(readRecord(dir, session())), ['Odalys Venn', 'Corvin Tash']);
+      assert.deepStrictEqual(titles(readRecord(dir, session())), ['Odalys Venn', 'Harl Brannock', 'Corvin Tash']);
       assert.strictEqual(readRecord(dir, session()).record.cards[0].items.length, 3);
       // Mara Venn shares the word, so "Venn" alone names neither
       put(dir, npc('Mara Venn'), '---\ntype: npc\nname: Mara Venn\n---\n');
       const m = readRecord(dir, session());
-      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: Venn keeps slipping', 'Corvin Tash']);
+      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: Venn keeps slipping', 'Harl Brannock', 'Corvin Tash']);
       // a full name, an alias and a link always count
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** Venn keeps', '- **Unsigned notes:** Odalys Venn keeps'));
       assert.strictEqual(readRecord(dir, session()).record.cards[0].items.length, 3);
@@ -392,14 +412,14 @@ describe('the possible scenes', () => {
       for (const l of ['[[Harbour Festival Grounds]]', '[[Harbour District]]', '[[Mirren Fell]]']) {
         const dir = open({ crlf });
         edit(dir, W14, link(l));
-        assert.deepStrictEqual(titles(readRecord(dir, session())), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Corvin Tash'], l);
+        assert.deepStrictEqual(titles(readRecord(dir, session())), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Harl Brannock', 'Corvin Tash'], l);
       }
       // control: Dock Row sits below the party's area (Harbour District), so it joins
       const dir = open({ crlf });
       edit(dir, W14, link('[[Dock Row]]'));
       const m = readRecord(dir, session());
-      assert.deepStrictEqual(titles(m), ['Corvin Tash', 'Dock Row']);
-      assert.deepStrictEqual(m.record.cards[1].places, [loc('Dock Row')]);
+      assert.deepStrictEqual(titles(m), ['Harl Brannock', 'Corvin Tash', 'Dock Row']);
+      assert.deepStrictEqual(m.record.cards[2].places, [loc('Dock Row')]);
     });
   }
 
@@ -408,7 +428,7 @@ describe('the possible scenes', () => {
     edit(dir, W14, (t) => t.replace('The Harbour Festival opens at dusk on Day 14. ', ''));
     const m = readRecord(dir, session());
     assert.deepStrictEqual(m.record.comingUp.lead.schedule, []);
-    assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Corvin Tash', 'Festival schedule: the crew will']);
+    assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Unsigned notes: someone keeps slipping', 'Harl Brannock', 'Corvin Tash', 'Festival schedule: the crew will']);
   });
 
   it('a template-fresh Wrap-Up and a missing one make no cards and no Background', () => {

@@ -72,7 +72,7 @@ Harl took the page in the name of the port. The crew let him, then argued about 
 #### NPCs Needing Follow-Up
 
 - **[[Odalys Venn]]:** decide whether she hides the crew or turns them in.
-- **[[Harl Brannock]]:** decide what he does with the ledger page tonight.
+- **[[Harl Brannock]]:** decide what he does with the page tonight.
 - **[[Corvin Tash]]:** decide what the guild learns of the scuffle.
 
 ### World State

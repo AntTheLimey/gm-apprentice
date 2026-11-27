@@ -214,7 +214,18 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   // Needing Follow-Up and Player-Stated Intentions; PC Carry-Forward never makes one.
   const sectionBullets = (re) => bulletsOf(sectionText(carries, 4, re));
   const doneLines = nl(sectionText(gm, 3, /^keeper checklist$/i)).split('\n').filter((l) => /^\s*[-*+]\s*\[x\]/i.test(l)).map(wordSet);
-  const isDone = (s) => /^\s*~~[\s\S]*~~\s*$/.test(s) || doneLines.some((w) => [...wordSet(s)].filter((x) => w.has(x)).length >= 3);
+  // A ticked line drops at most one open item: the one sharing the most words with it (three or more). On a tie it drops
+  // nothing: keeping a finished item costs a glance, dropping a live one loses it.
+  const openTexts = ['unresolved threads', 'npcs needing follow-up', 'player-stated intentions', 'pending consequences', 'resolved threads']
+    .flatMap((n) => sectionBullets(new RegExp(`^${n}$`, 'i'))).filter((s) => !/^\s*~~[\s\S]*~~\s*$/.test(s));
+  const ticked = new Set();
+  for (const line of doneLines) {
+    const scored = openTexts.map((s) => [s, [...wordSet(s)].filter((x) => line.has(x)).length]);
+    const top = Math.max(0, ...scored.map((x) => x[1]));
+    const best = scored.filter((x) => x[1] === top);
+    if (top >= 3 && best.length === 1) ticked.add(best[0][0]);
+  }
+  const isDone = (s) => /^\s*~~[\s\S]*~~\s*$/.test(s) || ticked.has(s);
   const lead = comingUp.lead;
   // An intention naming the lead card's key word is the lead's schedule, not a card.
   const onLead = (s) => Boolean(lead && lead.word) && said(s, lead.word) !== null;
