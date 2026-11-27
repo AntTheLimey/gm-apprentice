@@ -557,7 +557,7 @@
     if (!whole || !whole.pcs.length) return;
     // on the no-Plan page the GM may pick PCs in the row (Task 8 fix round 1): Move them moves those as a group of their
     // own, else the whole row
-    const picked = whole.pcs.filter((p) => (G.ui.picked || {})[p]);
+    const picked = whole.pcs.filter((p) => (G.ui.picked || {})[p] === whole.key);
     const g = { ...whole, pcs: picked.length ? picked : whole.pcs };
     for (const p of g.pcs) if (G.ui.picked) delete G.ui.picked[p];
     if (G.ui.moveHits) for (const k of Object.keys(G.ui.moveHits)) if (k.endsWith(`|${group}`)) delete G.ui.moveHits[k];
@@ -643,14 +643,19 @@
   // Fight here on the no-Plan page (gm-fight.js asks first): the crew the sheet has not placed stand where the record has
   // them, so they are put there quietly (no move is logged: they did not move), and the fight finds them standing there,
   // or offers them on Add when it is elsewhere.
-  function placeCrew(extra = []) {
+  // `list` stands where the record has the crew (its place beat made first, quietly); false when the record names no place
+  // the sheet knows.
+  function placeAtRecord(list) {
     const at = crewPlace();
     const key = at ? (G.model.placeKeys || {})[at] : null;
-    const crew = unplacedCrew().concat(extra.filter((p) => !unplacedCrew().includes(p)));
-    if (!key || !crew.length) return;
+    if (!key || !list.length) return false;
     if (!D().beats.some((b) => b.key === key)) act({ type: 'improvise', key, title: nameOf(at), place: at, quiet: true });
-    act({ type: 'moveAll', pcs: crew, to: { beat: key, spot: null, title: nameOf(at) } });
-    touch(key);
+    act({ type: 'moveAll', pcs: list, to: { beat: key, spot: null, title: nameOf(at) } });
+    return key;
+  }
+  function placeCrew() {
+    const key = placeAtRecord(unplacedCrew());
+    if (key) touch(key);
   }
 
   // "Where the party is" (F13): one row per group at the top of Hand over, with its place and Move them.
@@ -989,9 +994,9 @@
     const from = g.key === CREW && note ? ' <span class="note">from the record</span>' : '';
     // each PC a chip: picked, Move them moves the picked ones alone; "off" sends that PC off-screen (the rail's own action)
     const chip = (p) => {
-      const on = Boolean((G.ui.picked || {})[p]);
+      const on = (G.ui.picked || {})[p] === g.key;
       const nm = nameOf(p);
-      return `<span class="pchip ${on ? 'on' : ''}"><button type="button" class="pick ${on ? 'on' : ''}" data-wpick="${esc(p)}" aria-pressed="${on}" title="${on ? `Picked: Move them moves the picked PCs. Click: unpick ${esc(nm)}` : `Pick ${esc(nm)}: Move them then moves the picked PCs alone`}">${face(p)}${esc(first(nm))}</button><button type="button" class="mini off" data-off="${esc(p)}" title="Move ${esc(nm)} off-screen" aria-label="${esc(nm)} off-screen">off</button></span>`;
+      return `<span class="pchip ${on ? 'on' : ''}"><button type="button" class="pick ${on ? 'on' : ''}" data-wpick="${esc(p)}" data-wrowkey="${esc(g.key)}" aria-pressed="${on}" title="${on ? `Picked: Move them moves the picked PCs. Click: unpick ${esc(nm)}` : `Pick ${esc(nm)}: Move them then moves the picked PCs alone`}">${face(p)}${esc(first(nm))}</button><button type="button" class="mini off" data-off="${esc(p)}" title="Move ${esc(nm)} off-screen" aria-label="${esc(nm)} off-screen">off</button></span>`;
     };
     const lead = many ? `<a class="lk wfocus" data-pgroup="${esc(g.key)}" tabindex="0" role="link" title="Rank the cards and places around this group">${focus ? 'Focused' : 'Focus'}</a>` : '';
     return `<li class="wrow ${many && focus ? 'focus' : ''}" data-wrow="${esc(g.key)}"><span class="who">${g.pcs.map(chip).join('')}</span> <span class="at">at ${place}${from}</span>${lead ? ` ${lead}` : ''} <span class="wact">${moveBoxHTML(g.key, 'where')}${fight ? ` <span class="wbtns">${fight}</span>` : ''}</span></li>`;
@@ -1000,25 +1005,48 @@
   function offHTML() {
     const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; });
     if (!off.length) return '';
-    return `<p class="woff note" id="woff">Off-screen: ${off.map((p) => `<span class="pchip">${face(p.note)}${esc(first(p.name))} <button type="button" class="mini" data-wback="${esc(p.note)}" title="Bring ${esc(p.name)} back to the focused group">back</button></span>`).join(' ')}</p>`;
+    // "back" only where there is somewhere to go (fix round 3): else the line says how to make one
+    const can = Boolean(backTarget());
+    const back = (p) => (can ? ` <button type="button" class="mini" data-wback="${esc(p.note)}" title="Bring ${esc(p.name)} back to the focused group">back</button>` : '');
+    return `<p class="woff note" id="woff">Off-screen: ${off.map((p) => `<span class="pchip">${face(p.note)}${esc(first(p.name))}${back(p)}</span>`).join(' ')}${can ? '' : ' <span class="muted">back: Move them first</span>'}</p>`;
+  }
+  // A pick holds only while its PC stands in the row it was picked in: a PC moved by any route (Move them, Fight here,
+  // the rail, another window) is unpicked (fix round 3).
+  function prunePicks(rows) {
+    if (!G.ui.picked) return;
+    for (const [pc, key] of Object.entries(G.ui.picked)) {
+      const row = rows.find((g) => g.key === key);
+      if (!row || !row.pcs.includes(pc)) delete G.ui.picked[pc];
+    }
   }
   function recordWhereHTML(d) {
     const rows = whereGroups();
+    prunePicks(rows);
     if (!rows.length) return (pcs().length ? '<p class="muted">Every PC is off-screen.</p>' : '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>') + offHTML();
     const f = recFocus();
     return `<ul class="where-rec">${rows.map((g) => whereRowHTML(g, d, rows.length > 1, g.key === f)).join('')}</ul>${offHTML()}`;
   }
   // "back" for an off-screen PC: to the focused group's place (the Here strip's own `move`); to the crew not placed yet,
   // where the record has them; with no group at all, where the record has the crew.
-  function bringBack(pc) {
+  // Where "back" goes: the focused placed group, else (the crew not placed yet, or nobody placed) where the record has the
+  // crew, if the sheet knows that place; null when there is nowhere.
+  function backTarget() {
     const f = recFocus();
     const g = f && f !== CREW ? groupByKey(f) : null;
-    if (g) {
-      const b = D().beats.find((x) => x.key === g.beat);
-      act({ type: 'move', pc, to: { beat: g.beat, spot: g.spot || null, title: b ? b.title : '' } });
+    if (g) return { group: g };
+    const at = crewPlace();
+    return at && (G.model.placeKeys || {})[at] ? { record: at } : null;
+  }
+  function bringBack(pc) {
+    const t = backTarget();
+    if (!t) return;
+    if (t.group) {
+      const b = D().beats.find((x) => x.key === t.group.beat);
+      act({ type: 'move', pc, to: { beat: t.group.beat, spot: t.group.spot || null, title: b ? b.title : '' } });
       return;
     }
-    placeCrew([pc]);
+    // that PC alone, where the record has the crew: the others stay where the record has them, unplaced
+    placeAtRecord([pc]);
   }
 
   const listHTML = (htmls) => `<ul>${htmls.map((x) => `<li>${x}</li>`).join('')}</ul>`;
@@ -2122,7 +2150,12 @@
     if (d.move) { const to = JSON.parse(d.to); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'move', pc: d.move, to }); return; }
     if (d.all) { const to = JSON.parse(d.all); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'moveAll', pcs: pcs().map((p) => p.note), to }); return; }
     if (d.off) { if (G.ui.picked) delete G.ui.picked[d.off]; act({ type: 'move', pc: d.off, to: 'off' }); return; }
-    if (d.wpick) { G.ui.picked = G.ui.picked || {}; G.ui.picked[d.wpick] = !G.ui.picked[d.wpick]; update(); return; }
+    if (d.wpick) {
+      G.ui.picked = G.ui.picked || {};
+      if (G.ui.picked[d.wpick] === d.wrowkey) delete G.ui.picked[d.wpick]; else G.ui.picked[d.wpick] = d.wrowkey;
+      update();
+      return;
+    }
     if (d.wback) { bringBack(d.wback); return; }
     if (d.pt) {
       const b = beatOfKey(d.beat);
@@ -2239,8 +2272,8 @@
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
-    // the title box: kept as typed, sent a moment after the typing stops (or first, before any other action), and a
-    // character the vault can't hold named beside it (D8)
+    // the title box: kept as a draft while typed, sent on Enter, on the GM leaving the box, before any other action, or
+    // when the tab closes; a character the vault can't hold is named beside it (D8)
     if (t.id === 'rtitle') {
       G.ui.titleDraft = t.value;
       const bad = $('#rtbad');
@@ -2335,6 +2368,8 @@
 
   // A tab closed while clicks are still unsent (the server not answering) would lose them: the browser asks first.
   window.addEventListener('beforeunload', (ev) => {
+    // a title still a draft goes with the rest: queued now, so the browser asks before the tab closes (fix round 3)
+    if (G.ui.titleDraft != null) commitTitle();
     if (!G.pending.length) return;
     ev.preventDefault();
     ev.returnValue = '';

@@ -58,9 +58,20 @@ function tableFiler(vault) {
   return { calls, runFileLog };
 }
 
-async function startRec({ crlf = false, prepped = null } = {}) {
+async function startRec({ crlf = false, prepped = null, noPlace = false } = {}) {
   const vault = copyRecordFixture({ crlf });
   made.push(vault);
+  // a record that names no place for the crew: the World State's Location and Pell's note's are left empty
+  if (noPlace) {
+    const blank = (rel, from, to) => {
+      const f = path.join(vault, rel);
+      const t = fs.readFileSync(f, 'utf8');
+      assert.ok(t.includes(from), `${rel} holds ${from}`);
+      fs.writeFileSync(f, t.replace(from, to));
+    };
+    blank('Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md', '**Location:** [[The Salt Inn]]', '**Location:**');
+    blank('Characters/PCs/Pell Rowan.md', '**Location:** [[The Salt Inn]]', '**Location:**');
+  }
   // session-prep filed Session 15's index (no Plan, no Table Log): the sheet opens it, named
   if (prepped) {
     fs.mkdirSync(path.join(vault, S15), { recursive: true });
@@ -358,8 +369,66 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await settled(page);
         const s = await stateOf(run);
         assert.deepStrictEqual(s.positions[YARROW], { beat: 'pl-dcecf058', spot: null }, 'back with the crew, at the inn');
+        // that PC alone: the others stay where the record has them, not placed (fix round 3)
+        assert.deepStrictEqual(Object.keys(s.positions), [YARROW], `only Yarrow is placed: ${JSON.stringify(s.positions)}`);
         assert.match(await page.evaluate('document.querySelector("#where .wrow").textContent'), /Yarrow/);
         assert.ok(!s.events.some((l) => /\bmove/i.test(l.text || '')), `no move logged: ${JSON.stringify(s.events)}`);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`with nowhere to go, the off-screen line says Move them first, then offers back (${width})`, async () => {
+      const run = await startRec({ noPlace: true });
+      const YARROW = 'Characters/PCs/Yarrow Tide.md';
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.match(await page.evaluate('document.querySelector("#where .wrow").textContent'), /a place the record does not name/);
+        await page.click(`#where [data-off="${YARROW}"]`);
+        await page.waitFor('document.getElementById("woff")');
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.querySelector("#woff [data-wback]")'), null, 'no dead "back" button');
+        assert.match(await page.evaluate('document.getElementById("woff").textContent'), /back: Move them first/);
+        // Move them gives the crew a place: "back" now goes there
+        await page.click('#where .wrow input[data-movebox]');
+        await page.type('Marrow');
+        await page.waitFor('document.querySelector("#where [data-movepick]")');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor(`document.querySelector('#woff [data-wback="${YARROW}"]')`);
+        assert.doesNotMatch(await page.evaluate('document.getElementById("woff").textContent'), /Move them first/);
+        await page.click(`#woff [data-wback="${YARROW}"]`);
+        await page.waitFor('!document.getElementById("woff")');
+        await settled(page);
+        assert.deepStrictEqual((await stateOf(run)).positions[YARROW], { beat: 'pl-3b2cc69c', spot: null });
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    it(`a pick goes when its PC moves by another route (${width})`, async () => {
+      const run = await startRec();
+      const PELL = 'Characters/PCs/Pell Rowan.md';
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await page.click(`#where [data-wpick="${PELL}"]`);
+        await page.waitFor(`document.querySelector('#where [data-wpick="${PELL}"]').getAttribute('aria-pressed') === 'true'`);
+        // Fight here moves the crew, Pell with them, to where the record has them; then the fight ends
+        await page.click(`#where .wrow [data-fplace="${SALT}"]`);
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+        await page.click('#fEnd');
+        await page.click('#fEnd');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.querySelectorAll("#where [data-wpick][aria-pressed=true]").length'), 0, 'no stale pick');
+        // so Move them moves the whole row, not Pell alone
+        await page.click('#where .wrow input[data-movebox]');
+        await page.type('Marrow');
+        await page.waitFor('document.querySelector("#where [data-movepick]")');
+        await page.key('Enter');
+        await settled(page);
+        const s = await stateOf(run);
+        assert.ok(Object.values(s.positions).length === 4 && Object.values(s.positions).every((p) => p.beat === 'pl-3b2cc69c'), JSON.stringify(s.positions));
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });

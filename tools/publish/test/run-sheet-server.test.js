@@ -1835,6 +1835,10 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     await jot(a, 'The crew lands at Dock Row.');
     const idx = `${S15}/Session 15 - The Lamp Fair.md`;
     await waitFor(() => logHas(vault, 'The Lamp Fair', /Dock Row/) && savedState(a).filed);
+    // the crew moves on: tonight's positions live in the state, and a restart keeps them (D1)
+    const crew = ['Joss Harker', 'Mirren Fell', 'Pell Rowan', 'Yarrow Tide'].map((n) => `Characters/PCs/${n}.md`);
+    await actions(a, [{ type: 'moveGroup', pcs: crew, place: 'Locations/Marrow Market.md', key: 'pl-3b2cc69c', title: 'Marrow Market', names: ['Joss', 'Mirren', 'Pell', 'Yarrow'] }]);
+    await waitFor(() => logHas(vault, 'The Lamp Fair', /move to Marrow Market/));
     await wait(100);
     await a.close();
     const logFile = logFileOf(vault, 'The Lamp Fair');
@@ -1849,6 +1853,7 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     const st = (await req(b.port, 'GET', '/api/state')).json.state;
     assert.strictEqual(st.title, 'The Lamp Fair');
     assert.strictEqual(st.jots.length, 1);
+    assert.deepStrictEqual(st.positions, Object.fromEntries(crew.map((p) => [p, { beat: 'pl-3b2cc69c', spot: null }])), 'where the crew went is kept');
     await wait(150);
     assert.deepStrictEqual(again.calls, []);
     assert.deepStrictEqual(fingerprint(vault), before.vault);
@@ -1870,7 +1875,8 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     await c.close();
 
     // a log left behind the state (the skeleton again) is brought up to date at start, still with no filing
-    fs.writeFileSync(logFile, fs.readFileSync(logFile, 'utf8').replace(/## Log[\s\S]*$/, '## Log\n'));
+    // (every section cut, as filed: the crew's move put sections before ## Log too)
+    fs.writeFileSync(logFile, fs.readFileSync(logFile, 'utf8').replace(/\n## [\s\S]*$/, '\n## Log\n'));
     const fourth = tableFiler(vault);
     await startRec(vault, { runFileLog: fourth.runFileLog });
     await waitFor(() => logHas(vault, 'The Lamp Fair', /Odalys sends word\./));
