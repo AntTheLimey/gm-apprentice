@@ -2096,3 +2096,33 @@ describe('S2: the players\' column outside a fight', { skip: browserSkip() }, ()
     });
   });
 });
+
+// Task 9 fix round 1: the find box lives in the rail, which a fight at 1100 folds. "/" reaches it from anywhere (never
+// while typing in a box), opening the rail first.
+describe('the find box from the keyboard', { skip: browserSkip() }, () => {
+  it('1100, in a fight with the rail folded: "/" opens the rail and the box, and Enter opens the first hit', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
+      assert.strictEqual(p.layout.railFolded, true, 'the fight folded the rail');
+      // focus off any box: a click on the fight's round line
+      await page.click('#round');
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      p = await until(page, '!p.layout.railFolded');
+      const v = await page.evaluate('(() => { const r = document.getElementById("find").getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; })()');
+      assert.strictEqual(v, true, 'the box is on screen');
+      assert.strictEqual(await page.evaluate('document.getElementById("find").value'), '', 'the slash is not typed');
+      await page.type('chapel');
+      await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+      await page.key('Enter');
+      await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Chapel Yard"');
+      sane(await P(page), '1100 fight, rail opened by "/"');
+      // "/" typed in a box is a slash
+      await page.key('Escape');
+      await tap(page, '#fAddName');
+      await page.key('/');
+      assert.strictEqual(await page.evaluate('document.getElementById("fAddName").value'), '/');
+    });
+  });
+});

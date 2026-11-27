@@ -1618,7 +1618,7 @@
   const KIND = { npc: 'person', creature: 'creature', pc: 'PC', location: 'place' };
   const findbox = document.createElement('div');
   findbox.className = 'findw';
-  findbox.innerHTML = '<input id="find" type="search" placeholder="Find a person or place" aria-label="Find a person or place" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="findHits"><div class="findhits" id="findHits" role="listbox"></div>';
+  findbox.innerHTML = '<input id="find" type="search" placeholder="Find a person or place (/)" aria-label="Find a person or place" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="findHits"><div class="findhits" id="findHits" role="listbox"></div>';
   const findInput = findbox.querySelector('#find');
   const findList = findbox.querySelector('#findHits');
   const find = { hits: [], sel: 0 };
@@ -2423,6 +2423,14 @@
     const picking = t.matches && t.matches('select[data-fhlocsel]');
     // the page stays where the GM is reading: a box in the sticky header, focused plainly, scrolled the page to its top
     if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus({ preventScroll: true }); return; }
+    // "/" reaches the find box from anywhere but a box being typed in, opening the rail first when it is folded (a
+    // fight at 1100 folds it) (Task 9 fix round 1)
+    if (!typing && !picking && ev.key === '/' && !ev.metaKey && !ev.ctrlKey && !ev.altKey && window.innerWidth > NARROW) {
+      ev.preventDefault();
+      if (G.lay.rail) foldClick('railOpen');
+      findInput.focus({ preventScroll: true });
+      return;
+    }
     // a letter on a closed status list never picks a status by the browser's type-ahead: a status is chosen, not typed
     if (t.matches && t.matches('select[data-fstatus]') && ev.key.length === 1 && ev.key !== ' ' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
