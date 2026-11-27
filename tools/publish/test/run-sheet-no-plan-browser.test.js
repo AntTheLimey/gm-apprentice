@@ -58,9 +58,30 @@ function tableFiler(vault) {
   return { calls, runFileLog };
 }
 
-async function startRec({ crlf = false, prepped = null, noPlace = false } = {}) {
+// Every note under `dir`, its text passed through `fn` (the file's own line ends kept).
+function rewriteAll(dir, fn) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const f = path.join(dir, e.name);
+    if (e.isDirectory()) rewriteAll(f, fn);
+    else if (e.name.endsWith('.md')) fs.writeFileSync(f, fn(fs.readFileSync(f, 'utf8')));
+  }
+}
+
+async function startRec({ crlf = false, prepped = null, noPlace = false, underscored = false } = {}) {
   const vault = copyRecordFixture({ crlf });
   made.push(vault);
+  // Task 11b, F11: a vault whose notes are named by their stems with `_` (Canticle's shape): Mirren's PC note is
+  // Mirren_Fell, with no name of its own, and a follow-up links an NPC note Wren_Halloway
+  if (underscored) {
+    fs.renameSync(path.join(vault, 'Characters/PCs/Mirren Fell.md'), path.join(vault, 'Characters/PCs/Mirren_Fell.md'));
+    rewriteAll(vault, (t) => t.split('Mirren Fell').join('Mirren_Fell'));
+    fs.writeFileSync(path.join(vault, 'Characters/NPCs/Wren_Halloway.md'), '---\ntype: npc\n---\n\nA bell-ringer.\n');
+    const w = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
+    const t = fs.readFileSync(w, 'utf8');
+    const nl = t.includes('\r\n') ? '\r\n' : '\n';
+    fs.writeFileSync(w, t.replace(`- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.${nl}`,
+      `- **[[Wren_Halloway]]** rings the bell at odd hours.${nl}`));
+  }
   // a record that names no place for the crew: the World State's Location and Pell's note's are left empty
   if (noPlace) {
     const blank = (rel, from, to) => {
@@ -681,6 +702,39 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
     // P9 (pinned, never seen on this page): the prototype put a 20 x 17 px Show beside nearly every link, so a near miss on
     // a link could put something on the players' screen. The cards carry no Show at all, and a press just beside a link
     // opens nothing and shows nothing.
+    // Task 11b, F11: the chips, the cards, People and the PCs show display names, never a raw file stem.
+    it(`F11: a vault of underscored stems shows display names on the chips, cards, People and PCs (${width})`, async () => {
+      const run = await startRec({ underscored: true, crlf: width === 1280 });
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const chips = await page.evaluate('Array.from(document.querySelectorAll("#where .pchip .pick"), (b) => b.textContent.trim())');
+        // each chip is the face's initial (no portrait) and the first word of the name
+        assert.ok(chips.some((c) => /Mirren$/.test(c)) && chips.every((c) => !c.includes('_')), JSON.stringify(chips));
+        const text = (sel) => page.evaluate(`document.querySelector(${JSON.stringify(sel)}).textContent`);
+        // a card's own lines keep the record's words (a bare [[Wren_Halloway]] reads as written); its title, the chips,
+        // People, the PCs and the rail show display names
+        const heads = await page.evaluate('Array.from(document.querySelectorAll("#scenes .card h3"), (h) => h.textContent).join(" | ")');
+        assert.doesNotMatch(heads, /_/, heads);
+        for (const sel of ['#where', '#people', '#pcs', '#rail']) assert.doesNotMatch(await text(sel), /Mirren_Fell|Wren_Halloway/, sel);
+        assert.ok((await cardTitles(page, 'here')).concat(await cardTitles(page, 'could')).includes('Wren Halloway'));
+        assert.match(await text('#people'), /Wren Halloway/);
+        assert.match(await text('#pcs'), /Mirren Fell/);
+        // Move them: the Table Log's line names her by her display name too
+        await page.click('#where .wrow input[data-movebox]');
+        await page.type('Marrow');
+        await page.waitFor('document.querySelector("#where [data-movepick]")');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor('/Marrow Market/.test(document.querySelector("#where .wrow").textContent)');
+        assert.doesNotMatch(await text('#where'), /Mirren_Fell/);
+        const s = await stateOf(run);
+        assert.match(JSON.stringify(s.events), /Mirren/);
+        assert.doesNotMatch(JSON.stringify(s.events), /Mirren_Fell(?!\.md)/);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
     it(`P9: no Show beside the cards' links; a near miss shows the players nothing (${width})`, async () => {
       const run = await startRec();
       await withPage({ width, height: HEIGHT }, async (page) => {

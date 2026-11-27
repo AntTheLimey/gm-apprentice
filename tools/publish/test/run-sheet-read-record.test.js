@@ -425,7 +425,9 @@ describe('the possible scenes', () => {
       // Unsigned notes links the Guild; Corvin's note is member_of it, so his card reaches it by one hop
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps', '- **Unsigned notes:** someone from the [[Lamplighters Guild]] keeps'));
       const m = readRecord(dir, session());
-      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Harl Brannock', 'Lamplighters Guild']);
+      // Changed on purpose (Task 11b, F11: a title comes only from notes the items link or name, never one hop away):
+      // Corvin's two items link him; the Guild is linked by one item, so the card is Corvin's
+      assert.deepStrictEqual(titles(m), ['Odalys Venn', 'Harl Brannock', 'Corvin Tash']);
       const j = m.record.cards[2];
       assert.deepStrictEqual(j.items.map((i) => i.source), ['Unresolved Threads', 'NPCs Needing Follow-Up', 'Player-Stated Intentions']);
       assert.deepStrictEqual(j.notes.slice().sort(), [CORVIN, GUILD]);
@@ -506,12 +508,15 @@ describe('the possible scenes', () => {
     assert.doesNotMatch(all, /Dead lead/);
   });
 
-  it('a title counts one-hop notes: the Guild, linked by one item, beats Corvin, linked by two', () => {
+  // Changed on purpose (Task 11b, F11, the controller's ruling): a card's title comes only from notes its items link or
+  // name directly; one-hop notes count for joins, never for the title. This test pinned the opposite ("the Guild, linked
+  // by one item, beats Corvin, linked by two", counting the hop); it now pins the ruling.
+  it('a title never counts one-hop notes: Corvin, linked by two items, beats the Guild, linked by one', () => {
     const dir = open();
     edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps', '- **Unsigned notes:** someone from the [[Lamplighters Guild]] keeps'));
     const m = readRecord(dir, session());
-    // Corvin's two items link Corvin twice; the Guild is reached by his two items (hop) and linked by the third: three
-    assert.strictEqual(m.record.cards.find((c) => c.items.length === 3).title, 'Lamplighters Guild');
+    // Corvin's two items link Corvin; the Guild is linked by one item (and reached by Corvin's two only by a hop)
+    assert.strictEqual(m.record.cards.find((c) => c.items.length === 3).title, 'Corvin Tash');
   });
 
   it('an intention naming no lead word is a card of its own, and a placeless lead has no schedule', () => {
@@ -665,6 +670,41 @@ describe('real-vault shapes (Task 11b)', () => {
       const lead = readRecord(dir, session()).record.comingUp.lead;
       assert.strictEqual(lead.place, loc('Harbour Festival Grounds'));
       assert.deepStrictEqual(lead.hits, [CORVIN]);
+    });
+
+    // F11: titles, chips and people show each note's display name (name, else title, else the stem with `_` as spaces),
+    // and a card's title comes only from notes its items link or name, never from a note one hop away.
+    it(`F11: a card and the names map show display names, never a raw stem${tag}`, () => {
+      const dir = open({ crlf });
+      put(dir, npc('Wren_Halloway'), '---\ntype: npc\n---\n\nA bell-ringer.\n');
+      put(dir, 'Items/Ferry_Charter.md', '---\ntype: item\ntitle: The Ferry Charter\n---\n');
+      edit(dir, 'Characters/PCs/Pell Rowan.md', (t) => t.replace('type: pc\n', 'type: pc\nname: Pell Rowan-Ashe\n'));
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+        '- **[[Wren_Halloway]]** rings the bell at odd hours.\n- [[Ferry_Charter]] terms are still unsigned.\n'));
+      const r = readRecord(dir, session()).record;
+      const ts = r.cards.map((c) => c.title);
+      assert.ok(ts.includes('Wren Halloway'), ts.join(' | '));
+      // the first five words, the link read as the note's title
+      assert.ok(ts.includes('The Ferry Charter terms are'), ts.join(' | '));
+      assert.ok(ts.every((x) => !x.includes('_')), ts.join(' | '));
+      assert.strictEqual(r.names[npc('Wren_Halloway')], 'Wren Halloway');
+      assert.strictEqual(r.names['Items/Ferry_Charter.md'], 'The Ferry Charter');
+      assert.strictEqual(r.names['Characters/PCs/Pell Rowan.md'], 'Pell Rowan-Ashe');
+      assert.strictEqual(r.names['Characters/PCs/Joss Harker.md'], 'Joss Harker');
+      assert.strictEqual(r.names[CORVIN], 'Corvin Tash');
+      assert.strictEqual(r.names[loc('The Salt Inn')], 'The Salt Inn');
+    });
+
+    it(`F11: two cards joined through a place one hop away are titled by a note they name, not the place${tag}`, () => {
+      const dir = open({ crlf });
+      put(dir, npc('Mags_Orrel'), '---\ntype: npc\nrelationships:\n  - target: "[[Dock Row]]"\n    type: based_at\n---\n');
+      put(dir, npc('Tobin Reave'), '---\nname: Tobin Reave\ntype: npc\nrelationships:\n  - target: "[[Dock Row]]"\n    type: located_at\n---\n');
+      edit(dir, W14, (t) => t.replace('- **[[Corvin Tash]]:** decide what the guild learns of the scuffle.\n',
+        '- **[[Corvin Tash]]:** decide what the guild learns of the scuffle.\n- **[[Mags_Orrel]]:** decide whether she sells the oil.\n- **[[Tobin Reave]]:** decide where he sleeps tonight.\n'));
+      const r = readRecord(dir, session()).record;
+      const joined = r.cards.find((c) => c.items.some((i) => /Mags_Orrel/.test(i.md)));
+      assert.ok(joined.items.some((i) => /Tobin Reave/.test(i.md)), 'the two join on Dock Row');
+      assert.strictEqual(joined.title, 'Mags Orrel');
     });
 
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {

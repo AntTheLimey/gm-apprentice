@@ -6,7 +6,7 @@
 
 const crypto = require('node:crypto');
 const pt = require('./plan-text');
-const { buildIndex, stemOf } = require('./notes');
+const { buildIndex, stemOf, stemName } = require('./notes');
 const { readSheet } = require('./read');
 const { listSessions, tableLogOf } = require('./sessions');
 const { canonicalNfc } = require('../unicode');
@@ -129,7 +129,12 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const typeOf = (p) => low(fmOf(p).type);
   // a place is a location note in `loc`: maps and GM halves are not places (read.js already treats them so)
   const isPlace = (p) => Boolean(p) && typeOf(p) === 'location' && Boolean(loc[p]);
-  const nameOf = (p) => { const n = fmOf(p).name; return typeof n === 'string' && n.trim() ? n.trim() : stemOf(p); };
+  // A note's display name (Task 11b, F11): its `name`, else its `title`, else its stem with `_` as spaces; never a raw stem.
+  const nameOf = (p) => {
+    const fm = fmOf(p);
+    for (const v of [fm.name, fm.title]) if (typeof v === 'string' && v.trim()) return v.trim();
+    return stemName(p);
+  };
   const parentOf = (p) => { const l = pt.links(String(fmOf(p).parent_location || ''))[0]; return l ? index.resolve(l) : null; };
   const chain = (p) => { const out = []; for (let c = p; c && !out.includes(c) && out.length < 12; c = parentOf(c)) out.push(c); return out; };
   const depth = (p) => chain(p).length;
@@ -359,16 +364,23 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     // a joined card does not join again: its subject notes are kept for the card, not for another join
     pool = [...pool.filter((_, i) => !ix.includes(i)), { person: null, items: parts.flatMap((c) => c.items), subj: new Map(), frozen: subj, joinedOn: note }];
   }
-  const firstFive = (md) => stripMd(md).split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
+  // a link in the first words reads as its words: its alias, else the note's display name (never a raw stem, F11)
+  const linkWords = (md) => nl(md).replace(/\[\[([^\]|#]*)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g, (m, t, a) => {
+    if (a) return a;
+    const n = index.resolve(t.trim());
+    return n ? nameOf(n) : t;
+  });
+  const firstFive = (md) => stripMd(linkWords(md)).split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
   const cards = pool.map((grp) => {
     const subj = grp.frozen || grp.subj;
     let title;
     if (grp.person) title = nameOf(grp.person);
     else if (grp.joinedOn) {
+      // A title comes only from notes the items link or name (Task 11b, F11): a note one hop away joins cards, never
+      // titles them. Most items linking or naming it wins; a tie goes to the note first seen in the record, in item order
+      // (the sort is stable and the map is filled in that order). With none, the note the cards joined on.
       const count = new Map();
-      for (const it of grp.items) for (const n of uniq([...it.links, ...subjectsOf([it]).keys()])) if (keep(n)) count.set(n, (count.get(n) || 0) + 1);
-      // most items linking or reaching it (by link or one hop); a tie goes to the note first seen in the record, in item order
-      // (the sort is stable and the map is filled in that order)
+      for (const it of grp.items) for (const n of uniq([...it.links, ...it.people])) if (keep(n)) count.set(n, (count.get(n) || 0) + 1);
       const best = [...count.entries()].sort((x, y) => y[1] - x[1])[0];
       title = nameOf(best ? best[0] : grp.joinedOn);
     } else title = firstFive(grp.items[0].md);
@@ -397,6 +409,18 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     }
   }
 
+  // Every note the page names, by its display name (F11): the PCs, the cards' notes, people and places, the lead's, where
+  // the crew is and where each person stands. The page reads a name from here before its own.
+  const names = {};
+  const named = (p) => { if (p && index.has(p) && !names[p]) names[p] = nameOf(p); };
+  for (const p of pcNotes) named(p);
+  for (const c of cards) for (const p of [...c.notes, ...c.people, ...c.places]) named(p);
+  if (lead) for (const p of [lead.place, ...lead.people, ...lead.hits]) named(p);
+  named(whereNow.place);
+  named(worldLoc);
+  for (const [p, at] of Object.entries(peopleAt)) { named(p); named(at); }
+  for (const p of Object.values(byPc)) named(p);
+
   model.record = {
     from: wrapUp || null,
     fromSession: wrapUp ? given.after : null,
@@ -410,6 +434,7 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     peopleAt,
     background,
     whereNow,
+    names,
     leftOut: LEFT_OUT,
   };
   return model;

@@ -411,7 +411,9 @@
   const castOf = (p) => (G.model.cast || []).find((c) => c.note === p) || null;
   const pcOf = (p) => (G.model.pcs || []).find((x) => x.note === p) || null;
   // a place goes by its title, the reader's one rule (place-name.js): never a folder note's "index"
-  const nameOf = (p) => { const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? (n.title || n.name) : stem(p); };
+  // the no-Plan page names every note by the record's display name first (Task 11b, F11: never a raw file stem)
+  const recName = (p) => { const r = G.model && G.model.record; return (r && r.names && r.names[p]) || null; };
+  const nameOf = (p) => { const rn = recName(p); if (rn) return rn; const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? (n.title || n.name) : stem(p); };
   const portraitOf = (p) => { const pc = pcOf(p); if (pc && pc.portrait) return pc.portrait; const n = noteInfo(p); if (n && n.portrait) return n.portrait; const c = castOf(p); return c ? c.portrait : null; };
   const unmaskOf = (p) => { const n = noteInfo(p); return n && n.unmask ? n.unmask : null; };
   const isUnmasked = (d, p) => d.unmaskedNow.some((u) => u.note === p);
@@ -885,7 +887,7 @@
     }).join('');
     h += `<a class="b ${off.length ? 'here' : ''}" title="A PC in no beat (asleep, elsewhere)">Off-screen${faces(off)}</a>`;
     const canGoOff = pcs().filter((p) => !off.includes(p));
-    if (canGoOff.length) h += `<div class="offs">${canGoOff.map((p) => `<button class="mini" type="button" data-off="${esc(p.note)}" title="Move ${esc(p.name)} off-screen">${esc(first(p.name))}</button>`).join('')}</div>`;
+    if (canGoOff.length) h += `<div class="offs">${canGoOff.map((p) => `<button class="mini" type="button" data-off="${esc(p.note)}" title="Move ${esc(nameOf(p.note))} off-screen">${esc(first(nameOf(p.note)))}</button>`).join('')}</div>`;
     if (unplaced.length) h += `<a class="b" title="PCs the sheet has not placed at any beat yet">Not placed yet${faces(unplaced)}</a>`;
     h += RAIL_END.map(([id, t]) => `<a data-go="${id}">${t}</a>`).join('');
     return h;
@@ -1020,8 +1022,8 @@
     if (!off.length) return '';
     // "back" only where there is somewhere to go (fix round 3): else the line says how to make one
     const can = Boolean(backTarget());
-    const back = (p) => (can ? ` <button type="button" class="mini" data-wback="${esc(p.note)}" title="Bring ${esc(p.name)} back to the focused group">back</button>` : '');
-    return `<p class="woff note" id="woff">Off-screen: ${off.map((p) => `<span class="pchip">${face(p.note)}${esc(first(p.name))}${back(p)}</span>`).join(' ')}${can ? '' : ' <span class="muted">back: Move them first</span>'}</p>`;
+    const back = (p) => (can ? ` <button type="button" class="mini" data-wback="${esc(p.note)}" title="Bring ${esc(nameOf(p.note))} back to the focused group">back</button>` : '');
+    return `<p class="woff note" id="woff">Off-screen: ${off.map((p) => `<span class="pchip">${face(p.note)}${esc(first(nameOf(p.note)))}${back(p)}</span>`).join(' ')}${can ? '' : ' <span class="muted">back: Move them first</span>'}</p>`;
   }
   // A pick holds only while its PC stands in the row it was picked in: a PC moved by any route (Move them, Fight here,
   // the rail, another window) is unpicked (fix round 3).
@@ -1228,7 +1230,7 @@
   function pcsHTML() {
     if (!pcs().length) return '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
     const src = { index: "the session's list", wrapup: REC() ? 'the last Wrap-Up' : "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
-    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
+    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, nameOf(p.note))}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
       <td>${p.moment ? `<b>Moment:</b> ${md(p, 'moment')}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${md(p, 'touch')}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${md(p, 'arc')}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${md(p, 'thread')}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
