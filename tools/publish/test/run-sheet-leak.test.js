@@ -31,6 +31,7 @@ const { listSessions, pickSession, stateIdOf } = require('../lib/run-sheet/sessi
 const { readRunSheet } = require('../lib/run-sheet/read');
 const { forPlayers } = require('../lib/run-sheet/players');
 const S = require('./helpers/run-sheet-leak-script');
+const { browserSkip } = require('./helpers/browser');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-players');
 const made = [];
@@ -69,7 +70,7 @@ function req(port, method, url, body) {
   });
 }
 
-// An event stream, raw text kept. `events` are { event, data } as they arrive.
+// An event stream, raw text kept (also `streamOf` below). `events` are { event, data } as they arrive.
 function stream(port, url) {
   const events = [];
   let raw = '';
@@ -1603,3 +1604,110 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
     } finally { await t.stop(); }
   });
 });
+
+// ---- the no-Plan sheet (plan "no-Plan run sheet" Task 10) ----
+// A record vault whose Session 14 Wrap-Up holds a secret word in its GM Notes. The sheet opens from that record,
+// and the word must never reach the players' view or their stream: not on opening, nor after Move them, Fight here,
+// a jot, or the filing (`gma table-file` faked through deps.runFileLog). Real input in the page, as the sheet's own
+// browser tests do.
+describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)', { skip: browserSkip() }, () => {
+  const { withPage } = require('./helpers/cdp');
+  const { copyRecordFixture } = require('./helpers/record-fixture');
+  const { removeFixture } = require('./helpers/systems-fixture');
+  const { stateFileFor } = require('../lib/run-sheet/sessions');
+  const WORD = 'Quillmoth-Sentinel-4417';
+  const S15 = 'Chapters/Chapter 3/Sessions/Session 15';
+  const FESTIVAL = 'Locations/Harbour Festival Grounds.md';
+  const PROBE = 'JSON.parse(document.body.dataset.probe || "null")';
+
+  for (const crlf of [false, true]) {
+    it(`a secret in the Wrap-Up's GM Notes never reaches /api/players (${crlf ? 'CRLF' : 'LF'})`, { timeout: 120000 }, async () => {
+      const vault = copyRecordFixture({ crlf });
+      made.push(vault);
+      const wrap = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
+      const text = fs.readFileSync(wrap, 'utf8');
+      const eol = crlf ? '\r\n' : '\n';
+      const marker = `## GM Notes${eol}`;
+      assert.ok(text.includes(marker), 'the Wrap-Up has GM Notes');
+      // under GM Notes, so the sheet reads it, and nowhere a player-facing page would hold it
+      fs.writeFileSync(wrap, text.replace(marker, `${marker}${eol}- ${WORD} is the GM's own word.${eol}`));
+
+      const session = pickSession(listSessions(vault), null, vault).session;
+      assert.ok(session && session.fromRecord, 'the record gives Session 15');
+      const { file, stateId } = stateFileFor(vault, session);
+      const filed = [];
+      const runFileLog = async (cmd) => {
+        filed.push(cmd);
+        const a = cmd.find((x) => x.startsWith('--title='));
+        const stem = `Session 15 - ${a ? a.slice('--title='.length) : 'untitled'}`;
+        fs.mkdirSync(path.join(vault, S15), { recursive: true });
+        fs.writeFileSync(path.join(vault, S15, `${stem}.md`), `---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\ndocuments:\n  plan: null\n  table_log: "[[${stem} - Table Log]]"\n  wrap_up: null\n---\n\n# ${stem}\n`);
+        fs.writeFileSync(path.join(vault, S15, `${stem} - Table Log.md`), `---\ntype: session-table-log\nsession: "[[${stem}]]"\ncreated_by: run-sheet\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
+        return { ok: true, out: `CREATED\t${S15}/${stem}.md\t\tsession template\nCREATED\t${S15}/${stem} - Table Log.md\t\tthe Table Log's 18 sections, empty\n` };
+      };
+      const run = createTableServer({ vaultPath: vault, session, stateFile: file, stateId,
+        fileLog: { cmd: ['gma', 'table-file', 'VAULT', '--number', '15', '--chapter', 'Chapter 3'], takesTitle: true },
+        deps: { delayMs: 50, log: () => {}, now: () => new Date(2026, 10, 29, 20, 15), runFileLog } });
+      const port = await listenLocal(run.server, 0);
+      const base = `http://127.0.0.1:${port}/`;
+      const stream = streamOf(port, '/api/players/events');
+      try {
+        const views = [];
+        const look = async () => { views.push((await req(port, 'GET', '/api/players/view')).text); };
+        const noWord = (where) => {
+          for (const v of views) assert.ok(!v.toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' view holds the secret word`);
+          assert.ok(!stream.raw().toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' stream holds the secret word`);
+        };
+        // positive control: the GM's own answer about the note does hold the word
+        const gmNote = await req(port, 'GET', `/api/note?path=${encodeURIComponent('Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md')}`);
+        assert.equal(gmNote.status, 200, gmNote.text);
+        assert.ok(gmNote.text.includes(WORD), 'the GM can read the word');
+        await look();
+        noWord('before the page opens');
+
+        await withPage({ width: 1449, height: 762 }, async (page) => {
+          const settled = () => page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && document.getElementById('where') && p; })()`);
+          await page.goto(`${base}?probe=1`);
+          await settled();
+          await look(); noWord('opened');
+          // Fight here at the lead card's place, then end it
+          await page.click(`#coming .lead [data-fplace="${FESTIVAL}"]`);
+          await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+          await look(); noWord('Fight here');
+          await page.click('#fEnd');
+          await page.click('#fEnd');
+          await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
+          await settled();
+          // Move them
+          await page.click('#where .wrow input[data-movebox]');
+          await page.type('Marrow');
+          await page.waitFor('document.querySelector("#where [data-movepick]")');
+          await page.key('Enter');
+          await settled();
+          await look(); noWord('Move them');
+          // a jot, which files the session
+          await page.click('#hjot');
+          await page.type('The crew lands at Dock Row.');
+          await page.key('Enter');
+          await page.waitFor('/Filed as Session 15/.test((document.getElementById("rfiled") || {}).textContent || "")');
+          await settled();
+          await look(); noWord('the jot and the filing');
+          await page.sleep(300);
+        });
+        assert.equal(filed.length, 1, 'filed once');
+        assert.match(stream.raw(), /event: (hello|view)/, 'the players\' stream was read');
+        await look();
+        noWord('at the end');
+        // the Table Log the filing made holds no word either
+        for (const f of walk(path.join(vault, S15)).filter((x) => /Table Log/.test(x))) {
+          assert.ok(!fs.readFileSync(f, 'utf8').includes(WORD), `${f} holds the secret word`);
+        }
+      } finally {
+        stream.close();
+        await run.close();
+      }
+    });
+  }
+});
+
+function streamOf(port, url) { return stream(port, url); }

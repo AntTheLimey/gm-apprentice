@@ -244,6 +244,31 @@ describe('readRecord', () => {
     assert.strictEqual(readRecord(dir, session()).record.comingUp.lead.place, null);
   });
 
+  // Carried over from Task 6: a map's GM half (a `location` with `doc_type: map`, paired with the players' half) is never
+  // the lead card's place and never counts in a card's places, even when a clock word names it uniquely.
+  for (const crlf of [false, true]) {
+    it(`a map's GM half is never the lead's place nor a card's place, even when a clock word names it${crlf ? ' (CRLF)' : ''}`, () => {
+      const dir = open({ crlf });
+      put(dir, loc('Lanternhall Map (GM)'), '---\ntype: location\nname: Lanternhall Map (GM)\ndoc_type: map\nplayer_version: "[[Lanternhall Map]]"\nlocation_type: building\nparent_location: "[[Harbour District]]"\n---\n\nThe GM map.\n');
+      put(dir, loc('Lanternhall Map'), '---\ntype: location\nname: Lanternhall Map\ndoc_type: map\nlocation_type: building\nparent_location: "[[Harbour District]]"\n---\n\nThe players\' map.\n');
+      // "lanternhall" is unique to the map pair; the clock names it, and a threat links the GM half
+      edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Lanternhall bell tolls at dusk.\n')
+        .replace(/- \*\*Active threats:\*\*.*\n/, "- **Active threats:** [[Corvin Tash]] waits near [[Lanternhall Map (GM)]].\n"));
+      const m = readRecord(dir, session());
+      const lead = m.record.comingUp.lead;
+      const gm = loc('Lanternhall Map (GM)');
+      const players = loc('Lanternhall Map');
+      assert.ok(lead, 'there is a lead card');
+      assert.ok(lead.place !== gm && lead.place !== players, `the lead's place is ${lead.place}`);
+      for (const c of [lead, ...m.record.cards]) {
+        assert.ok(!(c.places || []).includes(gm) && !(c.places || []).includes(players), `a card's places hold the map: ${JSON.stringify(c.places)}`);
+        assert.ok(c.place !== gm && c.place !== players, `a card's place is the map: ${c.place}`);
+      }
+      assert.ok(!(m.placeKeys || {})[gm], 'the GM half has no place key');
+      assert.ok(!JSON.stringify(m.record.whereNow).includes('Lanternhall'));
+    });
+  }
+
   it('a word three places share gives no place, a stop word beside it changes nothing', () => {
     const dir = open();
     put(dir, loc('Harbour Gate'), '---\ntype: location\nname: Harbour Gate\nlocation_type: district\nparent_location: "[[Veyland]]"\n---\n');

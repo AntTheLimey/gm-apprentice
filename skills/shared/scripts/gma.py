@@ -118,7 +118,10 @@ def _publish_parser() -> argparse.ArgumentParser:
 
 def _table_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="gma table", description=COMMANDS["table"].summary,
+        prog="gma table",
+        description=COMMANDS["table"].summary + " With no Plan open, it "
+        "opens the next session from the last Wrap-Up and files it on the "
+        "first thing that happens at the table.",
         epilog="Example: gma table <vault>")
     ap.add_argument("vault", help="the campaign vault")
     ap.add_argument("--session", help="the session to run: an index stem or "
