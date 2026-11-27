@@ -10,10 +10,10 @@ const { buildIndex, stemOf } = require('./notes');
 const { readSheet } = require('./read');
 const { listSessions, tableLogOf } = require('./sessions');
 const { canonicalNfc } = require('../unicode');
+const RR = require('./web/record-rank');
 
 const LEFT_OUT = 'Points to land and If-they need a Plan.';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const AREA_TYPES = /^(city|town|village|settlement|space station|station|outpost|base|ship)$/i;
 const PEOPLE_TYPES = new Set(['npc', 'creature']);
 const THREAT_TYPES = new Set(['npc', 'creature', 'faction', 'organization']);
 
@@ -81,18 +81,18 @@ function labelItems(text, name) {
 }
 const labelValue = (text, name) => labelItems(text, name).join(' ');
 
-// The settlement a place is in: the first place on its parent chain (itself first, at most 12 steps) whose location_type
-// is a settlement; else its parent, else itself.
-function areaOf(index, place) {
-  if (!place || !index.has(place)) return place || null;
-  const parentOf = (p) => { const l = pt.links(String((index.read(p).fm || {}).parent_location || ''))[0]; return l ? index.resolve(l) : null; };
-  let cur = place;
-  for (let d = 0; cur && d < 12; d++) {
-    if (AREA_TYPES.test(String((index.read(cur).fm || {}).location_type || ''))) return cur;
-    cur = parentOf(cur);
+// The plain location map the page ranks by: { path: { parent, type } }.
+function locOf(index, places) {
+  const out = {};
+  for (const p of places) {
+    const fm = index.read(p).fm || {};
+    const l = pt.links(String(fm.parent_location || ''))[0];
+    out[p] = { parent: l ? index.resolve(l) || null : null, type: String(fm.location_type || '') };
   }
-  return parentOf(place) || place;
+  return out;
 }
+// The settlement a place is in, over a vault index (one copy of the rule lives in web/record-rank.js).
+const areaOf = (index, place) => RR.areaOf(place, locOf(index, index.notes().filter((p) => String(index.read(p).fm.type || '').toLowerCase() === 'location')));
 
 function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const given = session || {};
@@ -110,6 +110,18 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const depth = (p) => chain(p).length;
   const deepest = (places) => places.slice().sort((a, b) => depth(b) - depth(a))[0] || null;
   const placesIn = (text) => uniq(pt.links(text).map((t) => index.resolve(t)).filter(isPlace));
+
+  // Every location note (maps and GM halves left out, as read.js's `locations` does) with its parent and type, and where
+  // each NPC or creature stands by its `location` field: what the page ranks the cards by. No guessing from prose.
+  const loc = locOf(index, Object.keys(model.placeKeys || {}).sort());
+  const peopleAt = {};
+  for (const p of index.notes()) {
+    if (!PEOPLE_TYPES.has(typeOf(p))) continue;
+    const v = Array.isArray(fmOf(p).location) ? fmOf(p).location[0] : fmOf(p).location;
+    const t = v == null ? '' : (pt.links(String(v))[0] || String(v).trim());
+    const at = t ? index.resolve(t) : null;
+    if (at && loc[at]) peopleAt[p] = at;
+  }
 
   const label = given.number !== null && given.number !== undefined ? `Session ${given.number}` : (given.title || 'Session');
   const sessions = listSessions(vaultPath, { deps, index });
@@ -179,7 +191,7 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
       'road', 'bridge', 'gate', 'city', 'town', 'village', 'building', 'north', 'south', 'east', 'west', 'upper', 'lower', 'great']);
     const wordsOf = (s) => uniq((String(s).match(/\p{L}{5,}/gu) || []).map((w) => w.toLowerCase())).filter((w) => !GENERIC.has(w)).sort((a, b) => b.length - a.length);
     const nameWords = (p) => new Set(wordsOf(`${nameOf(p)} ${stemOf(p)}`));
-    const area = where.place ? areaOf(index, where.place) : null;
+    const area = where.place ? RR.areaOf(where.place, loc) : null;
     // A clock word names a place only when it matches exactly one location, or exactly one inside the crew's area.
     // Else there is no place from that word: the next word is tried, and if none gives one, no place (never a guess).
     let found = null;
@@ -280,7 +292,7 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   // Joins: cards sharing a subject note join, one hop, no chains. A card's subject notes are the notes its items link plus
   // one hop through each linked note's own relationships. Left out: the lead card's place, the PCs, and the party's area
   // and everything above it (they would join nearly every card).
-  const broad = new Set(whereNow.place ? chain(areaOf(index, whereNow.place)) : []);
+  const broad = new Set(whereNow.place ? chain(RR.areaOf(whereNow.place, loc)) : []);
   const pcSet = new Set(pcNotes);
   const keep = (n) => Boolean(n) && ENTITY_TYPES.has(typeOf(n)) && n !== (lead && lead.place) && !pcSet.has(n) && !broad.has(n);
   const subjectsOf = (list) => {
@@ -360,6 +372,8 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     world,
     comingUp,
     cards,
+    loc,
+    peopleAt,
     background,
     whereNow,
     leftOut: LEFT_OUT,
