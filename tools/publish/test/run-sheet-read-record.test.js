@@ -175,23 +175,36 @@ describe('readRecord', () => {
       assert.deepStrictEqual(Object.keys(w.byPc).sort(), ['Joss Harker', 'Mirren Fell', 'Pell Rowan', 'Yarrow Tide'].map((n) => `Characters/PCs/${n}.md`));
     });
 
-    it(`a Table Log's Where everyone ended wins${tag}`, () => {
+    // Changed on purpose (Task 8 fix round 2, the coordinator's ruling): tonight's own positions live in the state (the
+    // same state file survives a restart and a played-not-wrapped reopen), so whereNow never reads tonight's Table Log.
+    // It reads the latest wrapped-up session's (`after`'s) Where everyone ended first: where the crew starts tonight.
+    const L14 = 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Table Log.md';
+    const whereEnded = (lines) => (t) => t.replace('## Log\n', `## Where everyone ended\n\n${lines}\n\n## Log\n`);
+    it(`the last session's Table Log's Where everyone ended wins${tag}`, () => {
       const dir = open({ crlf });
-      put(dir, S15, '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\ndocuments:\n  table_log: "[[Session 15 - Next - Table Log]]"\n---\n\n# Session 15 - Next\n');
-      put(dir, 'Chapters/Chapter 3/Sessions/Session 15/Session 15 - Next - Table Log.md',
-        '---\ntype: session-table-log\nsession: "[[Session 15 - Next]]"\n---\n\n## Where everyone ended\n\n- [[Mirren Fell]]: [[Marrow Market]]\n- [[Joss Harker]]: not placed\n\n## Log\n\n- Went inland.\n');
-      const w = readRecord(dir, session({ index: S15 })).record.whereNow;
+      edit(dir, L14, whereEnded('- [[Mirren Fell]]: [[Marrow Market]]\n- [[Joss Harker]]: not placed'));
+      const w = readRecord(dir, session()).record.whereNow;
       assert.strictEqual(w.place, loc('Marrow Market'));
       assert.strictEqual(w.from, 'table-log');
       assert.strictEqual(w.text, 'Marrow Market');
     });
 
-    it(`the most specific place wins, by the parent chain${tag}`, () => {
+    it(`tonight's own Table Log is never read for where the crew is${tag}`, () => {
       const dir = open({ crlf });
       put(dir, S15, '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\ndocuments:\n  table_log: "[[Session 15 - Next - Table Log]]"\n---\n\n# Session 15 - Next\n');
       put(dir, 'Chapters/Chapter 3/Sessions/Session 15/Session 15 - Next - Table Log.md',
-        '---\ntype: session-table-log\nsession: "[[Session 15 - Next]]"\n---\n\n## Where everyone ended\n\n- [[Mirren Fell]]: [[Harbour District]]\n- [[Joss Harker]]: [[The Salt Inn]]\n');
-      assert.strictEqual(readRecord(dir, session({ index: S15 })).record.whereNow.place, loc('The Salt Inn'));
+        '---\ntype: session-table-log\nsession: "[[Session 15 - Next]]"\n---\n\n## Where everyone ended\n\n- [[Pell Rowan]]: [[Marrow Market]]\n- [[Joss Harker]]: not placed\n\n## Log\n\n- Pell went inland.\n');
+      for (const played of [false, true]) {
+        const w = readRecord(dir, session({ index: S15, played })).record.whereNow;
+        assert.strictEqual(w.place, loc('The Salt Inn'), `played: ${played}`);
+        assert.strictEqual(w.from, 'world-state');
+      }
+    });
+
+    it(`the most specific place wins, by the parent chain${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, L14, whereEnded('- [[Mirren Fell]]: [[Harbour District]]\n- [[Joss Harker]]: [[Dock Row]]'));
+      assert.strictEqual(readRecord(dir, session()).record.whereNow.place, loc('Dock Row'));
     });
 
     it(`with no Location anywhere but the PC notes, the PC notes give the place${tag}`, () => {

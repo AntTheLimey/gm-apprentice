@@ -607,18 +607,9 @@
     return groups().find((g) => g.key === key) || null;
   }
   // A group's place note: its spot's or beat's place; null for a place typed tonight (no note, so nothing ranks Here).
-  // Where the record has the crew the sheet has not placed. Tonight's own Table Log (the reader's first source, for a night
-  // reopened later) only echoes tonight's state once anyone is placed or off-screen: then the World State's place, else
-  // the place an unplaced PC's note gives (fix round 1).
-  function crewPlace() {
-    const r = REC();
-    const w = (r && r.whereNow) || {};
-    const placed = Object.values((G.state && G.state.positions) || {}).some(Boolean);
-    if (w.from !== 'table-log' || !placed) return w.place || null;
-    if (r.world && r.world.location && (r.loc || {})[r.world.location]) return r.world.location;
-    for (const p of unplacedCrew()) if (w.byPc && w.byPc[p]) return w.byPc[p];
-    return null;
-  }
+  // Where the record has the crew the sheet has not placed: the reader's whereNow (the last session's Table Log, the World
+  // State, the PC notes; never tonight's log, whose positions live in the state).
+  const crewPlace = () => { const r = REC(); return (r && r.whereNow && r.whereNow.place) || null; };
   function groupPlaceNote(g, d = D()) {
     if (g.key === CREW) return crewPlace();
     const b = d.beats.find((x) => x.key === g.beat);

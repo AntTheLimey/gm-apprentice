@@ -165,7 +165,9 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     byPc[pc] = isPlaceholder(val) ? null : (placesIn(val)[0] || null);
   }
   const whereNow = { place: null, text: '', from: null, byPc };
-  const logNote = tableLogOf(index, given.index || null).log;
+  // The latest wrapped-up session's Table Log (`after`), never tonight's: tonight's own positions live in the state, which
+  // survives a restart and a played-not-wrapped reopen (Task 8 fix round 2). This is where the crew starts tonight.
+  const logNote = tableLogOf(index, given.after || null).log;
   const logPlaces = logNote ? placesIn(sectionText(nl(index.read(logNote).body), 2, /^where everyone ended$/i)) : [];
   const pcPlaces = Object.values(byPc).filter(Boolean);
   if (logPlaces.length) Object.assign(whereNow, { place: deepest(logPlaces), from: 'table-log' });
