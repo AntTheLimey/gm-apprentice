@@ -253,6 +253,12 @@ describe('run sheet sessions', () => {
     fs.writeFileSync(path.join(tdir, 'chapter-2--session-3.json'), JSON.stringify({ filed: { index: IDX.c2s1 } }));
     fs.writeFileSync(path.join(tdir, 'broken--session-3.json'), '{ not json');
     assert.deepStrictEqual(stateFileFor(dir, planned), { file: path.join(tdir, 'chapter-2--session-3.json'), stateId: 'chapter-2--session-3' });
+    // two states naming one index: the number-named one
+    fs.writeFileSync(path.join(tdir, 'aaa--session-3.json'), JSON.stringify({ filed: { index: IDX.c2s1 } }));
+    fs.writeFileSync(path.join(tdir, 'chapter-1--session-3.json'), JSON.stringify({ filed: { index: IDX.c2s1 } }));
+    assert.strictEqual(stateFileFor(dir, planned).stateId, 'chapter-1--session-3');
+    fs.rmSync(path.join(tdir, 'aaa--session-3.json'));
+    fs.writeFileSync(path.join(tdir, 'chapter-1--session-3.json'), JSON.stringify({ filed: { index: 'Elsewhere/Other.md' } }));
     // a state under the session's own name wins over the scan
     fs.writeFileSync(path.join(tdir, 'chapter-1--session-01-snowmelt.json'), '{}');
     assert.strictEqual(stateFileFor(dir, planned).stateId, 'chapter-1--session-01-snowmelt');

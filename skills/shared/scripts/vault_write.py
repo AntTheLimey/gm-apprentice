@@ -4230,6 +4230,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
                                  == (chapter or "").casefold()
                                  or found is not None and in_chapter(rel, ch))]
     if taken:
+        # gma.py's table-file parses this wording ("already has an index: <path>;")
         raise WriteError(f"session {n} already has an index: {taken[0]}; "
                          "play-notes-new files Play Notes beside it")
     prev_text = batch.read(prev[0]) if prev else ""

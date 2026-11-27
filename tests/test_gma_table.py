@@ -332,6 +332,22 @@ class TableFileTests(unittest.TestCase):
         self.assertFalse(list((root / CH3).rglob("Session 15 - Second*")))
         self.assertTrue((root / CH3 / "Session 15" / "Session 15 - First - Table Log.md").exists())
 
+    def test_an_index_in_another_chapter_is_not_beside(self):
+        root = _record_copy(self)
+        other = root / "Chapters" / "Chapter 9" / "Sessions" / "Session 15"
+        other.mkdir(parents=True)
+        (root / "Chapters" / "Chapter 9" / "Chapter 9.md").write_text(
+            "---\ntype: chapter\nstatus: active\n---\n\n# Chapter 9\n", encoding="utf-8")
+        (other / "Session 15 - Elsewhere.md").write_text(
+            '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 9]]"\nstatus: planned\n---\n\n# Session 15 - Elsewhere\n',
+            encoding="utf-8")
+        done = _table_file(root)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertTrue((root / CH3 / "Session 15" / "Session 15 - Quiet.md").exists())
+        self.assertFalse((other / "Session 15 - Elsewhere - Table Log.md").exists())
+        rows = [ln for ln in done.stdout.splitlines() if ln and not ln.startswith(("#", "="))]
+        self.assertEqual(rows[0].split("\t")[:2], ["CREATED", f"{CH3}/Session 15/Session 15 - Quiet.md"])
+
     def test_table_file_is_hidden_from_the_command_list(self):
         self.assertNotIn("table-file", gma.COMMANDS)
 

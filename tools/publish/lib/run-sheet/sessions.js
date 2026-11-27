@@ -255,14 +255,17 @@ function stateFileFor(vaultPath, session, { exists = fs.existsSync, readDir = fs
   if (session.plan && !exists(at(stateId))) {
     let found = null;
     if (session.index) {
+      const matches = [];
       let names = [];
       try { names = readDir(dir); } catch { names = []; }
       for (const name of names.filter((n) => /--session-.*\.json$/.test(n)).sort()) {
         try {
           const saved = JSON.parse(String(readFile(path.join(dir, name), 'utf8')));
-          if (saved && saved.filed && saved.filed.index === session.index) { found = name.replace(/\.json$/, ''); break; }
+          if (saved && saved.filed && saved.filed.index === session.index) matches.push(name.replace(/\.json$/, ''));
         } catch { /* an unreadable state file is not this session's */ }
       }
+      // two states with one filed index: the number-named one is the sheet's own
+      found = matches.includes(noPlanIdOf(session)) ? noPlanIdOf(session) : (matches[0] || null);
     }
     if (!found && session.number !== null && session.number !== undefined) {
       const byNumber = noPlanIdOf(session);

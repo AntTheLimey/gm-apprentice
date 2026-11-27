@@ -1114,7 +1114,7 @@ if (command === 'table') {
   if (parsed.flags.fileLog !== undefined) {
     try { fileLog = JSON.parse(parsed.flags.fileLog); } catch { fileLog = undefined; }
     const strings = (a) => Array.isArray(a) && a.length > 0 && a.every((x) => typeof x === 'string');
-    const objectForm = fileLog && typeof fileLog === 'object' && !Array.isArray(fileLog) && strings(fileLog.cmd) && typeof fileLog.takesTitle === 'boolean';
+    const objectForm = fileLog && typeof fileLog === 'object' && !Array.isArray(fileLog) && strings(fileLog.cmd) && fileLog.takesTitle === true;
     if (!strings(fileLog) && !objectForm) {
       console.error('Error: --file-log needs a JSON array of strings (the command that files the Table Log), or {"cmd": [...], "takesTitle": true}');
       process.exit(1);

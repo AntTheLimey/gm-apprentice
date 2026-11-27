@@ -603,8 +603,14 @@ def _table_file(args: list[str]) -> int:
         error = next((ln for ln in rows if ln.startswith("ERROR")), None)
         return refuse(error.split("\t", 3)[-1].splitlines()[0] if error
                       else "the batch was refused")
-    if beside:   # the index first: the row the server reads its path from
-        rows.sort(key=lambda ln: ln.split("\t")[1:2] != [beside])
+    # the index first, on both paths: the row the server reads its path from
+    def is_index(ln: str) -> bool:
+        verb, _, rest = ln.partition("\t")
+        path = rest.split("\t")[0]
+        if beside:
+            return path == beside
+        return verb == "CREATED" and (path == f"{stem}.md" or path.endswith(f"/{stem}.md"))
+    rows.sort(key=lambda ln: not is_index(ln))
     print("\n".join(rows))
     return 0
 
