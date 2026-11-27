@@ -16,3 +16,5 @@ vault.config.json
 .watcher-heartbeat
 .watcher-seen.json
 .watcher-session.json
+.watcher-lock.json
+.watcher-stop

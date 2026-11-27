@@ -5,7 +5,8 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { runInbox, HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE } = require('../lib/inbox-cli.js');
+const { runInbox, HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE, LOCK_FILE, STOP_FILE } = require('../lib/inbox-cli.js');
+const { spawn } = require('child_process');
 
 let inbox;
 before(async () => { inbox = await import('../templates-scaffold/functions/api/inbox-core.mjs'); });
@@ -300,7 +301,7 @@ test('inbox open adds the watcher files missing from an older site\'s .gitignore
   await open(fakeKV(), dir, ['wolf']);
   await open(fakeKV(), dir, ['wolf']);
   assert.equal(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'),
-    `node_modules/\n.watcher-heartbeat\n${SEEN_FILE}\n${SESSION_FILE}\n`);
+    `node_modules/\n.watcher-heartbeat\n${SEEN_FILE}\n${SESSION_FILE}\n${LOCK_FILE}\n${STOP_FILE}\n`);
 });
 
 test('opening a new code starts a new clock', async () => {
@@ -362,4 +363,250 @@ test('watch --help prints the usage without needing a site', async () => {
   const lines = [];
   assert.equal(await runInbox(['watch', '--help'], { cwd: siteDir(), out: (s) => lines.push(s) }), 0);
   assert.match(lines.join('\n'), /--exit-on-batch/);
+});
+
+// One watcher per site, and a status and a stop that need no host task handle (#884).
+const lockOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, LOCK_FILE), 'utf8'));
+
+test('a new watch stops the one running and takes over; the old one prints "WATCHER: stopped"', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  const firstLines = [];
+  // The first watcher's wait ends when a stop request lands, as the real wait does.
+  const first = runInbox(['watch'], {
+    adapter: kv, cwd: dir, out: (s) => firstLines.push(String(s)), maxPolls: 1000,
+    sleep: async () => { while (!fs.existsSync(path.join(dir, STOP_FILE))) await new Promise((r) => setTimeout(r, 10)); },
+  });
+  await until(() => fs.existsSync(path.join(dir, LOCK_FILE)));
+  const firstId = lockOf(dir).id;
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  const second = await watch(kv, dir, ['--exit-on-batch'], { polls: 5 });
+  assert.equal(await first, 0);
+  assert.deepEqual(firstLines, ['WATCHER: stopped']);
+  assert.equal(second.rc, 0);
+  assert.equal(second.lines.length, 1, 'the new watcher prints the batch');
+  assert.equal(fs.existsSync(path.join(dir, LOCK_FILE)), false);
+  assert.notEqual(firstId, undefined);
+});
+
+test('a holder that will not stop leaves the new watch exiting 1, without polling beside it', async () => {
+  const dir = siteDir();
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 4242, id: 'held', every: 30, started: Math.floor(Date.now() / 1000) }));
+  const lines = []; const kills = [];
+  const rc = await runInbox(['watch'], {
+    adapter: fakeKV(), cwd: dir, out: (s) => lines.push(String(s)), maxPolls: 1,
+    pidAlive: () => true, kill: (pid, sig) => kills.push(`${pid} ${sig}`), graceMs: 50,
+  });
+  assert.equal(rc, 1);
+  assert.deepEqual(lines, ['WATCHER: another watcher (pid 4242) holds this site and would not stop']);
+  assert.deepEqual(kills, ['4242 SIGTERM', '4242 SIGKILL']);
+  assert.equal(fs.existsSync(path.join(dir, HEARTBEAT_FILE)), false, 'it never polled');
+});
+
+test('a watcher whose pull runs long still counts as running', async () => {
+  const dir = siteDir();
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: process.pid, id: 'x', every: 30, started: now / 1000 - 3600 }));
+  fs.writeFileSync(path.join(dir, HEARTBEAT_FILE), `${now / 1000 - 8 * 60}\n`);
+  const r = await control(dir, ['--status'], { now: () => now });
+  assert.equal(r.rc, 0, 'last poll 8 minutes ago: a long pull, not a dead watcher');
+});
+
+test('a lock left by a watcher that was killed, or by a pid now used by another program, is taken over', async () => {
+  const dir = siteDir();
+  const now = Date.now();
+  // Dead pid.
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 4242, id: 'old', every: 30, started: Math.floor(now / 1000) }));
+  let lines = [];
+  let rc = await runInbox(['watch'], { adapter: fakeKV(), cwd: dir, out: (s) => lines.push(s), maxPolls: 1, pidAlive: () => false });
+  assert.equal(rc, 0); assert.deepEqual(lines, []);
+  // Live pid, but nothing polled for an hour: not a watcher.
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: process.pid, id: 'old', every: 30, started: Math.floor(now / 1000) - 3600 }));
+  fs.writeFileSync(path.join(dir, HEARTBEAT_FILE), `${Math.floor(now / 1000) - 3600}\n`);
+  lines = [];
+  rc = await runInbox(['watch'], { adapter: fakeKV(), cwd: dir, out: (s) => lines.push(s), maxPolls: 1 });
+  assert.equal(rc, 0); assert.deepEqual(lines, []);
+  // Half written.
+  fs.writeFileSync(path.join(dir, LOCK_FILE), '{"pid":');
+  rc = await runInbox(['watch'], { adapter: fakeKV(), cwd: dir, out: () => {}, maxPolls: 1 });
+  assert.equal(rc, 0);
+});
+
+test('a stop request for this watcher ends it with "WATCHER: stopped"; one for another watcher does not', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  const lines = [];
+  const rc = await runInbox(['watch', '--exit-on-batch'], {
+    adapter: kv, cwd: dir, out: (s) => lines.push(String(s)), maxPolls: 50,
+    sleep: async () => {
+      if (!fs.existsSync(path.join(dir, STOP_FILE))) fs.writeFileSync(path.join(dir, STOP_FILE), 'someone-else\n');
+      else fs.writeFileSync(path.join(dir, STOP_FILE), `${lockOf(dir).id}\n`);
+    },
+  });
+  assert.equal(rc, 0);
+  assert.deepEqual(lines, ['WATCHER: stopped']);
+  assert.equal(fs.existsSync(path.join(dir, LOCK_FILE)), false);
+  assert.equal(fs.existsSync(path.join(dir, STOP_FILE)), false, 'its own stop request is cleared');
+});
+
+test('an inbox open during a running watch starts a new session: a still-pending request is shown again', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await open(kv, dir, ['wolf'], T0);
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  const r = await clockedWatch(kv, dir, [], {
+    polls: 4, step: 30000, start: T0,
+    onPoll: async (n) => { if (n === 2) await open(kv, dir, ['bear'], T0 + 60000); },
+  });
+  assert.equal(r.lines.length, 2, r.lines.join('\n'));
+  assert.deepEqual(JSON.parse(r.lines[1]).map((e) => e.id), ['a']);
+});
+
+async function control(dir, args, deps = {}) {
+  const lines = [];
+  const rc = await runInbox(['watch', ...args], { adapter: fakeKV(), cwd: dir, out: (s) => lines.push(String(s)), ...deps });
+  return { rc, lines };
+}
+
+test('--status says whether a watcher runs, when it last polled and when the session ends', async () => {
+  const dir = siteDir();
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  let r = await control(dir, ['--status']);
+  assert.deepEqual(r, { rc: 1, lines: ['Not watching.'] });
+  await open(fakeKV(), dir, ['wolf', '--hours', '2'], now - 30 * 60_000);
+  fs.writeFileSync(path.join(dir, HEARTBEAT_FILE), `${Math.floor(now / 1000) - 600}\n`);
+  r = await control(dir, ['--status'], { now: () => now });
+  assert.deepEqual(r, { rc: 1, lines: ['Not watching. The last poll was 10 min ago. The session ends in 1 h 30 min.'] });
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: process.pid, id: 'x', every: 30, started: Math.floor(now / 1000) - 60 }));
+  fs.writeFileSync(path.join(dir, HEARTBEAT_FILE), `${Math.floor(now / 1000) - 12}\n`);
+  r = await control(dir, ['--status'], { now: () => now });
+  assert.deepEqual(r, { rc: 0, lines: [`Watching (pid ${process.pid}): last poll 12 s ago. The session ends in 1 h 30 min.`] });
+  r = await control(dir, ['--status'], { now: () => now + 2 * HOUR });
+  assert.equal(r.rc, 1, 'a lock not polled in two hours is no watcher');
+  assert.match(r.lines[0], /The session time is up\.$/);
+});
+
+test('--status and --stop take no other argument', async () => {
+  for (const args of [['--status', '--every', '5'], ['--stop', '--exit-on-batch'], ['--status', '--stop']]) {
+    const r = await control(siteDir(), args);
+    assert.equal(r.rc, 2, args.join(' '));
+    assert.match(r.lines[0], /takes no other argument/, args.join(' '));
+  }
+});
+
+test('--stop with no watcher running still removes the session\'s watcher files', async () => {
+  const dir = siteDir();
+  await open(fakeKV(), dir, ['wolf']);
+  for (const f of [HEARTBEAT_FILE, SEEN_FILE, LOCK_FILE, STOP_FILE]) fs.writeFileSync(path.join(dir, f), '{}');
+  fs.writeFileSync(path.join(dir, 'keep.txt'), 'x');
+  const r = await control(dir, ['--stop']);
+  assert.deepEqual(r, { rc: 0, lines: ['No watcher was running.', 'Removed the watcher files.'] });
+  assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith('.watcher')), []);
+  assert.ok(fs.existsSync(path.join(dir, 'keep.txt')));
+});
+
+// A real watcher process: `inbox watch` over an in-memory queue, polling every second.
+const CHILD = `
+const { runInbox } = require(${JSON.stringify(path.join(__dirname, '..', 'lib', 'inbox-cli.js'))});
+const store = new Map();
+const kv = { async get(k) { return store.get(k) ?? null; }, async put(k, v) { store.set(k, v); },
+  async delete(k) { store.delete(k); }, async list() { return { keys: [] }; } };
+runInbox(['watch', '--every', '1', ...process.argv.slice(1)], { adapter: kv, cwd: process.env.SITE })
+  .then((rc) => process.exit(rc));
+`;
+
+function startChild(dir, code = CHILD) {
+  const child = spawn(process.execPath, ['-e', code], { env: { ...process.env, SITE: dir }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '';
+  child.stdout.on('data', (d) => { output += d; });
+  child.stderr.on('data', (d) => { output += d; });
+  const closed = new Promise((r) => child.on('close', (rc, sig) => r({ rc, sig, output })));
+  return { child, closed };
+}
+
+async function until(check, ms = 10000) {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error('timed out');
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+test('--stop ends a running watcher process, which prints "WATCHER: stopped", and removes its files', async () => {
+  const dir = siteDir();
+  await open(fakeKV(), dir, ['wolf'], Date.now());
+  const w = startChild(dir);
+  try {
+    await until(() => fs.existsSync(path.join(dir, HEARTBEAT_FILE)) && fs.existsSync(path.join(dir, LOCK_FILE)));
+    assert.equal((await control(dir, ['--status'])).rc, 0);
+    const r = await control(dir, ['--stop']);
+    assert.deepEqual(r, { rc: 0, lines: [`Stopped the watcher (pid ${w.child.pid}).`, 'Removed the watcher files.'] });
+    const end = await w.closed;
+    assert.equal(end.rc, 0);
+    assert.equal(end.output, 'WATCHER: stopped\n');
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith('.watcher')), []);
+  } finally { w.child.kill('SIGKILL'); }
+});
+
+test('--stop ends a watcher stuck in a pull, by ending its process', async () => {
+  const dir = siteDir();
+  // Holds the lock, then hangs in a pull that never returns.
+  const stuck = CHILD.replace('async list() { return { keys: [] }; }', 'list() { return new Promise(() => setInterval(() => {}, 1000)); }');
+  assert.notEqual(stuck, CHILD);
+  const w = startChild(dir, stuck);
+  try {
+    await until(() => fs.existsSync(path.join(dir, LOCK_FILE)));
+    const r = await control(dir, ['--stop'], { graceMs: 1500 });
+    assert.deepEqual(r.lines, [`Stopped the watcher (pid ${w.child.pid}).`, 'Removed the watcher files.']);
+    const end = await w.closed;
+    // Windows ends a process without a signal name.
+    if (process.platform !== 'win32') assert.equal(end.sig, 'SIGTERM');
+    assert.deepEqual(fs.readdirSync(dir), []);
+  } finally { w.child.kill('SIGKILL'); }
+});
+
+test('a reply during a session with no watcher running says so; with one running, or no session, it does not', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  await inbox.enqueue(kv, entry('b', '2026-07-11T14:02:00.000Z'));
+  await inbox.enqueue(kv, entry('c', '2026-07-11T14:03:00.000Z'));
+  const reply = async (id) => {
+    const lines = [];
+    assert.equal(await runInbox(['reply', id, 'advice', 'ok'], { adapter: kv, cwd: dir, out: (s) => lines.push(String(s)) }), 0);
+    return lines;
+  };
+  assert.equal((await reply('a')).length, 1, 'no session open: no note');
+  await open(kv, dir, ['wolf'], Date.now());
+  const lines = await reply('b');
+  assert.equal(lines.length, 2);
+  assert.match(lines[1], /^Note: no inbox watch is running for this site, so the next request will not wake you\./);
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: process.pid, id: 'x', every: 30, started: Math.floor(Date.now() / 1000) }));
+  assert.equal((await reply('c')).length, 1, 'a watcher is running: no note');
+});
+
+test('--stop keeps the files of a watcher launched while it stopped the old one', async () => {
+  const dir = siteDir();
+  const nowS = Math.floor(Date.now() / 1000);
+  fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 4242, id: 'old', every: 30, started: nowS }));
+  fs.writeFileSync(path.join(dir, SESSION_FILE), JSON.stringify({ start: nowS, hours: 5 }));
+  const r = await control(dir, ['--stop'], {
+    pidAlive: () => true, graceMs: 50,
+    // The old one ends, and a new launch takes the site at that moment.
+    kill: () => fs.writeFileSync(path.join(dir, LOCK_FILE), JSON.stringify({ pid: 4343, id: 'new', every: 30, started: nowS })),
+  });
+  assert.deepEqual(r, { rc: 0, lines: ['Stopped the watcher (pid 4242).', 'A new watcher has started since: its files are kept.'] });
+  assert.equal(lockOf(dir).id, 'new');
+  assert.ok(fs.existsSync(path.join(dir, SESSION_FILE)));
+});
+
+test('a lock still being written by another launch is waited for, not taken over', async () => {
+  const dir = siteDir();
+  const file = path.join(dir, LOCK_FILE);
+  fs.writeFileSync(file, '');
+  setTimeout(() => fs.writeFileSync(file, JSON.stringify({ pid: 4242, id: 'other', every: 30, started: Math.floor(Date.now() / 1000) })), 300);
+  const lines = []; const kills = [];
+  const rc = await runInbox(['watch'], {
+    adapter: fakeKV(), cwd: dir, out: (s) => lines.push(String(s)), maxPolls: 1,
+    pidAlive: (pid) => pid === 4242 && !kills.length,
+    kill: (pid, sig) => kills.push(`${pid} ${sig}`), graceMs: 50,
+  });
+  assert.equal(rc, 0);
+  assert.deepEqual(kills, ['4242 SIGTERM'], 'the other launch was found and asked to stop, not overwritten blind');
 });

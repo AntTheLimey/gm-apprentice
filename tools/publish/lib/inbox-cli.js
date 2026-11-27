@@ -1,5 +1,6 @@
 // Local inbox subcommands, invoked by the publish-site loop (never typed by the
 // GM). Reuses Part 1's inbox-core.mjs over a wrangler-backed KV adapter.
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command.js');
@@ -51,6 +52,18 @@ const DEFAULT_HOURS = 5;
 const MIN_HOURS = 1;
 const MAX_HOURS = 12;
 const TIME_UP = 'WATCHER: session time is up';
+// One watcher per site (#884). The running one holds {pid, id, every, started} here. A new one takes over: it asks
+// the holder to stop, so a relaunch never doubles the polling, and the newest launch, the one the loop is waiting
+// on, is the one that runs. `inbox watch --stop` asks the same way: it writes the holder's id to the stop file, and
+// the watcher ends before its next poll.
+const LOCK_FILE = '.watcher-lock.json';
+const STOP_FILE = '.watcher-stop';
+const STOPPED = 'WATCHER: stopped';
+// How long a watcher may go without finishing a poll and still count as running. A pull is one wrangler call per
+// request in the queue, each bounded at a minute, so a busy queue can take minutes; the bound only rules out a pid
+// the system has given to another program since the watcher died.
+const LIVE_MS = 15 * 60_000;
+const WATCH_FILES = [HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE, LOCK_FILE, STOP_FILE];
 const OPEN_USAGE = `Usage: inbox open <CODE> [--hours N]
   --hours N  hours the watcher runs from now (default ${DEFAULT_HOURS}, kept between ${MIN_HOURS} and ${MAX_HOURS})`;
 const DEFAULT_EVERY = 30;
@@ -58,27 +71,195 @@ const DEFAULT_REMIND = 300;
 const STREAK = 5;
 const USAGE_EXIT = 2;
 const WATCH_USAGE = `Usage: inbox watch [--every N] [--remind-after N] [--exit-on-batch]
+       inbox watch --status | --stop
   --every N         seconds between polls (default ${DEFAULT_EVERY}, kept between 1 and 300)
   --remind-after N  seconds before a request still pending is named again
                     (default ${DEFAULT_REMIND}, kept between 60 and 3600)
   --exit-on-batch   exit 0 after a new batch or a reminder line, 1 after a failure line
+  --status          say whether a watcher is running for this site and when it last polled;
+                    exits 0 when one is, 1 when none is
+  --stop            stop the running watcher (it prints "${STOPPED}"), make sure it ended,
+                    and remove the watcher's files
 Prints a new batch as the JSON array \`inbox pull\` prints, once; a batch it printed before
 prints nothing. An id shown before and still pending N seconds later prints
 "WATCHER: still pending: <id> <id>...", and again every N seconds while it stays pending.
 After ${STREAK} failed polls in a row it prints "WATCHER: inbox pull failed N times in a row",
 and again every ${STREAK} more. Once the hours set by \`inbox open\` have passed it prints
 "${TIME_UP}" and exits 0. Without --exit-on-batch it otherwise runs until stopped.
-Exit codes: 0 batch, reminder or time up (or polls done), 1 failure line, 2 usage error.`;
+One watcher runs per site: a new one stops the one running (which prints "${STOPPED}")
+and takes over.
+Exit codes: 0 batch, reminder, time up or stopped (or polls done), 1 failure line, 2 usage error.`;
 
-// The ms when the session opened by `inbox open` ends, or null for no limit.
-function readSessionEnd(file) {
+// The session opened by `inbox open`: {start, end} in ms, or null for no limit.
+function readSession(file) {
   try {
     const { start, hours } = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!Number.isFinite(start) || !Number.isFinite(hours)) return null;
-    return (start + hours * 3600) * 1000;
+    return { start: start * 1000, end: (start + hours * 3600) * 1000 };
   } catch {
     return null;
   }
+}
+
+function readJson(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+}
+
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (err) { return err.code === 'EPERM'; }
+}
+
+// The Unix seconds of the last poll, or null.
+function readBeat(dir) {
+  let t = NaN;
+  try { t = Number.parseInt(fs.readFileSync(path.join(dir, HEARTBEAT_FILE), 'utf8'), 10); } catch { /* none yet, or just removed */ }
+  return Number.isFinite(t) ? t : null;
+}
+
+// Written whole: a reader never sees an empty heartbeat.
+function writeBeat(dir, unixSeconds) {
+  const file = path.join(dir, HEARTBEAT_FILE);
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${unixSeconds}\n`);
+  fs.renameSync(tmp, file);
+}
+
+// The watcher running for this site, as its lock with `last` (Unix seconds of its last poll, or of its start), or
+// null. A lock counts only while its process is alive and has finished a poll within LIVE_MS.
+function liveWatcher(dir, nowMs, alive = pidAlive) {
+  const lock = readJson(path.join(dir, LOCK_FILE));
+  if (!lock || !Number.isInteger(lock.pid) || typeof lock.id !== 'string' || !alive(lock.pid)) return null;
+  const last = Math.max(Number(lock.started) || 0, readBeat(dir) || 0);
+  const every = Number.isFinite(lock.every) ? lock.every : DEFAULT_EVERY;
+  if (nowMs - last * 1000 > every * 1000 + LIVE_MS) return null;
+  return { ...lock, last };
+}
+
+// Takes the site's lock. A live holder is asked to stop first; a lock left by a watcher that ended without letting
+// go (a host that killed it at a time limit) is taken over. Returns the holder that would not stop, or null.
+async function claimLock(dir, lock, deps) {
+  const file = path.join(dir, LOCK_FILE);
+  const nowMs = (deps.now || Date.now)();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      fs.writeFileSync(file, `${JSON.stringify(lock)}\n`, { flag: 'wx' });
+      return null;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      if (await beingWritten(file)) continue;
+      const live = liveWatcher(dir, nowMs, deps.pidAlive);
+      if (live && !(await stopHolder(dir, live, deps))) return live;
+      fs.rmSync(file, { force: true });
+    }
+  }
+  return liveWatcher(dir, nowMs, deps.pidAlive) || { pid: '?' };
+}
+
+// A lock with nothing readable in it may be one another launch is writing this moment: give it two seconds to
+// appear. True when it did (the caller looks again); false once it is plainly left over.
+async function beingWritten(file) {
+  for (let i = 0; i < 20; i++) {
+    const lock = readJson(file);
+    if (lock && Number.isInteger(lock.pid)) return i > 0;
+    let age = Infinity;
+    try { age = Date.now() - fs.statSync(file).mtimeMs; } catch { return true; }
+    if (age > 2000) return false;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+
+// Lets go of the lock only while it is still this watcher's.
+function releaseLock(dir, id) {
+  const file = path.join(dir, LOCK_FILE);
+  if ((readJson(file) || {}).id === id) fs.rmSync(file, { force: true });
+  if (stopAsked(dir, id)) fs.rmSync(path.join(dir, STOP_FILE), { force: true });
+}
+
+function stopAsked(dir, id) {
+  try { return fs.readFileSync(path.join(dir, STOP_FILE), 'utf8').trim() === id; } catch { return false; }
+}
+
+// The wait between polls, cut short by a stop request.
+function stopAwareSleep(dir, id) {
+  return async (ms) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end && !stopAsked(dir, id)) {
+      await new Promise((r) => setTimeout(r, Math.min(500, end - Date.now())));
+    }
+  };
+}
+
+const ago = (s) => (s < 120 ? `${Math.max(0, Math.round(s))} s` : `${Math.round(s / 60)} min`);
+function inTime(ms) {
+  const min = Math.max(0, Math.round(ms / 60000));
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
+}
+
+// `inbox watch --status`: 0 while a watcher is running for the site, 1 when none is.
+function watchStatus(dir, deps) {
+  const out = deps.out || console.log;
+  const nowMs = (deps.now || Date.now)();
+  const live = liveWatcher(dir, nowMs, deps.pidAlive);
+  const session = readSession(path.join(dir, SESSION_FILE));
+  const ends = !session ? '' : nowMs >= session.end ? ' The session time is up.' : ` The session ends in ${inTime(session.end - nowMs)}.`;
+  const beat = readBeat(dir);
+  if (live) {
+    out(`Watching (pid ${live.pid}): ${beat !== null && beat >= live.started ? `last poll ${ago(nowMs / 1000 - beat)} ago` : 'first poll under way'}.${ends}`);
+    return 0;
+  }
+  out(`Not watching.${beat !== null ? ` The last poll was ${ago(nowMs / 1000 - beat)} ago.` : ''}${ends}`);
+  return 1;
+}
+
+async function waitUntil(check, timeoutMs, sleep) {
+  const end = Date.now() + timeoutMs;
+  for (;;) {
+    if (check()) return true;
+    if (Date.now() >= end) return false;
+    await sleep(100);
+  }
+}
+
+// Asks a live watcher to stop and makes sure it ended, ending its process if it is stuck in a pull. True once it
+// has.
+async function stopHolder(dir, live, deps) {
+  const alive = deps.pidAlive || pidAlive;
+  const kill = deps.kill || ((pid, sig) => process.kill(pid, sig));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  fs.writeFileSync(path.join(dir, STOP_FILE), `${live.id}\n`);
+  const gone = () => !alive(live.pid) || (readJson(path.join(dir, LOCK_FILE)) || {}).id !== live.id;
+  let stopped = await waitUntil(gone, deps.graceMs ?? 5000, sleep);
+  for (const sig of ['SIGTERM', 'SIGKILL']) {
+    if (stopped) break;
+    try { kill(live.pid, sig); } catch { /* ended in between */ }
+    stopped = await waitUntil(gone, 3000, sleep);
+  }
+  return stopped;
+}
+
+// `inbox watch --stop`: stops the running watcher, then removes the watcher's files: they belong to one session.
+async function watchStop(dir, deps) {
+  const out = deps.out || console.log;
+  const live = liveWatcher(dir, (deps.now || Date.now)(), deps.pidAlive);
+  if (live) {
+    const stopped = await stopHolder(dir, live, deps);
+    if (!stopped) {
+      out(`The watcher (pid ${live.pid}) would not stop. Its files are kept: end process ${live.pid}, then run inbox watch --stop again.`);
+      return 1;
+    }
+    out(`Stopped the watcher (pid ${live.pid}).`);
+    // A launch made while this one stopped has taken over: its files are its own.
+    if (liveWatcher(dir, (deps.now || Date.now)(), deps.pidAlive)) {
+      out('A new watcher has started since: its files are kept.');
+      return 0;
+    }
+  } else {
+    out('No watcher was running.');
+  }
+  for (const f of WATCH_FILES) fs.rmSync(path.join(dir, f), { force: true });
+  out('Removed the watcher files.');
+  return 0;
 }
 
 function parseOpenArgs(args) {
@@ -135,7 +316,13 @@ function secondsArg(flag, raw, def, min, max, what, notes) {
 }
 
 function parseWatchArgs(args) {
-  const opts = { every: DEFAULT_EVERY, remindAfter: DEFAULT_REMIND, exitOnBatch: false, notes: [] };
+  const opts = { every: DEFAULT_EVERY, remindAfter: DEFAULT_REMIND, exitOnBatch: false, notes: [], mode: null };
+  const control = args.filter((a) => a === '--status' || a === '--stop');
+  if (control.length) {
+    if (args.length > 1) return { error: `${control[0]} takes no other argument` };
+    opts.mode = control[0];
+    return opts;
+  }
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--exit-on-batch') { opts.exitOnBatch = true; continue; }
@@ -160,27 +347,50 @@ async function runWatch(inbox, kv, args, deps) {
   const out = deps.out || console.log;
   const opts = parseWatchArgs(args);
   if (opts.error) { out(opts.error); out(WATCH_USAGE); return USAGE_EXIT; }
-  opts.notes.forEach((n) => out(n));
   const dir = deps.cwd || process.cwd();
-  const sleep = deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  if (opts.mode === '--status') return watchStatus(dir, deps);
+  if (opts.mode === '--stop') return watchStop(dir, deps);
+  opts.notes.forEach((n) => out(n));
+  const now = deps.now || Date.now;
+  const id = crypto.randomBytes(8).toString('hex');
+  const held = await claimLock(dir, { pid: process.pid, id, every: opts.every, started: Math.floor(now() / 1000) }, deps);
+  if (held) {
+    // The holder would not stop: exit 1, as a failure the loop diagnoses, rather than poll beside it.
+    out(`WATCHER: another watcher (pid ${held.pid}) holds this site and would not stop`);
+    return 1;
+  }
+  try {
+    return await pollLoop(inbox, kv, opts, deps, dir, id);
+  } finally {
+    releaseLock(dir, id);
+  }
+}
+
+async function pollLoop(inbox, kv, opts, deps, dir, id) {
+  const out = deps.out || console.log;
+  const sleep = deps.sleep || stopAwareSleep(dir, id);
   const now = deps.now || Date.now;
   const seenFile = path.join(dir, SEEN_FILE);
   const seen = readSeen(seenFile, now());
   const remindMs = opts.remindAfter * 1000;
   const sessionFile = path.join(dir, SESSION_FILE);
+  let sessionStart = (readSession(sessionFile) || {}).start;
   let fails = 0;
   for (let polls = 0; deps.maxPolls === undefined || polls < deps.maxPolls; polls++) {
     if (polls > 0) await sleep(opts.every * 1000);
-    // Read each poll, so an `inbox open` while this runs moves the end.
-    const end = readSessionEnd(sessionFile);
-    if (end !== null && now() >= end) { out(TIME_UP); return 0; }
+    if (stopAsked(dir, id)) { out(STOPPED); return 0; }
+    // Read each poll, so an `inbox open` while this runs moves the end, and starts a new session: the ids shown
+    // in the old one are forgotten, as the open's clearing of the seen file says.
+    const session = readSession(sessionFile);
+    if (session && session.start !== sessionStart) { seen.clear(); sessionStart = session.start; }
+    if (session && now() >= session.end) { out(TIME_UP); return 0; }
     let pending = null;
     try {
       pending = await inbox.readPending(kv);
     } catch {
       pending = null;
     }
-    fs.writeFileSync(path.join(dir, HEARTBEAT_FILE), `${Math.floor(now() / 1000)}\n`);
+    writeBeat(dir, Math.floor(now() / 1000));
     if (pending === null) {
       fails++;
       if (fails % STREAK === 0) {
@@ -207,6 +417,16 @@ async function runWatch(inbox, kv, args, deps) {
     if (opts.exitOnBatch) return 0;
   }
   return 0;
+}
+
+// After a reply during a session, a missing watcher is said at once: nothing would wake the loop for the next
+// request (#884).
+function nudgeIfNotWatching(deps) {
+  const dir = deps.cwd || process.cwd();
+  const nowMs = (deps.now || Date.now)();
+  const session = readSession(path.join(dir, SESSION_FILE));
+  if (!session || nowMs >= session.end || liveWatcher(dir, nowMs, deps.pidAlive)) return;
+  (deps.out || console.log)('Note: no inbox watch is running for this site, so the next request will not wake you. Launch it again, the way you started it.');
 }
 
 async function runInbox(argv, deps = {}) {
@@ -237,7 +457,7 @@ async function runInbox(argv, deps = {}) {
       const start = Math.floor((deps.now || Date.now)() / 1000);
       fs.writeFileSync(path.join(dir, SESSION_FILE), JSON.stringify({ start, hours: opts.hours }) + '\n');
       // Sites made before the scaffold named these files get them too.
-      ensureIgnored(dir, [HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE], 'the watcher files');
+      ensureIgnored(dir, WATCH_FILES, 'the watcher files');
       out(`Session code set: ${code} (the watcher stops after ${opts.hours} hours)`);
       return 0;
     }
@@ -279,6 +499,7 @@ async function runInbox(argv, deps = {}) {
         return 1;
       }
       out(`${id}: reply stored (${kind}) → status ${entry.status}`);
+      nudgeIfNotWatching(deps);
       return 0;
     }
     default:
@@ -287,4 +508,6 @@ async function runInbox(argv, deps = {}) {
   }
 }
 
-module.exports = { runInbox, defaultRunWrangler, WRANGLER_TIMEOUT_MS, HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE };
+module.exports = {
+  runInbox, defaultRunWrangler, WRANGLER_TIMEOUT_MS, HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE, LOCK_FILE, STOP_FILE,
+};
