@@ -955,3 +955,48 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
     });
   });
 });
+
+// Task 9: the frustration audit's items on the Plan sheet (docs/superpowers/plans/2026-11-22-run-sheet-no-plan-ux-audit.md),
+// each named by its number, by real input only (held clicks, key events, insertText), at 1449, 1280 and 1100 wide, 762 high.
+describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browserSkip() }, () => {
+  const WIDTHS = [1449, 1280, 1100];
+  const PLAN = path.join('Chapters', 'Chapter 1', 'Sessions', 'Session 02', 'Session 02 - The Test - Plan.md');
+  // the fixture with `edit(vault)` applied to a copy first
+  async function startApp(edit) {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-src-'));
+    made.push(src);
+    fs.cpSync(FIXTURE, src, { recursive: true });
+    if (edit) edit(src);
+    return start(src, 'Session 02 - The Test');
+  }
+  const tap = async (page, sel) => {
+    const r = await page.click(sel);
+    assert.ok(r.inView && r.hit, `click ${sel}: ${JSON.stringify(r)}`);
+    return r;
+  };
+
+  for (const width of WIDTHS) {
+    // S5: a Scene cell that is a link (Dead Air's shape) read "Page Two ([[The Loop]])"
+    it(`S5: Hand over shows plain names, never [[ (${width})`, async () => {
+      const run = await startApp((vault) => {
+        const f = path.join(vault, PLAN);
+        const t = fs.readFileSync(f, 'utf8');
+        const row = "| [[Ash's Note]] | Scene 1 | to build | What Ash passes down the wall |";
+        assert.ok(t.includes(row));
+        fs.writeFileSync(f, t.replace(row, "| [[Ash's Note]] | [[The Gate]] | to build | What Ash passes down the wall |\n| Dock ledger | [[Nowhere Hall]] | to build | names the night crew |"));
+      });
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const text = await page.evaluate('document.getElementById("handover").innerText');
+        assert.ok(!text.includes('[['), `no link marks: ${text}`);
+        assert.match(text, /Ash's Note \(The Gate\)/);
+        assert.match(text, /Dock ledger \(Nowhere Hall\)/);
+        // the scene's place opens in the drawer, as the handout's own name does
+        await tap(page, '#handover a[data-note="Locations/The Gate.md"]');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Gate"');
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+  }
+});

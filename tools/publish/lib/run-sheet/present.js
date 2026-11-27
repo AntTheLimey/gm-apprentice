@@ -92,7 +92,8 @@ function present(model, { index }) {
   }
   for (const p of m.prep || []) addHtml(p, ['md'], index, false);
   if (typeof m.threads === 'string') m.threadsHtml = toHtml(m.threads, index);
-  for (const h of m.handouts || []) addHtml(h, ['name', 'text'], index, true);
+  // the Scene cell too: a link there reads as the place's name (audit S5), never `[[The Loop]]`
+  for (const h of m.handouts || []) addHtml(h, ['name', 'scene', 'text'], index, true);
   for (const c of m.cast || []) if (c.foe) addFoeHtml(c.foe, index);
   // a caster PC's spells, rendered as a foe's stat block is, for the fight panel's fold
   for (const p of m.pcs || []) addHtml(p, ['spells'], index, false);

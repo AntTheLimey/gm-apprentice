@@ -1184,7 +1184,7 @@
   function handoutsHTML(list) {
     return `<ul class="pts">${list.map((x) => {
       const on = !!G.state.handouts[x.key];
-      return `<li class="${on ? 'landed' : ''}"><button class="ptb ${on ? 'landed' : ''}" data-hand="${esc(x.key)}" type="button" aria-pressed="${on}" title="${on ? 'Handed over. Click: not handed over' : 'Click: handed over'}">${on ? '✓' : ''}</button><span>${x.nameHtml || esc(x.name)}${x.scene ? ` <span class="muted">(${esc(x.scene)})</span>` : ''} ${x.textHtml || ''}${on ? ' <span class="note">handed over</span>' : ''}</span></li>`;
+      return `<li class="${on ? 'landed' : ''}"><button class="ptb ${on ? 'landed' : ''}" data-hand="${esc(x.key)}" type="button" aria-pressed="${on}" title="${on ? 'Handed over. Click: not handed over' : 'Click: handed over'}">${on ? '✓' : ''}</button><span>${x.nameHtml || esc(x.name)}${x.scene ? ` <span class="muted">(${x.sceneHtml || esc(x.scene)})</span>` : ''} ${x.textHtml || ''}${on ? ' <span class="note">handed over</span>' : ''}</span></li>`;
     }).join('')}</ul>`;
   }
 
