@@ -42,6 +42,11 @@ img { max-width: 100%; }
 .top .sub { color: var(--muted); font-size: .85rem; }
 .top .sp { flex: 1; }
 .top #hjot { width: min(26rem, 26vw); min-width: 9rem; }
+/* audit S4: "Noted" for 3 s once a jot is taken: inside the header box's right end (it is empty then), beside a beat's box */
+.top .hjotw { position: relative; display: inline-flex; }
+.top .hjotw .noted { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.noted { font: 600 .75rem var(--mono); color: var(--ok); white-space: nowrap; }
+.noted:empty { display: none; }
 .top .saved { font: 600 .75rem var(--mono); color: var(--ok); min-width: 6.5rem; text-align: center; }
 .top .saved.wait { color: var(--muted); }
 .top .saved.bad { color: var(--bad); }
@@ -181,6 +186,9 @@ ul.pts li.overtaken .pt-t::after { content: " · overtaken"; font-size: .8rem; }
 .ifs td:first-child { width: 32%; font-weight: 600; }
 .jot { display: flex; gap: 6px; margin-top: 10px; }
 .jot input { flex: 1; min-width: 0; }
+.jot .noted { align-self: center; }
+/* a jot brought into view clears the sticky header */
+ul.jots li, .jot { scroll-margin: calc(var(--toph, 52px) + 8px) 0 8px; }
 ul.jots { list-style: none; padding: 0; margin: 6px 0 0; font-size: .9rem; }
 ul.jots li { display: flex; gap: 6px; align-items: baseline; }
 ul.jots .tm { font: 500 .72rem var(--mono); color: var(--muted); }

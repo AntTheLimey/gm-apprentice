@@ -1062,7 +1062,16 @@
   }
 
   const listHTML = (htmls) => `<ul>${htmls.map((x) => `<li>${x}</li>`).join('')}</ul>`;
+  // Tonight's jots, newest first: a night with no Plan has no beat to hold them (audit S4, ruling 2)
+  function tonightHTML() {
+    const js = (G.state.jots || []).slice().reverse();
+    if (!js.length) return '';
+    return `<h4 class="lab">Tonight so far</h4><ul class="jots" id="tonight">${js.map((j) => `<li><span class="tm">${esc(hhmm(j.at))}</span><span>${esc(j.text)}</span>${armBtn(`unjot:${j.id}`, '✕', `data-unjot="${esc(j.id)}" class="mini"`, 'Delete this jot')}</li>`).join('')}</ul>`;
+  }
   function comingHTML() {
+    return tonightHTML() + comingRecordHTML();
+  }
+  function comingRecordHTML() {
     const cu = REC().comingUp || {};
     const w = REC().world || {};
     let h = '';
@@ -1290,7 +1299,7 @@
     // 7 The jot box and this beat's jots
     const js = G.state.jots.filter((j) => j.beat === b.key);
     h += `<ul class="jots">${js.map((j) => `<li><span class="tm">${esc(hhmm(j.at))}</span><span>${esc(j.text)}</span>${armBtn(`unjot:${j.id}`, '✕', `data-unjot="${esc(j.id)}" class="mini"`, 'Delete this jot')}</li>`).join('')}</ul>`;
-    h += `<div class="jot"><input data-jot="${esc(b.key)}" placeholder="Jot what happened (Enter)" aria-label="Jot a line for ${esc(b.title)}" autocomplete="off"></div></div>`;
+    h += `<div class="jot"><input data-jot="${esc(b.key)}" placeholder="Jot what happened (Enter)" aria-label="Jot a line for ${esc(b.title)}" autocomplete="off"><span class="noted" data-noted="${esc(b.key)}" role="status">${notedNow(b.key) ? 'Noted' : ''}</span></div></div>`;
     return h;
   }
 
@@ -1656,12 +1665,36 @@
   const beatOfKey = (key) => D().beats.find((b) => b.key === key) || null;
   const titleOfKey = (key) => { const b = beatOfKey(key); return b ? b.title : ''; };
 
-  function jot(beat, text) {
+  // A jot says "Noted" beside the box it came from for 3 s (`box`: 'hjot', the header's, or a beat's key), and the
+  // line it made comes into view when where it lands is on screen: the beat's last jot, or the top of the no-Plan
+  // page's Tonight so far (audit S4). A beat off screen is never jumped to.
+  function jot(beat, text, box) {
     const t = String(text || '').trim();
     if (!t) return;
     if (beat) G.ui.focus = beat;
+    G.ui.noted = { box: box || 'hjot', at: Date.now() };
+    clearTimeout(jot.timer);
+    jot.timer = setTimeout(clearNoted, 3000);
     act({ type: 'jot', beat: beat || null, text: t, title: beat ? titleOfKey(beat) : undefined });
+    showNoted();
+    const li = REC() ? document.querySelector('#tonight li:first-child')
+      : (beat ? document.querySelector(`#sheet [id="beat:${CSS.escape(beat)}"] ul.jots li:last-child`) : null);
+    const around = li && (li.closest('.beat') || li.closest('section'));
+    if (!around) return;
+    const r = around.getBoundingClientRect();
+    const top = $('#top') ? $('#top').getBoundingClientRect().bottom : 0;
+    if (!(r.bottom > top && r.top < window.innerHeight)) return;
+    // from the beat's own box, the box with its Noted (the jot just above it); from the header, the jot
+    const own = box && box !== 'hjot' ? around.querySelector('.jot') : null;
+    (own || li).scrollIntoView({ block: 'nearest' });
   }
+  const notedNow = (box) => Boolean(G.ui.noted) && G.ui.noted.box === box && Date.now() - G.ui.noted.at < 3000;
+  function showNoted() {
+    const h = $('#hnoted');
+    if (h) h.textContent = notedNow('hjot') ? 'Noted' : '';
+    document.querySelectorAll('[data-noted]').forEach((e) => { e.textContent = notedNow(e.dataset.noted) ? 'Noted' : ''; });
+  }
+  function clearNoted() { G.ui.noted = null; showNoted(); }
 
   function bring(beat, p) {
     const b = beatOfKey(beat);
@@ -2273,15 +2306,16 @@
     if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     // the hit location list (GURPS, Task 25) is picked by its letters (J for Jaw): J stays in it
     const picking = t.matches && t.matches('select[data-fhlocsel]');
-    if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
+    // the page stays where the GM is reading: a box in the sticky header, focused plainly, scrolled the page to its top
+    if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus({ preventScroll: true }); return; }
     // a letter on a closed status list never picks a status by the browser's type-ahead: a status is chosen, not typed
     if (t.matches && t.matches('select[data-fstatus]') && ev.key.length === 1 && ev.key !== ' ' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && (d.go || d.pane)) { ev.preventDefault(); t.click(); return; }
     if (ev.key !== 'Enter' || ev.isComposing) return;
     if (t.id === 'rtitle') { ev.preventDefault(); commitTitle(); return; }
-    if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v); return; }
-    if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v); return; }
+    if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v, d.jot); return; }
+    if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v, 'hjot'); return; }
     if (d.bring !== undefined) {
       const hits = RS.castSearch(G.model.cast || [], t.value);
       if (!hits.length) { t.setCustomValidity('No one in the vault by that name'); t.reportValidity(); return; }
@@ -2302,6 +2336,7 @@
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
+    if (t.id === 'hjot' && notedNow('hjot')) clearNoted();
     // the title box: kept as a draft while typed, sent on Enter, on the GM leaving the box, before any other action, or
     // when the tab closes; a character the vault can't hold is named beside it (D8)
     if (t.id === 'rtitle') {

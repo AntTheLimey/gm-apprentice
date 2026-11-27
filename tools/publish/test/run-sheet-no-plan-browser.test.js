@@ -565,5 +565,34 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // S4: a no-Plan night has no beats, so a jot had nowhere to land on the page: "Tonight so far" tops Coming up
+    it(`S4: tonight's jots top Coming up, newest first, and each says Noted for 3 s (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.getElementById("tonight")'), null, 'no list before the first jot');
+        // the page opens with focus in the header's Jot box: the GM just types
+        assert.strictEqual(await page.evaluate('document.activeElement.id'), 'hjot');
+        await page.type('Venn arrives soaked');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor('(document.getElementById("hnoted") || {}).textContent === "Noted"', 1000);
+        const v = await inView(page, '#hnoted');
+        assert.ok(v.whole, `Noted in view: ${JSON.stringify(v)}`);
+        await page.type('Brannock pays in lamp oil');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor('document.querySelectorAll("#tonight li").length === 2');
+        const list = await page.evaluate('Array.from(document.querySelectorAll("#tonight li > span:not(.tm)"), (e) => e.textContent)');
+        assert.deepStrictEqual(list, ['Brannock pays in lamp oil', 'Venn arrives soaked'], 'newest first');
+        assert.match(await page.evaluate('document.querySelector("#coming h4.lab").textContent'), /^Tonight so far$/, 'at the top of Coming up');
+        assert.ok(await page.evaluate('document.getElementById("tonight").compareDocumentPosition(document.querySelector("#coming .lead")) & Node.DOCUMENT_POSITION_FOLLOWING'), 'above the lead card');
+        await page.waitFor('(document.getElementById("hnoted") || {}).textContent === ""', 4000);
+        assert.strictEqual(await noSideways(page), true);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });
