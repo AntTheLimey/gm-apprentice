@@ -64,7 +64,7 @@ const NO_PAGE = '.run-sheet-no-404-page';
 
 const within = (child, parent) => child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
 
-function createTableServer({ vaultPath, session, party = [], stateFile, fileLog = null, deps = {} } = {}) {
+function createTableServer({ vaultPath, session, party = [], stateFile, stateId: givenId, fileLog = null, deps = {} } = {}) {
   const fs = deps.fs || nodeFs;
   const now = deps.now || (() => new Date());
   const log = deps.log || ((line) => console.error(line));
@@ -72,7 +72,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
   const index = deps.buildIndex || buildIndex;
   const vaultDeps = deps.vaultDeps;
   const serverId = deps.serverId || crypto.randomUUID();
-  const stateId = stateIdOf(session);
+  const stateId = givenId || stateIdOf(session);
   const label = session.label;
   const file = stateFile || path.join(vaultPath, '_meta', 'table', `${stateId}.json`);
   const tableDir = path.dirname(file);
@@ -156,12 +156,13 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
     if (!lastIndex) lastIndex = index(vaultPath, { deps: vaultDeps });
     return lastIndex;
   };
-  const logOf = (idx) => tableLogOf(idx, session.index).log;
+  // A session not filed yet has no index and so no Table Log to read.
+  const logOf = (idx) => (session.index ? tableLogOf(idx, session.index).log : null);
   const loadModel = () => {
     const idx = index(vaultPath, { deps: vaultDeps });
     const model = read(vaultPath, session.plan, { party, deps: vaultDeps });
     // tonight's Table Log link, when it is refused (another session's log), is a prep note
-    const tl = tableLogOf(idx, session.index);
+    const tl = session.index ? tableLogOf(idx, session.index) : { log: null, warning: null };
     if (tl.warning && Array.isArray(model.warnings) && !model.warnings.some((w) => w.text === tl.warning.text)) model.warnings.push(tl.warning);
     lastIndex = idx;
     lastModel = model;

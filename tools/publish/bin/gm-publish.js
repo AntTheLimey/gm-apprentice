@@ -581,11 +581,14 @@ first (stopped after 20 s); a flush that fails does not stop the sheet.
                      of paths, or a .json file holding one, also works
   --file-log <json>  The command that files the session's Table Log, as a JSON
                      array of strings; run once, on the first write with
-                     something in it
+                     something in it. For a session not filed yet, {"cmd":
+                     [...], "takesTitle": true}: it files the session too
   --no-open          Do not open the browser
   --pick             Choose the session and check the port, then stop: nothing is
                      served or written. With --json prints
-                     { "ok": true, "index", "plan", "tableLog", "label", "stateId", "others" }
+                     { "ok": true, "index", "plan", "tableLog", "label", "stateId", "others",
+                     "fromRecord", "number", "chapter", "after", "planVault", "playDate" }
+                     ("index" is null for a session not filed yet)
                      or { "ok": false, "error" } and exits 1
   --help, -h         Show this help
 `,
@@ -1104,12 +1107,16 @@ if (command === 'table') {
   const given = parseParty(parsed.flags.party);
   const portText = parsed.flags.port;
   const port = portText === undefined ? undefined : (/^\d{1,5}$/.test(portText) ? Number(portText) : NaN);
-  // --file-log: the command that files tonight's Table Log, as a JSON array (gma table hands it over, #855).
+  // --file-log: the command that files tonight's Table Log, as a JSON array (gma table hands it over, #855), or, for a
+  // session not filed yet, { cmd: [...], takesTitle: true }: the command that files the session and its log, to which
+  // the server adds the title and the date.
   let fileLog = null;
   if (parsed.flags.fileLog !== undefined) {
     try { fileLog = JSON.parse(parsed.flags.fileLog); } catch { fileLog = undefined; }
-    if (!Array.isArray(fileLog) || !fileLog.length || fileLog.some((x) => typeof x !== 'string')) {
-      console.error('Error: --file-log needs a JSON array of strings: the command that files the Table Log');
+    const strings = (a) => Array.isArray(a) && a.length > 0 && a.every((x) => typeof x === 'string');
+    const objectForm = fileLog && typeof fileLog === 'object' && !Array.isArray(fileLog) && strings(fileLog.cmd) && typeof fileLog.takesTitle === 'boolean';
+    if (!strings(fileLog) && !objectForm) {
+      console.error('Error: --file-log needs a JSON array of strings (the command that files the Table Log), or {"cmd": [...], "takesTitle": true}');
       process.exit(1);
     }
   }

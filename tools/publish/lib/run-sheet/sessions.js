@@ -245,14 +245,30 @@ function stateIdOf(session) {
   return `${where}--${slug(stemOf(session.index))}`;
 }
 
-// The state file and its id. A Plan session with no state of its own name but one under its number (prep ran mid-play,
-// then a restart) takes that one (D1).
-function stateFileFor(vaultPath, session, { exists = fs.existsSync } = {}) {
-  const at = (id) => path.join(vaultPath, '_meta', 'table', `${id}.json`);
+// The state file and its id. A Plan session with no state of its own name takes, in order: the state whose saved
+// `filed.index` is this session's index (the no-Plan sheet filed it, whatever its folder was then), then the one named
+// by its number (prep ran mid-play, then a restart) (D1).
+function stateFileFor(vaultPath, session, { exists = fs.existsSync, readDir = fs.readdirSync, readFile = fs.readFileSync } = {}) {
+  const dir = path.join(vaultPath, '_meta', 'table');
+  const at = (id) => path.join(dir, `${id}.json`);
   let stateId = stateIdOf(session);
-  if (session.plan && session.number !== null && session.number !== undefined && !exists(at(stateId))) {
-    const byNumber = noPlanIdOf(session);
-    if (exists(at(byNumber))) stateId = byNumber;
+  if (session.plan && !exists(at(stateId))) {
+    let found = null;
+    if (session.index) {
+      let names = [];
+      try { names = readDir(dir); } catch { names = []; }
+      for (const name of names.filter((n) => /--session-.*\.json$/.test(n)).sort()) {
+        try {
+          const saved = JSON.parse(String(readFile(path.join(dir, name), 'utf8')));
+          if (saved && saved.filed && saved.filed.index === session.index) { found = name.replace(/\.json$/, ''); break; }
+        } catch { /* an unreadable state file is not this session's */ }
+      }
+    }
+    if (!found && session.number !== null && session.number !== undefined) {
+      const byNumber = noPlanIdOf(session);
+      if (exists(at(byNumber))) found = byNumber;
+    }
+    if (found) stateId = found;
   }
   return { file: at(stateId), stateId };
 }

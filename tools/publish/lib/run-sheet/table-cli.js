@@ -7,7 +7,7 @@ const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn: nodeSpawn, spawnSync: nodeSpawnSync, execFile } = require('node:child_process');
-const { listSessions, pickSession, stateIdOf } = require('./sessions');
+const { listSessions, pickSession, stateFileFor } = require('./sessions');
 const { createTableServer, listenLocal } = require('./server');
 const { lockHolder, inCloudOnly } = require('./store');
 const { siteFileNamedBy } = require('../settings/site-tool');
@@ -243,7 +243,7 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   const busy = await checkPort(port);
   if (busy) return refuse(await busyMessage(port, busy, deps));
   // One server per session: another one (on another port) would write the same state and Table Log.
-  const stateFile = path.join(vaultPath, '_meta', 'table', `${stateIdOf(chosen)}.json`);
+  const { file: stateFile, stateId } = stateFileFor(vaultPath, chosen);
   const hello = deps.hello || defaultHello;
   const holder = await lockHolder(stateFile, { hello });
   if (holder) return refuse(lockedMessage(chosen.label, holder));
@@ -251,9 +251,16 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   if ((deps.inCloud || inCloudOnly)(stateFile)) return refuse(inCloudMessage(chosen.label, vaultPath, stateFile));
 
   if (pick) {
-    const stateId = stateIdOf(chosen);
-    if (json) out(JSON.stringify({ ok: true, index: chosen.index, plan: chosen.plan, tableLog: chosen.tableLog, label: chosen.label, stateId, others: picked.others.map((s) => s.index) }));
-    else out(`${chosen.label}: ${chosen.index}`);
+    if (json) {
+      out(JSON.stringify({
+        ok: true, index: chosen.index, plan: chosen.plan, tableLog: chosen.tableLog, label: chosen.label, stateId,
+        // a session opened from the record: the number, chapter and date `gma table` files it under
+        fromRecord: !!chosen.fromRecord, number: chosen.number === undefined ? null : chosen.number,
+        chapter: chosen.chapter || null, after: chosen.after || null, planVault: chosen.planVault === undefined ? null : chosen.planVault,
+        playDate: chosen.playDate || null,
+        others: picked.others.map((s) => s.index),
+      }));
+    } else out(`${chosen.label}: ${chosen.index || 'not filed yet'}`);
     return 0;
   }
 
@@ -282,7 +289,7 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   if (late) return refuse(lockedMessage(chosen.label, late));
 
   let app;
-  try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, fileLog, deps: deps.server }); } catch (e) {
+  try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, stateFile, stateId, fileLog, deps: deps.server }); } catch (e) {
     if (e.code === 'LOCKED') return refuse(lockedMessage(chosen.label, e));
     if (e.code === 'IN_CLOUD') return refuse(inCloudMessage(chosen.label, vaultPath, e.file));
     throw e;

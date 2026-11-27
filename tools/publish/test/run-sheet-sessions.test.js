@@ -243,6 +243,27 @@ describe('run sheet sessions', () => {
     assert.deepStrictEqual(stateFileFor('/v', rec), { file: num, stateId: 'chapter-1--session-3' });
   });
 
+  it('stateFileFor adopts the state whose filed.index is the Plan session, even filed in another chapter', () => {
+    const dir = copy();
+    const tdir = path.join(dir, '_meta', 'table');
+    fs.mkdirSync(tdir, { recursive: true });
+    // prep filed Session 3 into Chapter 2, while the record session counted it in Chapter 1
+    const planned = { index: IDX.c2s1, plan: 'p.md', number: 3, chapter: 'Chapters/Chapter 1/Chapter 1.md' };
+    fs.writeFileSync(path.join(tdir, 'chapter-1--session-3.json'), JSON.stringify({ filed: { index: 'Elsewhere/Other.md' } }));
+    fs.writeFileSync(path.join(tdir, 'chapter-2--session-3.json'), JSON.stringify({ filed: { index: IDX.c2s1 } }));
+    fs.writeFileSync(path.join(tdir, 'broken--session-3.json'), '{ not json');
+    assert.deepStrictEqual(stateFileFor(dir, planned), { file: path.join(tdir, 'chapter-2--session-3.json'), stateId: 'chapter-2--session-3' });
+    // a state under the session's own name wins over the scan
+    fs.writeFileSync(path.join(tdir, 'chapter-1--session-01-snowmelt.json'), '{}');
+    assert.strictEqual(stateFileFor(dir, planned).stateId, 'chapter-1--session-01-snowmelt');
+    fs.rmSync(path.join(tdir, 'chapter-1--session-01-snowmelt.json'));
+    // no filed.index match: the number name still adopts, else the session's own name
+    const other = { index: IDX.c1s3, plan: 'p.md', number: 3, chapter: 'Chapters/Chapter 1/Chapter 1.md' };
+    assert.strictEqual(stateFileFor(dir, other).stateId, 'chapter-1--session-3');
+    fs.rmSync(path.join(tdir, 'chapter-1--session-3.json'));
+    assert.strictEqual(stateFileFor(dir, other).stateId, 'chapter-1--session-03-next');
+  });
+
   it("an orphan Table Log is no unfiled session's log [B2]", () => {
     const dir = copy();
     for (const [name, sess] of [['empty', ''], ['dead', '"[[Nowhere At All]]"']]) {

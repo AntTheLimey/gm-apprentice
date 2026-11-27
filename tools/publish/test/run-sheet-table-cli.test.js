@@ -9,6 +9,8 @@ const { EventEmitter } = require('node:events');
 const { spawnSync } = require('node:child_process');
 const { runTable, runFlushCapped, killTree, whoHolds, openBrowser, parseParty, STOP_SIGNALS } = require('../lib/run-sheet/table-cli');
 const RS = require('../lib/run-sheet/web/state');
+const { copyRecordFixture } = require('./helpers/record-fixture');
+const { removeFixture } = require('./helpers/systems-fixture');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
@@ -130,6 +132,66 @@ describe('gm-publish table: pick', () => {
     assert.match(errs.join('\n'), /No session matches/);
   });
 });
+
+describe('gm-publish table: a session from the record', () => {
+  it('the pick answer carries a record session', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const { deps, lines } = quiet();
+    const rc = await runTable({ vault, pick: true, json: true, port: await freePort() }, deps);
+    assert.strictEqual(rc, 0);
+    const got = JSON.parse(lines[0]);
+    assert.strictEqual(got.ok, true);
+    assert.strictEqual(got.index, null);
+    assert.strictEqual(got.fromRecord, true);
+    assert.strictEqual(got.number, 15);
+    assert.strictEqual(got.chapter, 'Chapters/Chapter 3/Chapter 3.md');
+    assert.strictEqual(got.plan, null);
+    assert.strictEqual(got.label, 'Session 15');
+    assert.strictEqual(got.stateId, 'chapter-3--session-15');
+    assert.ok('after' in got && 'planVault' in got && 'playDate' in got);
+    assert.deepStrictEqual(got.others, []);
+    // the plain pick line does not print "null"
+    const plain = quiet();
+    assert.strictEqual(await runTable({ vault, pick: true, port: await freePort() }, plain.deps), 0);
+    assert.ok(!plain.lines.join('\n').includes('null'), plain.lines.join('\n'));
+  });
+
+  it('a record session is served, not refused as an unreadable Plan', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const seen = [];
+    const fake = (opts) => {
+      seen.push(opts);
+      const http = require('node:http');
+      const server = http.createServer((req, res) => {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ model: { warnings: [] } }));
+      });
+      return { server, close: () => new Promise((r) => { server.close(r); server.closeAllConnections(); }) };
+    };
+    const { deps, lines, errs } = quiet({ createTableServer: fake });
+    const h = await runTable({ vault, port: await freePort(), open: false, fileLog: { cmd: ['x'], takesTitle: true } }, deps);
+    assert.notStrictEqual(typeof h, 'number', errs.join('\n'));
+    handles.push(h);
+    assert.ok(lines.join('\n').includes('Run sheet for'), lines.join('\n'));
+    assert.ok(!errs.join('\n').includes('cannot be read'));
+    assert.strictEqual(seen[0].session.fromRecord, true);
+    assert.strictEqual(seen[0].stateId, 'chapter-3--session-15');
+    assert.strictEqual(seen[0].stateFile, path.join(path.resolve(vault), '_meta', 'table', 'chapter-3--session-15.json'));
+    assert.deepStrictEqual(seen[0].fileLog, { cmd: ['x'], takesTitle: true });
+  });
+
+  it('a state iCloud has taken is found under the number name (the lock and iCloud checks use stateFileFor)', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const { deps, errs } = quiet({ inCloud: (f) => f.endsWith('chapter-3--session-15.json') });
+    const rc = await runTable({ vault, port: await freePort(), open: false }, deps);
+    assert.strictEqual(rc, 1);
+    assert.match(errs.join('\n'), /iCloud/);
+  });
+});
+
 
 describe('gm-publish table: serving', () => {
   it('serves, prints the address and Ctrl+C, and opens the browser unless told not to', async () => {
@@ -518,6 +580,16 @@ describe('the table command line', () => {
     const r = spawnSync(process.execPath, [BIN, 'table', FIXTURE, '--pick', '--json', '--port', '0'], { encoding: 'utf8', timeout: 30000 });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(JSON.parse(r.stdout).index, S2);
+  });
+  it('--file-log takes the array or the { cmd, takesTitle } object, and nothing else', () => {
+    const run = (v) => spawnSync(process.execPath, [BIN, 'table', FIXTURE, '--pick', '--json', '--port', '0', '--file-log', v], { encoding: 'utf8', timeout: 30000 });
+    assert.strictEqual(run('["a","b"]').status, 0);
+    assert.strictEqual(run('{"cmd":["a"],"takesTitle":true}').status, 0);
+    for (const bad of ['{"cmd":"a","takesTitle":true}', '{"cmd":["a"]}', '[]', '3', 'nope']) {
+      const r = run(bad);
+      assert.strictEqual(r.status, 1, bad);
+      assert.match(r.stderr, /--file-log needs/);
+    }
   });
   it('no vault is a usage error', () => {
     const r = spawnSync(process.execPath, [BIN, 'table'], { encoding: 'utf8' });
