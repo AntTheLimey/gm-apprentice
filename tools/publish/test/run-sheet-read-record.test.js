@@ -397,7 +397,8 @@ describe('the possible scenes', () => {
       assert.deepStrictEqual(bg.map((b) => b.from), ['Pending Consequences', 'Pending Consequences', 'Resolved Threads']);
       assert.match(bg[0].md, /^\*\*The page is gone:\*\* \[\[Harl Brannock\]\] will log the ledger page as port evidence/);
       assert.match(bg[1].md, /^\*\*Corvin's wound:\*\*/);
-      assert.strictEqual(bg[2].md, "The question of who opened the chandler's safe: carried on a live list");
+      // Changed on purpose (Task 11b, F1: one bullet is one line, word for word): the bullet's own full stop stays.
+      assert.strictEqual(bg[2].md, "The question of who opened the chandler's safe: carried on a live list.");
       for (const b of bg) assert.doesNotMatch(b.md, /[\r\n]/);
     });
 
@@ -522,4 +523,35 @@ describe('the possible scenes', () => {
     const none = readRecord(open({ drop: [W13, W14] }), session({ number: 1, after: null, title: 'Session 1' })).record;
     assert.deepStrictEqual([none.cards, none.background], [[], []]);
   });
+});
+
+// ---- Task 11b: shapes the proof found on copies of real vaults (the shapes only; every word here is the fixture's own).
+describe('real-vault shapes (Task 11b)', () => {
+  for (const crlf of [false, true]) {
+    const tag = crlf ? ' (CRLF)' : '';
+
+    // F1: a Background line is one whole bullet, never cut into sentences; an initialism's dots are not sentence ends.
+    it(`F1: a Background line is the whole bullet, initialisms and bold kept${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t
+        .replace("- **Corvin's wound:**", '- **The Q.R.L. charter** is lodged with the port. **Harl** has read it twice.\n- **Corvin\'s wound:**')
+        .replace("- The question of who opened the chandler's safe: carried on a live list.",
+          "- **The chandler's safe** was opened by a hand the crew never saw. The Q.R.L. agent was in town that week. — closed: carried on the shared list (Session 14)"));
+      const bg = readRecord(dir, session()).record.background;
+      assert.deepStrictEqual(bg.map((b) => b.md), [
+        '**The page is gone:** [[Harl Brannock]] will log the ledger page as port evidence, so the crew cannot use it openly.',
+        '**The Q.R.L. charter** is lodged with the port. **Harl** has read it twice.',
+        "**Corvin's wound:** [[Corvin Tash]] was cut in the scuffle and will blame the crew to his guild.",
+        "**The chandler's safe** was opened by a hand the crew never saw. The Q.R.L. agent was in town that week. — closed: carried on the shared list (Session 14)",
+      ]);
+    });
+
+    it(`F1: a clock is never split at an initialism's dots${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Q.R.L. Council marches on the Harbour Festival Grounds at noon. The bell rings at dusk.\n'));
+      const lead = readRecord(dir, session()).record.comingUp.lead;
+      assert.strictEqual(lead.title, 'The Q.R.L. Council marches on the Harbour Festival Grounds at noon.');
+      assert.strictEqual(lead.place, loc('Harbour Festival Grounds'));
+    });
+  }
 });

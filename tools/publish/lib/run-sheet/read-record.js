@@ -61,6 +61,9 @@ const sectionText = (body, level, re) => {
 };
 const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.trim()).filter((t) => !isPlaceholder(t));
 
+// A sentence end: a stop and a space, but never the dot after a lone capital ("P.E.T.A. Council", "J. Smith"), which is
+// an initialism's or an initial's, not a sentence's end (Task 11b, F1).
+const ITEM_BREAK = /(?<=[.!?])(?<!(?:^|[^\p{L}])\p{Lu}\.)\s+(?=\p{Lu})|;\s*/u;
 // One World State label's items: the line's own words and any nested bullets, each split on sentence ends and `;`.
 function labelItems(text, name) {
   const lines = nl(text).split('\n');
@@ -76,7 +79,7 @@ function labelItems(text, name) {
     else break;
   }
   return parts.filter((p) => !isPlaceholder(p))
-    .flatMap((p) => p.split(/(?<=[.!?])\s+(?=[A-Z])|;\s*/))
+    .flatMap((p) => p.split(ITEM_BREAK))
     .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p));
 }
 const labelValue = (text, name) => labelItems(text, name).join(' ');
@@ -349,17 +352,15 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     };
   });
 
-  // Background: Pending Consequences, and Resolved Threads entries that say "carried", one line each. A carried entry takes
-  // the forward-looking sentence it holds, if it holds one.
+  // Background: Pending Consequences, and Resolved Threads entries that say "carried", one line each. Each line is its
+  // whole bullet, never cut into sentences, so an initialism and the bold survive (Task 11b, F1).
   const oneLine = (s) => nl(s).replace(/\s*\n\s*/g, ' ').trim();
   const background = [];
   if (wrapUp) {
     for (const md of sectionBullets(/^pending consequences$/i)) if (!isDone(md)) background.push({ from: 'Pending Consequences', md: oneLine(md) });
     for (const md of sectionBullets(/^resolved threads$/i)) {
       if (!/\bcarried\b/i.test(md) || isDone(md)) continue;
-      const sentences = oneLine(md).split(/(?<=[.!?])\s+/);
-      const ahead = sentences.slice(1).find((x) => /\b(may|might|could|will)\b/i.test(x) && !/closed/i.test(x));
-      background.push({ from: 'Resolved Threads', md: sentences[0].replace(/\.$/, '') + (ahead ? ` (${ahead.replace(/\.$/, '')})` : '') });
+      background.push({ from: 'Resolved Threads', md: oneLine(md) });
     }
   }
 
