@@ -7,6 +7,8 @@ const path = require('node:path');
 const { readRecord } = require('../lib/run-sheet/read-record');
 const { areaOf } = require('../lib/run-sheet/web/record-rank');
 const { copyRecordFixture } = require('./helpers/record-fixture');
+const { present } = require('../lib/run-sheet/present');
+const { buildIndex } = require('../lib/run-sheet/notes');
 const { removeFixture } = require('./helpers/systems-fixture');
 
 const made = [];
@@ -119,8 +121,10 @@ describe('readRecord', () => {
       const w = readRecord(open({ crlf }), session()).record.world;
       assert.strictEqual(w.date, 'Day 11');
       assert.strictEqual(w.location, loc('The Salt Inn'));
-      assert.deepStrictEqual(w.threats, ["Corvin's guild wants payback.", 'Harl is closing in on the crew.']);
-      assert.deepStrictEqual(w.clocks, ['The Harbour Festival opens at dusk on Day 14.', 'The next shift of lamplighters starts at midnight.']);
+      // Changed on purpose (Task 11b, F5 and F9): each World State value is shown word for word; the split into
+      // sentences is the lead card's search alone
+      assert.deepStrictEqual(w.threats, ["Corvin's guild wants payback. Harl is closing in on the crew."]);
+      assert.deepStrictEqual(w.clocks, ['The Harbour Festival opens at dusk on Day 14. The next shift of lamplighters starts at midnight.']);
       assert.match(w.md, /Day 11/);
     });
 
@@ -155,14 +159,17 @@ describe('readRecord', () => {
       assert.deepStrictEqual(lead.people, [npc('Harl Brannock'), npc('Odalys Venn')]);
     });
 
-    it(`World State labels may hold several items: sentences, semicolons or nested bullets${tag}`, () => {
+    // Changed on purpose (Task 11b, F5 and F9): the items the page shows are the label's line and its nested bullets,
+    // word for word; sentences and semicolons split for the lead card's search only (the lead's title below)
+    it(`World State labels may hold several items: nested bullets, each word for word${tag}`, () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t
         .replace(/- \*\*Active threats:\*\*.*\n/, '- **Active threats:**\n  - The guild wants payback.\n  - Harl closes in; the harbourmaster waits.\n')
         .replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Harbour Festival opens at dusk; the lamps go out at noon.\n'));
       const w = readRecord(dir, session()).record.world;
-      assert.deepStrictEqual(w.threats, ['The guild wants payback.', 'Harl closes in', 'the harbourmaster waits.']);
-      assert.deepStrictEqual(w.clocks, ['The Harbour Festival opens at dusk', 'the lamps go out at noon.']);
+      assert.deepStrictEqual(w.threats, ['The guild wants payback.', 'Harl closes in; the harbourmaster waits.']);
+      assert.deepStrictEqual(w.clocks, ['The Harbour Festival opens at dusk; the lamps go out at noon.']);
+      assert.strictEqual(readRecord(dir, session()).record.comingUp.lead.title, 'The Harbour Festival opens at dusk');
     });
 
     it(`where they are comes from the World State\'s Location, and each PC note gives its own${tag}`, () => {
@@ -585,6 +592,47 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.ok(!all.some((m) => /None left open|^Nothing\.$|^n\/a$|^—$|No open threads/.test(m)), all.join('\n'));
       assert.ok(all.includes('Nothing stops the deputy from reading the page aloud.'));
       assert.ok(all.includes('No one knows who rang the bell.'));
+    });
+
+    // F5 / F9: the in-game date and every World State value are shown word for word, links as links; the split into
+    // items is for the lead card's search only.
+    it(`F5: the World lines are the record's words, links rendered, never re-joined${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t
+        .replace('- **In-game date:** Day 11', '- **In-game date:** Day 11; three days to the [[Harbour Festival Grounds|fair]].')
+        .replace(/- \*\*Active threats:\*\*.*\n/, '- **Active threats:** Corvin (the guild, the cut); Harl and the deputy; the bell-ringer.\n')
+        .replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** Day 12 the market at dawn; Day 14 the Harbour Festival at dusk.\n'));
+      const m = readRecord(dir, session());
+      const w = m.record.world;
+      assert.strictEqual(w.date, 'Day 11; three days to the [[Harbour Festival Grounds|fair]].');
+      assert.deepStrictEqual(w.threats, ['Corvin (the guild, the cut); Harl and the deputy; the bell-ringer.']);
+      assert.deepStrictEqual(w.clocks, ['Day 12 the market at dawn; Day 14 the Harbour Festival at dusk.']);
+      assert.strictEqual(w.md, [
+        '- **In-game date:** Day 11; three days to the [[Harbour Festival Grounds|fair]].',
+        '- **Location:** [[The Salt Inn]]',
+        '- **Active threats:** Corvin (the guild, the cut); Harl and the deputy; the bell-ringer.',
+        '- **Ticking clocks:** Day 12 the market at dawn; Day 14 the Harbour Festival at dusk.',
+      ].join('\n'));
+      // the search still splits: the lead is the clause that names a place
+      assert.strictEqual(m.record.comingUp.lead.title, 'Day 14 the Harbour Festival at dusk.');
+      assert.strictEqual(m.record.comingUp.lead.place, loc('Harbour Festival Grounds'));
+      // rendered: the alias shown, the link a link, no markup left
+      const p = present(m, { index: buildIndex(dir) }).record.world;
+      assert.match(p.dateHtml, /^Day 11; three days to the <a class="lk" data-note="Locations\/Harbour Festival Grounds\.md">fair<\/a>\.$/);
+      assert.deepStrictEqual(p.clocksHtml, ['Day 12 the market at dawn; Day 14 the Harbour Festival at dusk.']);
+      assert.doesNotMatch(p.mdHtml, /\[\[|\*\*/);
+    });
+
+    it(`F5: the Location line is its own words, with nested bullets kept as items${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t
+        .replace('- **Location:** [[The Salt Inn]]', '- **Location:** the crew at [[The Salt Inn]], with the deputy outside.')
+        .replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:**\n  - The Harbour Festival opens at dusk; the lamps go out.\n  - The deputy reports at noon.\n'));
+      const w = readRecord(dir, session()).record.world;
+      assert.strictEqual(w.location, loc('The Salt Inn'));
+      assert.deepStrictEqual(w.clocks, ['The Harbour Festival opens at dusk; the lamps go out.', 'The deputy reports at noon.']);
+      assert.match(w.md, /^- \*\*Location:\*\* the crew at \[\[The Salt Inn\]\], with the deputy outside\.$/m);
+      assert.match(w.md, /^- \*\*Ticking clocks:\*\*\n {2}- The Harbour Festival opens at dusk; the lamps go out\.\n {2}- The deputy reports at noon\.$/m);
     });
 
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {

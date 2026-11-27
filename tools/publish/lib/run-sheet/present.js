@@ -105,6 +105,9 @@ function present(model, { index }) {
   if (r) {
     addHtml(r.lastTime, ['recap'], index, false);
     addHtml(r.world, ['md'], index, false);
+    // the In-game date and the Clocks, as the record wrote them, links as links (Task 11b, F5 and F9)
+    addHtml(r.world, ['date'], index, true);
+    if (r.world && Array.isArray(r.world.clocks)) r.world.clocksHtml = r.world.clocks.map((t) => toHtml(t, index, { inline: true }));
     const cu = r.comingUp || {};
     addHtml(cu, ['handoff'], index, false);
     if (Array.isArray(cu.intentions)) cu.intentionsHtml = cu.intentions.map((t) => toHtml(t, index, { inline: true }));

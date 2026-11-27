@@ -78,8 +78,9 @@ const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.tr
 const ITEM_BREAK = /(?<=[.!?])(?<!(?:^|[^\p{L}])\p{Lu}\.)\s+(?=\p{Lu})|;\s*/u;
 // A Resolved Threads entry still open: it says it is carried on, carried forward or still live.
 const CARRIED = /\bcarried\s+(?:on|forward)\b|\bstill\s+live\b/i;
-// One World State label's items: the line's own words and any nested bullets, each split on sentence ends and `;`.
-function labelItems(text, name) {
+// One World State label's items, word for word (Task 11b, F5 and F9): the line's own words and each nested bullet, a
+// wrapped line joined to the one above. What the page shows.
+function labelRaw(text, name) {
   const lines = nl(text).split('\n');
   const want = low(name);
   const at = lines.findIndex((l) => { const m = pt.LABEL.exec(l); return m && low(m[1]) === want; });
@@ -92,11 +93,17 @@ function labelItems(text, name) {
     else if (/^\s+\S/.test(lines[i])) parts[parts.length - 1] += ` ${lines[i].trim()}`;
     else break;
   }
-  return parts.filter((p) => !isPlaceholder(p) && !isNothing(p))
-    .flatMap((p) => p.split(ITEM_BREAK))
-    .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p) && !isNothing(p));
+  return parts.map((p) => p.trim()).filter((p) => !isPlaceholder(p) && !isNothing(p));
 }
-const labelValue = (text, name) => labelItems(text, name).join(' ');
+// The same items split on sentence ends and `;`, for the lead card's search only: never shown re-joined.
+const labelItems = (text, name) => labelRaw(text, name).flatMap((p) => p.split(ITEM_BREAK))
+  .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p) && !isNothing(p));
+// A World line as the record wrote it: one item on the label's line, several as nested bullets.
+const worldLine = (label, items) => {
+  if (!items.length) return '';
+  if (items.length === 1) return `- **${label}:** ${items[0]}`;
+  return [`- **${label}:**`, ...items.map((x) => `  - ${x}`)].join('\n');
+};
 
 // The plain location map the page ranks by: { path: { parent, type } }.
 function locOf(index, places) {
@@ -160,17 +167,21 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   // World: the World State's labelled bullets
   const gm = sectionText(wrapBody, 2, /^gm notes$/i) || wrapBody;
   const worldText = stripComments(sectionText(gm, 3, /^world state$/i));
-  const worldLoc = placesIn(labelValue(worldText, 'Location'))[0] || null;
-  const date = labelValue(worldText, 'In-game date');
-  const threats = labelItems(worldText, 'Active threats');
-  const clocks = labelItems(worldText, 'Ticking clocks');
+  const locItems = labelRaw(worldText, 'Location');
+  const worldLoc = placesIn(locItems.join('\n'))[0] || null;
+  const date = labelRaw(worldText, 'In-game date').join(' ');
+  const threats = labelRaw(worldText, 'Active threats');
+  const clocks = labelRaw(worldText, 'Ticking clocks');
+  // the lead card searches these: each item split on sentence ends and `;`
+  const threatItems = labelItems(worldText, 'Active threats');
+  const clockItems = labelItems(worldText, 'Ticking clocks');
   const world = {
     date, location: worldLoc, threats, clocks,
     md: [
       date ? `- **In-game date:** ${date}` : '',
-      worldLoc ? `- **Location:** [[${stemOf(worldLoc)}]]` : '',
-      threats.length ? `- **Active threats:** ${threats.join(' ')}` : '',
-      clocks.length ? `- **Ticking clocks:** ${clocks.join(' ')}` : '',
+      worldLine('Location', locItems),
+      worldLine('Active threats', threats),
+      worldLine('Ticking clocks', clocks),
     ].filter(Boolean).join('\n'),
   };
 
@@ -199,7 +210,7 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const comingUp = { handoff, intentions, lead: null, empty: null };
   if (!wrapUp) comingUp.empty = 'No record yet: nothing is coming up.';
   else if (!handoff) comingUp.empty = 'The last Wrap-Up has no Handoff yet.';
-  if (wrapUp && clocks.length) comingUp.lead = leadFrom({ clocks, handoff, threats, whereNow });
+  if (wrapUp && clockItems.length) comingUp.lead = leadFrom({ clocks: clockItems, handoff, threats: threatItems, whereNow });
 
   function leadFrom({ clocks: cs, handoff: h, threats: ts, whereNow: where }) {
     const allPlaces = index.notes().filter(isPlace);

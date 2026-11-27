@@ -1089,8 +1089,8 @@
     if (cu.handoff) h += `<h4 class="lab">Handoff</h4>${cu.handoffHtml || `<p>${esc(cu.handoff)}</p>`}`;
     if (cu.empty) h += `<p class="muted">${esc(cu.empty)}</p>`;
     const kv = [];
-    if (w.date) kv.push(`<b>In-game date</b><span>${esc(w.date)}</span>`);
-    if ((w.clocks || []).length) kv.push(`<b>Clocks</b><span>${w.clocks.map(esc).join('<br>')}</span>`);
+    if (w.date) kv.push(`<b>In-game date</b><span>${w.dateHtml || esc(w.date)}</span>`);
+    if ((w.clocks || []).length) kv.push(`<b>Clocks</b><span>${(w.clocksHtml || w.clocks.map(esc)).join('<br>')}</span>`);
     if (kv.length) h += `<div class="kv">${kv.join('')}</div>`;
     const inSched = new Set((lead && lead.schedule) || []);
     const ints = (cu.intentions || []).map((t, i) => [t, (cu.intentionsHtml || [])[i] || esc(t)]).filter(([t]) => !inSched.has(t));
