@@ -2580,7 +2580,9 @@
       notes: G.notes.map((n) => n.text), rev: G.rev, heardRev: G.heardRev, pending: G.pending.length, answered: G.answered.length,
       stateId: G.stateId, clientId: G.clientId,
       marked: document.querySelectorAll('#sheet .ptb.landed[data-pt]').length,
-      jots: Array.from(document.querySelectorAll('#sheet ul.jots li > span:not(.tm)'), (el) => el.textContent),
+      // the beats' jots; the no-Plan page's Tonight so far is its own field (Task 9 fix round 1)
+      jots: Array.from(document.querySelectorAll('#sheet ul.jots:not(#tonight) li > span:not(.tm)'), (el) => el.textContent),
+      tonight: Array.from(document.querySelectorAll('#tonight li > span:not(.tm)'), (el) => el.textContent),
       requests: { ...requests }, view: G.view, focusGroup: G.state ? focusedGroup() : null,
     };
     // one part's probe throwing must not freeze the rest: its message goes to dataset.probeError (tests only)

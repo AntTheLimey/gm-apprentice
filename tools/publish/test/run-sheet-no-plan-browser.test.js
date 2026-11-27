@@ -591,6 +591,9 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         await page.waitFor('document.querySelectorAll("#tonight li").length === 2');
         const list = await page.evaluate('Array.from(document.querySelectorAll("#tonight li > span:not(.tm)"), (e) => e.textContent)');
         assert.deepStrictEqual(list, ['Brannock pays in lamp oil', 'Venn arrives soaked'], 'newest first');
+        // fix round 1: the probe's jots are the beats' alone; tonight's list has its own field
+        const pr = await probe(page);
+        assert.deepStrictEqual([pr.jots, pr.tonight], [[], ['Brannock pays in lamp oil', 'Venn arrives soaked']]);
         assert.match(await page.evaluate('document.querySelector("#coming h4.lab").textContent'), /^Tonight so far$/, 'at the top of Coming up');
         assert.ok(await page.evaluate('document.getElementById("tonight").compareDocumentPosition(document.querySelector("#coming .lead")) & Node.DOCUMENT_POSITION_FOLLOWING'), 'above the lead card');
         await page.waitFor('(document.getElementById("hnoted") || {}).textContent === ""', 4000);
