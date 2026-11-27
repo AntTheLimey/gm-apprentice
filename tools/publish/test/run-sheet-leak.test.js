@@ -70,7 +70,7 @@ function req(port, method, url, body) {
   });
 }
 
-// An event stream, raw text kept (also `streamOf` below). `events` are { event, data } as they arrive.
+// An event stream, raw text kept. `events` are { event, data } as they arrive.
 function stream(port, url) {
   const events = [];
   let raw = '';
@@ -1625,12 +1625,16 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
       const vault = copyRecordFixture({ crlf });
       made.push(vault);
       const wrap = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
-      const text = fs.readFileSync(wrap, 'utf8');
-      const eol = crlf ? '\r\n' : '\n';
-      const marker = `## GM Notes${eol}`;
-      assert.ok(text.includes(marker), 'the Wrap-Up has GM Notes');
-      // under GM Notes, so the sheet reads it, and nowhere a player-facing page would hold it
-      fs.writeFileSync(wrap, text.replace(marker, `${marker}${eol}- ${WORD} is the GM's own word.${eol}`));
+      const text = fs.readFileSync(wrap, 'utf8').replace(/\r\n/g, '\n');
+      // The word goes where readRecord reads: the Handoff, the Ticking clocks line, an Unresolved Threads bullet and
+      // a Pending Consequences line (a bare bullet under "## GM Notes" is never read: the first version missed it).
+      const put = (t, from, to) => { assert.ok(t.includes(from), `the Wrap-Up holds ${from}`); return t.replace(from, to); };
+      let edited = text;
+      edited = put(edited, 'Odalys Venn]] is upstairs and has heard all of it.', `Odalys Venn]] is upstairs and has heard all of it. Mind the ${WORD} wharf.`);
+      edited = put(edited, 'starts at midnight.', `starts at midnight, when the ${WORD} bell rings.`);
+      edited = put(edited, 'someone keeps slipping the crew notes with no name on them.', `someone keeps slipping the crew notes signed ${WORD}.`);
+      edited = put(edited, 'will blame the crew to his guild.', `will blame the crew to his guild, citing ${WORD}.`);
+      fs.writeFileSync(wrap, crlf ? edited.replace(/\n/g, '\r\n') : edited);
 
       const session = pickSession(listSessions(vault), null, vault).session;
       assert.ok(session && session.fromRecord, 'the record gives Session 15');
@@ -1650,18 +1654,22 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
         deps: { delayMs: 50, log: () => {}, now: () => new Date(2026, 10, 29, 20, 15), runFileLog } });
       const port = await listenLocal(run.server, 0);
       const base = `http://127.0.0.1:${port}/`;
-      const stream = streamOf(port, '/api/players/events');
+      const pstream = stream(port, '/api/players/events');
       try {
         const views = [];
         const look = async () => { views.push((await req(port, 'GET', '/api/players/view')).text); };
         const noWord = (where) => {
           for (const v of views) assert.ok(!v.toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' view holds the secret word`);
-          assert.ok(!stream.raw().toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' stream holds the secret word`);
+          assert.ok(!pstream.raw().toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' stream holds the secret word`);
         };
         // positive control: the GM's own answer about the note does hold the word
         const gmNote = await req(port, 'GET', `/api/note?path=${encodeURIComponent('Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md')}`);
         assert.equal(gmNote.status, 200, gmNote.text);
         assert.ok(gmNote.text.includes(WORD), 'the GM can read the word');
+        // the control that matters: the word is in the GM's own model, so the players' filter is what keeps it back
+        const gmModel = await req(port, 'GET', '/api/model');
+        assert.equal(gmModel.status, 200, gmModel.text);
+        assert.ok(gmModel.text.includes(WORD), 'the word reaches the GM\'s own model');
         await look();
         noWord('before the page opens');
 
@@ -1695,7 +1703,7 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
           await page.sleep(300);
         });
         assert.equal(filed.length, 1, 'filed once');
-        assert.match(stream.raw(), /event: (hello|view)/, 'the players\' stream was read');
+        assert.match(pstream.raw(), /event: (hello|view)/, 'the players\' stream was read');
         await look();
         noWord('at the end');
         // the Table Log the filing made holds no word either
@@ -1703,11 +1711,9 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
           assert.ok(!fs.readFileSync(f, 'utf8').includes(WORD), `${f} holds the secret word`);
         }
       } finally {
-        stream.close();
+        pstream.close();
         await run.close();
       }
     });
   }
 });
-
-function streamOf(port, url) { return stream(port, url); }

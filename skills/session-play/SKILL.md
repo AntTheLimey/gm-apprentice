@@ -62,9 +62,11 @@ session-export`) or a Table Log (`type: session-table-log`, the run
 sheet's) beside it is not Play Notes: leave it alone. Before play,
 `gma table <vault>` opens the run sheet, which runs fights and a
 players' screen and writes the Table Log; you still write the Play
-Notes beside it. On a night with no Plan, the sheet files the session
-index on the first thing at the table: Play Notes go beside that index,
-or beside the one `session-new --upcoming` files if the sheet isn't used. Acknowledge and hold — no editing or reorganizing;
+Notes beside it. With no Plan, the sheet files the session index on
+the first thing at the table: Play Notes go beside that index, or,
+if the sheet isn't used, beside the one `session-new --upcoming`
+files (with no index yet, `session-new --upcoming --number N --title
+T`). Acknowledge and hold — no editing or reorganizing;
 wrap-up processes it. Mark entities with:
 
 | Marker | Use when |
