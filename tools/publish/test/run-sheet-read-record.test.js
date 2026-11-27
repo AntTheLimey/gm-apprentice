@@ -546,6 +546,22 @@ describe('real-vault shapes (Task 11b)', () => {
       ]);
     });
 
+    // F7: a Resolved Threads entry is Background only when it says it is carried on, carried forward or still live.
+    it(`F7: a closed entry holding the word "carried" is not Background${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace("- The question of who opened the chandler's safe: carried on a live list.\n",
+        "- The question of who opened the chandler's safe: carried on a live list.\n"
+        + '- Means to haul the lamp oil up from the cellar herself. — closed: Mirren carried the casks up the stair; Pell held the door. (Mirren Fell)\n'
+        + '- Whether the deputy keeps his word. — closed: carried forward to the next session (Session 14)\n'
+        + '- The bell-ringer\'s debt. — closed: still live on the shared list\n'));
+      const bg = readRecord(dir, session()).record.background.filter((b) => b.from === 'Resolved Threads').map((b) => b.md);
+      assert.deepStrictEqual(bg, [
+        "The question of who opened the chandler's safe: carried on a live list.",
+        'Whether the deputy keeps his word. — closed: carried forward to the next session (Session 14)',
+        "The bell-ringer's debt. — closed: still live on the shared list",
+      ]);
+    });
+
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Q.R.L. Council marches on the Harbour Festival Grounds at noon. The bell rings at dusk.\n'));

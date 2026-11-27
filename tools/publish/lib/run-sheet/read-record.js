@@ -64,6 +64,8 @@ const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.tr
 // A sentence end: a stop and a space, but never the dot after a lone capital ("P.E.T.A. Council", "J. Smith"), which is
 // an initialism's or an initial's, not a sentence's end (Task 11b, F1).
 const ITEM_BREAK = /(?<=[.!?])(?<!(?:^|[^\p{L}])\p{Lu}\.)\s+(?=\p{Lu})|;\s*/u;
+// A Resolved Threads entry still open: it says it is carried on, carried forward or still live.
+const CARRIED = /\bcarried\s+(?:on|forward)\b|\bstill\s+live\b/i;
 // One World State label's items: the line's own words and any nested bullets, each split on sentence ends and `;`.
 function labelItems(text, name) {
   const lines = nl(text).split('\n');
@@ -352,14 +354,16 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     };
   });
 
-  // Background: Pending Consequences, and Resolved Threads entries that say "carried", one line each. Each line is its
-  // whole bullet, never cut into sentences, so an initialism and the bold survive (Task 11b, F1).
+  // Background: Pending Consequences, and Resolved Threads entries that say they are carried on, carried forward or
+  // still live, one line each; a closed entry that merely holds the word "carried" ("Kael carried Tam up") is closed
+  // (Task 11b, F7). Each line is its whole bullet, never cut into sentences, so an initialism and the bold survive
+  // (Task 11b, F1).
   const oneLine = (s) => nl(s).replace(/\s*\n\s*/g, ' ').trim();
   const background = [];
   if (wrapUp) {
     for (const md of sectionBullets(/^pending consequences$/i)) if (!isDone(md)) background.push({ from: 'Pending Consequences', md: oneLine(md) });
     for (const md of sectionBullets(/^resolved threads$/i)) {
-      if (!/\bcarried\b/i.test(md) || isDone(md)) continue;
+      if (!CARRIED.test(md) || isDone(md)) continue;
       background.push({ from: 'Resolved Threads', md: oneLine(md) });
     }
   }
