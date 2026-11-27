@@ -23,6 +23,9 @@ const uniq = (list) => [...new Set(list)];
 const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // A name said whole: not inside a longer word (Unicode letters and digits count as word characters).
 const said = (t, name, flags = 'iu') => new RegExp(`(?<![\\p{L}\\p{N}])${esc(name)}(?![\\p{L}\\p{N}])`, flags).exec(t);
+// Every place a name is said whole in `t`, as [start, end) spans.
+const spansOf = (t, name, flags = 'iu') => [...t.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${esc(name)}(?![\\p{L}\\p{N}])`, `${flags}g`))]
+  .map((m) => [m.index, m.index + m[0].length]);
 // Links and emphasis out, so a line reads as the words a GM would say.
 const stripMd = (s) => nl(s).replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, '$2').replace(/[*~`]/g, '');
 // A line that is one struck span and nothing else; "~~old~~ still true ~~maybe~~" is a live line.
@@ -132,6 +135,26 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const depth = (p) => chain(p).length;
   const deepest = (places) => places.slice().sort((a, b) => depth(b) - depth(a))[0] || null;
   const placesIn = (text) => uniq(pt.links(text).map((t) => index.resolve(t)).filter(isPlace));
+  // The notes `text` names, each at its first place (Task 11b, F2 and F10): a link to one of `wanted` (by its type), or a
+  // name of `cands` ({ note, whole: names said whole, any case; single: words said whole, case kept }). The longest
+  // match wins: a name inside a longer match, a link or another note's longer name, is dropped, so "Paul" is not named
+  // inside "Paul Harrelson", nor the alias "Charles" inside "[[Charles_Ashworth]]".
+  const namedIn = (text, cands, wanted) => {
+    const hits = [];
+    for (const m of text.matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)) {
+      const n = index.resolve(m[1].trim());
+      hits.push({ n: n && wanted(n) ? n : null, s: m.index, e: m.index + m[0].length });
+    }
+    for (const c of cands) {
+      for (const w of c.whole) for (const [st, en] of spansOf(text, w)) hits.push({ n: c.note, s: st, e: en });
+      for (const w of c.single || []) for (const [st, en] of spansOf(text, w, 'u')) hits.push({ n: c.note, s: st, e: en });
+    }
+    const inside = (h) => hits.some((o) => o.n !== h.n && o.s <= h.s && o.e >= h.e && o.e - o.s > h.e - h.s);
+    const at = new Map();
+    for (const h of hits) if (h.n && !inside(h) && (!at.has(h.n) || h.s < at.get(h.n))) at.set(h.n, h.s);
+    return [...at.entries()].sort((a, b) => a[1] - b[1]).map((e) => e[0]);
+  };
+  const namesOf = (p) => [nameOf(p), ...[fmOf(p).aliases, fmOf(p).gm_aliases].flat().filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim())];
 
   // Every location note (maps and GM halves left out, as read.js's `locations` does) with its parent and type, and where
   // each NPC or creature stands by its `location` field: what the page ranks the cards by. No guessing from prose.
@@ -241,14 +264,8 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
     if (found) {
       const re = new RegExp(`(?<![\\p{L}\\p{N}])${found.word}(?![\\p{L}\\p{N}])`, 'iu');
       const named = new Set();
-      for (const t of ts) {
-        for (const p of pt.links(t).map((x) => index.resolve(x))) if (p && THREAT_TYPES.has(typeOf(p))) named.add(p);
-        for (const p of index.notes().filter((n) => THREAT_TYPES.has(typeOf(n)))) {
-          const fm = fmOf(p);
-          const names = [nameOf(p), ...[fm.aliases, fm.gm_aliases].flat().filter((x) => typeof x === 'string' && x.trim())];
-          if (names.some((n) => said(t, n.trim()))) named.add(p);
-        }
-      }
+      const threatNotes = index.notes().filter((n) => THREAT_TYPES.has(typeOf(n))).map((n) => ({ note: n, whole: namesOf(n) }));
+      for (const t of ts) for (const p of namedIn(t, threatNotes, (n) => THREAT_TYPES.has(typeOf(n)))) named.add(p);
       hits = [...named].filter((p) => {
         const n = index.read(p);
         const raw = `${JSON.stringify(n.fm || {})}\n${nl(n.body)}`;
@@ -287,29 +304,18 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   }
 
   // People: NPC and creature notes. A full name, an alias or a link always names one; a first name or surname only when no
-  // other NPC note shares that word.
+  // other NPC note shares that word. Inside a longer match it names nobody (namedIn: the longest match wins).
   const npcs = index.notes().filter((n) => PEOPLE_TYPES.has(typeOf(n)));
   const partsOf = (n) => nameOf(n).split(/\s+/).filter(Boolean);
   const wordOwners = new Map();
   for (const n of npcs) for (const w of new Set([...partsOf(n), ...stemOf(n).split(/\s+/)].map(low))) wordOwners.set(w, (wordOwners.get(w) || 0) + 1);
   const namesFor = (n) => {
-    const fm = fmOf(n);
-    const whole = [nameOf(n), ...[fm.aliases, fm.gm_aliases].flat().filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim())];
     const ps = partsOf(n);
     const single = ps.length > 1 ? [ps[0], ps[ps.length - 1]].filter((w) => w.length >= 3 && wordOwners.get(low(w)) === 1) : [];
-    return { whole, single };
+    return { note: n, whole: namesOf(n), single };
   };
-  const peopleOf = (md) => {
-    const at = new Map();
-    const note = (n, pos) => { if (!at.has(n) || pos < at.get(n)) at.set(n, pos); };
-    for (const m of md.matchAll(/\[\[([^\]|#]+)/g)) { const n = index.resolve(m[1].trim()); if (n && PEOPLE_TYPES.has(typeOf(n))) note(n, m.index); }
-    for (const n of npcs) {
-      const { whole, single } = namesFor(n);
-      for (const w of whole) { const h = said(md, w.trim()); if (h) note(n, h.index); }
-      for (const w of single) { const h = said(md, w, 'u'); if (h) note(n, h.index); }
-    }
-    return [...at.entries()].sort((a, b) => a[1] - b[1]).map((e) => e[0]);
-  };
+  const npcNames = npcs.map(namesFor);
+  const peopleOf = (md) => namedIn(md, npcNames, (n) => PEOPLE_TYPES.has(typeOf(n)));
   for (const it of items) {
     it.links = uniq(pt.links(it.md).map((x) => index.resolve(x)).filter(Boolean));
     it.people = peopleOf(it.md);

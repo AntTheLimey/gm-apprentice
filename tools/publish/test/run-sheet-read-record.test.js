@@ -635,6 +635,38 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.match(w.md, /^- \*\*Ticking clocks:\*\*\n {2}- The Harbour Festival opens at dusk; the lamps go out\.\n {2}- The deputy reports at noon\.$/m);
     });
 
+    // F2 / F10: a name inside a longer matched name is not that person: the longest match wins.
+    it(`F2: a person whose whole name is another's first name is not named inside that full name${tag}`, () => {
+      const dir = open({ crlf });
+      put(dir, npc('Corvin'), '---\nname: Corvin\ntype: npc\n---\n\nAn old ferryman at the festival.\n');
+      const m = readRecord(dir, session());
+      const corvin = m.record.cards.find((c) => c.title === 'Corvin Tash');
+      assert.deepStrictEqual(corvin.people, [CORVIN]);
+      assert.ok(m.record.cards.every((c) => !c.people.includes(npc('Corvin'))), JSON.stringify(m.record.cards.map((c) => c.people)));
+      // said on its own, the name is his
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps', '- **Unsigned notes:** Corvin keeps'));
+      const solo = readRecord(dir, session()).record.cards.find((c) => /Unsigned notes/.test(c.items[0].md));
+      assert.deepStrictEqual(solo.people, [npc('Corvin')]);
+    });
+
+    it(`F10: an alias is not named inside another person's full name${tag}`, () => {
+      const dir = open({ crlf });
+      put(dir, npc('Harl Dunmore'), '---\nname: Harl Dunmore\ntype: npc\naliases: [Harl, Harl the Ferryman]\n---\n\nThe ferryman.\n');
+      const m = readRecord(dir, session());
+      const harl = m.record.cards.find((c) => c.title === 'Harl Brannock');
+      assert.deepStrictEqual(harl.people, [HARL]);
+      assert.ok(m.record.cards.every((c) => !c.people.includes(npc('Harl Dunmore'))));
+    });
+
+    it(`F2: a threat naming a full name is no hit for the man whose name is its first word${tag}`, () => {
+      const dir = open({ crlf });
+      put(dir, npc('Corvin'), '---\nname: Corvin\ntype: npc\n---\n\nAn old ferryman at the festival.\n');
+      edit(dir, W14, (t) => t.replace(/- \*\*Active threats:\*\*.*\n/, "- **Active threats:** Corvin Tash's guild wants payback.\n"));
+      const lead = readRecord(dir, session()).record.comingUp.lead;
+      assert.strictEqual(lead.place, loc('Harbour Festival Grounds'));
+      assert.deepStrictEqual(lead.hits, [CORVIN]);
+    });
+
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Q.R.L. Council marches on the Harbour Festival Grounds at noon. The bell rings at dusk.\n'));
