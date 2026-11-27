@@ -503,6 +503,10 @@ test('enterChoice: a word-start hit or a near typo wins on Enter; a shared last 
   assert.equal(at('The Old Inn'), null, 'a shared last word is not enough');
   assert.equal(at('North Gate'), null);
   assert.equal(at('alt'), null, 'inside a word is not a word start');
+  // fix round 2: several words from a word's start count, anywhere in the name
+  const more = [places[0], { note: 'L/Old Harbour District.md', name: 'Old Harbour District', type: 'location' }];
+  assert.equal(M.enterChoice(more, 'Harbour Dist', RS.castSearch).note, 'L/Old Harbour District.md');
+  assert.equal(M.enterChoice(more, 'arbour Dist', RS.castSearch), null, 'not from inside a word');
   // the list still offers the last-word match for a click
   assert.ok(M.addChoices(places, 'The Old Inn', RS.castSearch).some((c) => c.note === 'L/The Salt Inn.md'));
 });

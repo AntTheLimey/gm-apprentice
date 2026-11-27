@@ -1031,7 +1031,9 @@
     const k = nameKey(text);
     const most = Math.min(2, Math.floor(k.length / 3));
     const names = (c) => [c.name, ...(c.aliases || []), ...(c.gmAliases || [])].filter(Boolean);
-    const wordStart = (c) => names(c).some((n) => { const t = fold(n); return t.startsWith(q) || t.split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(q)); });
+    // the typed words from the start of any word of the name: "Harbour Dist" is Old Harbour District (fix round 2)
+    const at = new RegExp(`(^|[^\\p{L}\\p{N}])${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'u');
+    const wordStart = (c) => names(c).some((n) => at.test(fold(n)));
     const typo = (c) => k.length >= 3 && names(c).some((n) => { const t = nameKey(n); return Boolean(t) && editDistance(k, t) <= most; });
     const pick = addChoices(cast, text, search, Infinity).filter((x) => !x.isNew).find((x) => {
       const c = (cast || []).find((y) => y.note === x.note);
