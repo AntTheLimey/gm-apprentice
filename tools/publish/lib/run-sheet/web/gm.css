@@ -469,6 +469,8 @@ ol.to .defres.failed { color: var(--bad); }
 .movebox .hits:empty { display: none; }
 .movebox .hits.up { top: auto; bottom: 100%; }
 .movebox .hits button { text-align: left; font-size: .82rem; }
+.movebox .movesay { font-size: .78rem; scroll-margin-bottom: 8px; }
+.movebox .movesay:empty { display: none; }
 .where-party { list-style: none; padding: 0; margin: 4px 0 10px; }
 .where-party li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
 

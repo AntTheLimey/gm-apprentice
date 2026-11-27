@@ -541,5 +541,29 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
+
+    // S6: Enter on a typed new place did nothing, and an empty box said nothing
+    it(`S6: Enter in Move them makes a typed new place; with nothing typed it says why beside the box (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, '#where input[data-moveg]');
+        await page.key('Enter');
+        await page.waitFor('(document.querySelector("#where [data-movesay]") || {}).textContent === "Type a place, or pick one from the list"', 2000);
+        const v = await inView(page, '#where [data-movesay]');
+        assert.ok(v.whole, `beside the box, in view: ${JSON.stringify(v)}`);
+        assert.deepStrictEqual((await stateOf(run)).positions, {}, 'nobody moved');
+        await page.type('The Old Pier');
+        await page.key('Enter');
+        await settled(page);
+        const s = await stateOf(run);
+        const typed = s.improvised.find((i) => i.newPlace);
+        assert.strictEqual(typed && typed.title, 'The Old Pier');
+        assert.ok(Object.values(s.positions).length === 4 && Object.values(s.positions).every((x) => x.beat === typed.key), 'the crew went there');
+        assert.match(await page.evaluate('document.querySelector("#where .wrow").textContent'), /The Old Pier/);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
   }
 });

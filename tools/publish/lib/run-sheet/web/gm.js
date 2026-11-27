@@ -485,7 +485,8 @@
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }
   const NEW_PLACE = (t) => `+ New place: ${t}`;
-  const NO_PLACE = 'No known place by that name: choose "+ New place" to make one';
+  // Enter in an empty Move box (audit S6): said beside the box, never in a browser bubble
+  const MOVE_EMPTY = 'Type a place, or pick one from the list';
   const placeChoices = (text) => (FM ? FM.addChoices(knownPlaces(), text, RS.castSearch, 8, NEW_PLACE) : []);
   // A group's place, for the GM: its beat's place (or spot's), else the place beat's, else its beat's title.
   function groupPlace(g, d = D()) {
@@ -495,13 +496,23 @@
     return place ? link(place) : esc(groupLabel(g.key, d));
   }
   // The box: type a place (the page's own list under it offers the near ones; no browser datalist as well, final
-  // review P-A2), Enter takes the top known hit, and a new one is only ever the explicit "+ New place: <typed>"
-  // choice under it (P-S10).
+  // review P-A2). Enter takes the top known hit, and with none, makes the typed place, as "+ New place: <typed>" under
+  // it does (audit S6, which overturned P-S10's explicit choice only). Enter with nothing typed says so beside the box.
   // `where` tells a group's boxes apart (Hand over, a Here strip): each keeps its own focus and choices.
   function moveBoxHTML(group, where) {
     const id = `${where}|${group}`;
     const hits = (G.ui.moveHits && G.ui.moveHits[id]) || [];
-    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span></span>`;
+    const say = (G.ui.moveSay || {})[id] || '';
+    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span><span class="warn movesay" data-movesay="${esc(id)}" role="status">${esc(say)}</span></span>`;
+  }
+  function moveSay(id, text) {
+    G.ui.moveSay = G.ui.moveSay || {};
+    if (text) G.ui.moveSay[id] = text; else delete G.ui.moveSay[id];
+    const el = document.querySelector(`[data-movesay="${CSS.escape(id)}"]`);
+    if (!el) return;
+    el.textContent = text || '';
+    // a box at the window's bottom edge: the words come into view under it
+    if (text) el.scrollIntoView({ block: 'nearest' });
   }
   function moveHitsHTML(group, hits) {
     return hits.map((c) => (c.isNew
@@ -561,6 +572,7 @@
     const g = { ...whole, pcs: picked.length ? picked : whole.pcs };
     for (const p of g.pcs) if (G.ui.picked) delete G.ui.picked[p];
     if (G.ui.moveHits) for (const k of Object.keys(G.ui.moveHits)) if (k.endsWith(`|${group}`)) delete G.ui.moveHits[k];
+    if (G.ui.moveSay) for (const k of Object.keys(G.ui.moveSay)) if (k.endsWith(`|${group}`)) delete G.ui.moveSay[k];
     document.querySelectorAll(`input[data-moveg="${CSS.escape(group)}"]`).forEach((box) => { box.value = ''; });
     const names = g.pcs.map((p) => first(nameOf(p)));
     let key;
@@ -2280,9 +2292,10 @@
     if (t.id === 'newBeat') { ev.preventDefault(); addBeat(); }
     if (d.moveg !== undefined && t.tagName === 'INPUT') {
       ev.preventDefault();
+      if (!t.value.trim()) { moveSay(d.movebox, MOVE_EMPTY); return; }
       const top = placeChoices(t.value)[0];
       if (top && !top.isNew) { moveGroup(d.moveg, { note: top.note }); return; }
-      if (t.value.trim()) { t.setCustomValidity(NO_PLACE); t.reportValidity(); }
+      moveGroup(d.moveg, { name: t.value });
     }
   });
 
@@ -2299,6 +2312,7 @@
     }
     if (t.dataset && t.dataset.moveg !== undefined && t.tagName === 'INPUT') {
       const id = t.dataset.movebox;
+      moveSay(id, '');
       G.ui.moveHits = G.ui.moveHits || {};
       G.ui.moveHits[id] = placeChoices(t.value);
       const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);

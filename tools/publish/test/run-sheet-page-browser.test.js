@@ -746,13 +746,10 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       const northKey = model.placeKeys[NORTH];
       assert.strictEqual(s.positions[ADA].beat, northKey);
       await page.waitFor(`document.querySelector('${beat(northKey)}')`);
-      // a name no place has: Enter makes nothing; the explicit choice makes the new place
+      // a name no place has: the explicit choice makes the new place. Changed on purpose (Task 9, audit S6): Enter here
+      // used to make nothing (final review P-S10); now Enter makes it too, and the S6 test below pins that
       await page.click(`${beat(northKey)} input[data-moveg]`);
       await page.type('Rusty Anchor');
-      await page.key('Enter');
-      await page.sleep(200);
-      s = await stateOf(run);
-      assert.ok(!s.improvised.some((i) => i.newPlace), 'Enter never makes a new place');
       await page.waitFor(`document.querySelector('${beat(northKey)} [data-movenew]')`);
       await page.click(`${beat(northKey)} [data-movenew]`);
       await settled(page);
@@ -1061,6 +1058,39 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
         const h = await page.click('#pcs h2', { offsetX: 6 });
         assert.ok(h.inView && h.hit, `the heading is clear of the drawer: ${JSON.stringify(h)}`);
         await page.waitFor('!document.getElementById("drawer").classList.contains("open")', 2000);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // S6: Enter on a typed new place did nothing (only a click on "+ New place" made it), and an empty box said nothing
+    it(`S6: Enter in Move them makes a typed new place; with nothing typed it says why beside the box (${width})`, async () => {
+      const run = await startApp();
+      const { model } = await api(run, 'GET', '/api/model');
+      const gate = model.beats[0];
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `${beatSel(gate.key)} [data-all]`);
+        await settled(page);
+        const box = `${beatSel(gate.key)} input[data-moveg]`;
+        await tap(page, box);
+        await page.key('Enter');
+        const say = `${beatSel(gate.key)} .movebox [data-movesay]`;
+        await page.waitFor(`(document.querySelector('${say}') || {}).textContent === 'Type a place, or pick one from the list'`, 2000);
+        const r = await page.evaluate(`(() => { const e = document.querySelector('${say}').getBoundingClientRect(); const b = document.querySelector('${box}').getBoundingClientRect();
+          return { inView: e.top >= 0 && e.bottom <= innerHeight && e.left >= 0 && e.right <= innerWidth && e.width > 0, near: Math.abs(e.top - b.bottom) < 40 }; })()`);
+        assert.deepStrictEqual(r, { inView: true, near: true }, `the words are beside the box, in view: ${await page.evaluate(`JSON.stringify(document.querySelector('${say}').getBoundingClientRect())`)}`);
+        let s = (await api(run, 'GET', '/api/state')).state;
+        assert.ok(Object.values(s.positions).every((x) => x.beat === gate.key), 'nobody moved');
+        // typing takes the words away; Enter on a name no place has makes it
+        await page.type('Rusty Anchor');
+        assert.strictEqual(await page.evaluate(`document.querySelector('${say}').textContent`), '');
+        await page.key('Enter');
+        await settled(page);
+        s = (await api(run, 'GET', '/api/state')).state;
+        const typed = s.improvised.find((i) => i.newPlace);
+        assert.strictEqual(typed && typed.title, 'Rusty Anchor');
+        assert.ok(Object.values(s.positions).every((x) => x.beat === typed.key), 'both PCs went there');
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
