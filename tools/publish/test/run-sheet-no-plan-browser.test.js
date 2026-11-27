@@ -570,7 +570,7 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
     });
 
     // S4: a no-Plan night has no beats, so a jot had nowhere to land on the page: "Tonight so far" tops Coming up
-    it(`S4: tonight's jots top Coming up, newest first, and each says Noted for 3 s (${width})`, async () => {
+    it(`S4: tonight's jots top Coming up, newest first, and each says "Noted under" for 3 s (${width})`, async () => {
       const run = await startRec();
       await withPage({ width, height: HEIGHT }, async (page) => {
         await page.goto(`${run.base}?probe=1`);
@@ -581,7 +581,8 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         await page.type('Venn arrives soaked');
         await page.key('Enter');
         await settled(page);
-        await page.waitFor('(document.getElementById("hnoted") || {}).textContent === "Noted"', 1000);
+        // nobody placed: the jot is the night's, and Noted says so (fix round 1)
+        await page.waitFor('(document.getElementById("hnoted") || {}).textContent === "Noted under the night"', 1000);
         const v = await inView(page, '#hnoted');
         assert.ok(v.whole, `Noted in view: ${JSON.stringify(v)}`);
         await page.type('Brannock pays in lamp oil');

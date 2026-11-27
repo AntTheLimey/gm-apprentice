@@ -1301,7 +1301,7 @@
     // 7 The jot box and this beat's jots
     const js = G.state.jots.filter((j) => j.beat === b.key);
     h += `<ul class="jots">${js.map((j) => `<li><span class="tm">${esc(hhmm(j.at))}</span><span>${esc(j.text)}</span>${armBtn(`unjot:${j.id}`, '✕', `data-unjot="${esc(j.id)}" class="mini"`, 'Delete this jot')}</li>`).join('')}</ul>`;
-    h += `<div class="jot"><input data-jot="${esc(b.key)}" placeholder="Jot what happened (Enter)" aria-label="Jot a line for ${esc(b.title)}" autocomplete="off"><span class="noted" data-noted="${esc(b.key)}" role="status">${notedNow(b.key) ? 'Noted' : ''}</span></div></div>`;
+    h += `<div class="jot"><input data-jot="${esc(b.key)}" placeholder="Jot what happened (Enter)" aria-label="Jot a line for ${esc(b.title)}" autocomplete="off"><span class="noted" data-noted="${esc(b.key)}" role="status">${esc(notedText(b.key))}</span></div></div>`;
     return h;
   }
 
@@ -1740,36 +1740,36 @@
   const beatOfKey = (key) => D().beats.find((b) => b.key === key) || null;
   const titleOfKey = (key) => { const b = beatOfKey(key); return b ? b.title : ''; };
 
-  // A jot says "Noted" beside the box it came from for 3 s (`box`: 'hjot', the header's, or a beat's key), and the
-  // line it made comes into view when where it lands is on screen: the beat's last jot, or the top of the no-Plan
-  // page's Tonight so far (audit S4). A beat off screen is never jumped to.
+  // A jot says "Noted under <beat or place>" beside the box it came from for 3 s (`box`: 'hjot', the header's, or a
+  // beat's key), and never scrolls the page (audit S4, fix round 1 ruling). With no beat in play it is the night's.
   function jot(beat, text, box) {
     const t = String(text || '').trim();
     if (!t) return;
     if (beat) G.ui.focus = beat;
-    G.ui.noted = { box: box || 'hjot', at: Date.now() };
+    G.ui.noted = { box: box || 'hjot', at: Date.now(), under: beat ? titleOfKey(beat) || 'the night' : 'the night' };
     clearTimeout(jot.timer);
     jot.timer = setTimeout(clearNoted, 3000);
     act({ type: 'jot', beat: beat || null, text: t, title: beat ? titleOfKey(beat) : undefined });
     showNoted();
-    const li = REC() ? document.querySelector('#tonight li:first-child')
-      : (beat ? document.querySelector(`#sheet [id="beat:${CSS.escape(beat)}"] ul.jots li:last-child`) : null);
-    const around = li && (li.closest('.beat') || li.closest('section'));
-    if (!around) return;
-    const r = around.getBoundingClientRect();
-    const top = $('#top') ? $('#top').getBoundingClientRect().bottom : 0;
-    if (!(r.bottom > top && r.top < window.innerHeight)) return;
-    // from the beat's own box, the box with its Noted (the jot just above it); from the header, the jot
-    const own = box && box !== 'hjot' ? around.querySelector('.jot') : null;
-    (own || li).scrollIntoView({ block: 'nearest' });
   }
   const notedNow = (box) => Boolean(G.ui.noted) && G.ui.noted.box === box && Date.now() - G.ui.noted.at < 3000;
+  const notedText = (box) => (notedNow(box) ? `Noted under ${G.ui.noted.under}` : '');
   function showNoted() {
     const h = $('#hnoted');
-    if (h) h.textContent = notedNow('hjot') ? 'Noted' : '';
-    document.querySelectorAll('[data-noted]').forEach((e) => { e.textContent = notedNow(e.dataset.noted) ? 'Noted' : ''; });
+    if (h) h.textContent = notedText('hjot');
+    document.querySelectorAll('[data-noted]').forEach((e) => { e.textContent = notedText(e.dataset.noted); });
   }
   function clearNoted() { G.ui.noted = null; showNoted(); }
+  // Typing in the header's Jot box scrolled the page (Chrome brings the caret of a box in the sticky header into view
+  // as if the header sat at the page's top): the page is put back where the GM was reading (fix round 1).
+  (() => {
+    const box = $('#hjot');
+    if (!box) return;
+    let y = null;
+    box.addEventListener('beforeinput', () => { y = window.scrollY; });
+    const back = () => { if (y !== null && window.scrollY !== y) window.scrollTo(window.scrollX, y); };
+    box.addEventListener('input', () => { back(); requestAnimationFrame(() => { back(); y = null; }); });
+  })();
 
   function bring(beat, p) {
     const b = beatOfKey(beat);

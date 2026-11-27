@@ -1108,63 +1108,51 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
     });
 
     // S4: J, a line, Enter: stored at the end of the beat, 1,100 to 1,640 px below the window, and nothing said it took
-    it(`S4: a jot says Noted beside its box for 3 s, and the beat's last jot comes into view when the beat is on screen (${width})`, async () => {
+    // fix round 1 ruling: a jot never scrolls the page; the Noted line names where the jot went
+    it(`S4: a jot says "Noted under" its beat beside its box for 3 s, and never scrolls the page (${width})`, async () => {
       const run = await startApp();
       const { model } = await api(run, 'GET', '/api/model');
       const gate = model.beats[0];
       const B = beatSel(gate.key);
-      // an element wholly in the window, both edges, under the sticky header
-      const whole = (sel) => page0.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect();
-        const top = document.getElementById('top').getBoundingClientRect().bottom;
-        return Math.round(r.top) >= Math.floor(top) && Math.round(r.bottom) <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.width > 0; })()`);
-      let page0;
+      const NOTED = `Noted under ${gate.title}`;
       await withPage({ width, height: 762 }, async (page) => {
-        page0 = page;
+        const inWindow = (sel) => page.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect();
+          return r.width > 0 && r.top >= 0 && Math.round(r.bottom) <= innerHeight && r.left >= 0 && Math.round(r.right) <= innerWidth; })()`);
+        // what the GM reads stays put: the beat's heading on screen (scrollY itself may change, as the browser keeps the
+        // view steady when a line above goes, e.g. the "No Table Log" box once the first action files it)
+        const y = () => page.evaluate(`Math.round(document.querySelector('${B} h3').getBoundingClientRect().top)`);
         await page.goto(`${run.base}?probe=1`);
         await settled(page);
         await tap(page, `${B} [data-all]`);
         await settled(page);
-        // the beat's heading on screen, its jots far below
+        // the beat's heading on screen, its jots below the window
         const top = await page.evaluate(`document.querySelector('${B} h3').getBoundingClientRect().top`);
         await page.wheel(600, 400, Math.round(top - 250));
-        assert.strictEqual(await whole(`${B} ul.jots`), false, 'the jot list starts out of view');
         await page.key('j');
         await page.waitFor('document.activeElement.id === "hjot"', 2000);
         // J leaves the page where the GM is reading (it jumped to the top)
-        const at = await page.evaluate('Math.round(scrollY)');
-        assert.ok(at > 0, 'scrolled down to the beat');
+        const y0 = await y();
+        assert.ok(await page.evaluate('scrollY') > 0, 'scrolled down to the beat');
         await page.type('the bell rang twice');
         await page.key('Enter');
         await settled(page);
-        await page.waitFor(`(document.getElementById('hnoted') || {}).textContent === 'Noted'`, 1000);
-        assert.ok(await page.evaluate(`(() => { const r = document.getElementById('hnoted').getBoundingClientRect(); return r.width > 0 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; })()`), 'Noted is in view');
-        await page.waitFor(`document.querySelector('${B} ul.jots li:last-child') && /the bell rang twice/.test(document.querySelector('${B} ul.jots li:last-child').textContent)`);
-        assert.strictEqual(await whole(`${B} ul.jots li:last-child`), true, 'the beat\'s last jot is in view');
+        await page.waitFor(`(document.getElementById('hnoted') || {}).textContent === ${JSON.stringify(NOTED)}`, 1000);
+        assert.strictEqual(await inWindow('#hnoted'), true, 'the header\'s Noted is in view');
+        assert.strictEqual(await y(), y0, 'the page did not move');
         await page.waitFor(`(document.getElementById('hnoted') || {}).textContent === ''`, 4000);
-        // the beat's own box: Noted beside it
+        // the beat's own box, mid-window: Noted beside it, and the page stays
+        const box = await page.box(`${B} input[data-jot]`);
+        await page.wheel(600, 400, Math.round(box.top - 400));
+        const y1 = await y();
         await tap(page, `${B} input[data-jot]`);
         await page.type('Ash lowers the rope');
         await page.key('Enter');
         await settled(page);
-        await page.waitFor(`(document.querySelector('${B} .jot [data-noted]') || {}).textContent === 'Noted'`, 1000);
-        assert.strictEqual(await whole(`${B} .jot [data-noted]`), true, 'Noted beside the beat\'s box');
-        assert.strictEqual(await whole(`${B} ul.jots li:last-child`), true);
-        // the beat far off screen (End of the night): the page stays where it is, and Noted still says it took
-        await tap(page, '#endBtn');
-        // where the jump settles
-        let y = -1;
-        for (let i = 0; i < 20; i++) { await page.sleep(150); const n = await page.evaluate('Math.round(scrollY)'); if (n === y) break; y = n; }
-        assert.strictEqual(await page.evaluate(`document.querySelector('${B}').getBoundingClientRect().bottom < 0`), true, 'the beat is off screen');
-        await page.key('j');
-        await page.type('a third line');
-        await page.key('Enter');
-        await settled(page);
-        await page.waitFor(`(document.getElementById('hnoted') || {}).textContent === 'Noted'`, 1000);
-        // the redraw may shift the page a line or two (the beat above grew), never to the beat
-        const now = await page.evaluate(`({ y: Math.round(scrollY), beat: document.querySelector('${B}').getBoundingClientRect().bottom < 0, end: document.querySelector('#end h2').getBoundingClientRect().top < innerHeight })`);
-        assert.ok(now.beat && now.end && Math.abs(now.y - y) < 100, `no jump to a beat off screen: from ${y} to ${JSON.stringify(now)}`);
+        await page.waitFor(`(document.querySelector('${B} .jot [data-noted]') || {}).textContent === ${JSON.stringify(NOTED)}`, 1000);
+        assert.strictEqual(await inWindow(`${B} .jot [data-noted]`), true, 'Noted beside the beat\'s box');
+        assert.strictEqual(await y(), y1, 'the page did not move');
         const s = (await api(run, 'GET', '/api/state')).state;
-        assert.deepStrictEqual(s.jots.map((j) => j.text), ['the bell rang twice', 'Ash lowers the rope', 'a third line']);
+        assert.deepStrictEqual(s.jots.map((j) => j.text), ['the bell rang twice', 'Ash lowers the rope']);
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
