@@ -106,7 +106,8 @@ const clean = (line) => String(line).replace(/^#+\s*/, '').replace(/^[-*]\s+/, '
 
 // ---- the forbidden list, read from the fixture ----
 // Each entry: { text | re, short, why, control } — `short` matches on word boundaries in the views, events
-// and markup only; `control: false` for a string the GM's answers cannot hold (the temp folder).
+// and markup only; `control: false` for a string the GM's answers cannot hold (the temp folder). `plan: null` (a no-Plan
+// sheet, Task 12): the notes' own entries only, nothing read from a Plan or its beats.
 function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: sessionName = S.SESSION, figures = true } = {}) {
   const out = [];
   const add = (text, why, opts = {}) => {
@@ -116,7 +117,7 @@ function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: session
   const files = walk(vault).map((f) => path.relative(vault, f).split(path.sep).join('/'));
   const notes = files.filter((f) => f.endsWith('.md'));
   const pictures = files.filter((f) => /\.(png|jpe?g|gif|webp|svg)$/i.test(f));
-  const sessionFoes = new Set(model.beats.flatMap((b) => (b.foes || []).map((f) => f.note).concat((b.who || []).map((w) => w.note))));
+  const sessionFoes = new Set((model.beats || []).flatMap((b) => (b.foes || []).map((f) => f.note).concat((b.who || []).map((w) => w.note))));
 
   for (const rel of notes) {
     add(rel, 'a vault path');
@@ -147,7 +148,7 @@ function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: session
       const stop = rest.search(/^(?:#{2,3}\s|<!--)/m);
       const stats = stop >= 0 ? rest.slice(0, stop) : rest;
       // an ally's HP is on the players' order (decision 7), once the ally is: allowed with its name
-      const ally = model.beats.some((b) => (b.foes || []).some((f) => f.note === rel && f.ally));
+      const ally = (model.beats || []).some((b) => (b.foes || []).some((f) => f.note === rel && f.ally));
       const hp = new Set([...stats.matchAll(/\b(?:HP|Hit Points)\**\s*(\d+)/g)].map((m) => m[1]));
       for (const m of stats.matchAll(/\d{4,}/g)) add(m[0], 'a foe number (sentinel)', ally && hp.has(m[0]) ? { with: fm.name } : {});
       // `figures: false` (the CoC and GURPS blocks): a foe's small numbers are the test's own named sentinels there,
@@ -168,6 +169,7 @@ function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: session
   add('Legendary', 'a foe\'s legendary counters', { short: true });
   add('Bloodied', 'a foe\'s Bloodied (no PC or ally is Bloodied in the script)', { short: true });
 
+  if (planPath === null) return out.filter((x) => x.re || x.text.length >= 4 || x.short);
   // the session's Plan: titles, each section's first line, and the beats' own words
   add(path.posix.basename(model.plan || planPath, '.md'), 'the Plan note');
   add(sessionName, 'the session\'s title');
@@ -1718,4 +1720,89 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
       }
     });
   }
+
+  // Task 12, F10: the no-Plan page's new routes to the players (Show from a card's link, Fight here at the card's place)
+  // keep back a withheld NPC's name and a gm_aliases name, both linked from a card: the existing forbidden list, read
+  // from the vault's notes, is checked on every view and the stream.
+  it('a withheld NPC and a gm_aliases name on a card reach the players by no route', { timeout: 120000 }, async () => {
+    const vault = copyRecordFixture();
+    made.push(vault);
+    const SALT = 'Locations/The Salt Inn.md';
+    const MOTT = 'Characters/NPCs/Mott Ferrage.md';
+    const DACE = 'Characters/NPCs/Dace Lorrimer.md';
+    fs.writeFileSync(path.join(vault, MOTT), '---\nname: Mott Ferrage\ntype: npc\nwithheld: true\nlocation: "[[The Salt Inn]]"\n---\n\nA lamp thief.\n');
+    fs.writeFileSync(path.join(vault, DACE), '---\nname: Dace Lorrimer\ntype: npc\ngm_aliases:\n  - The Lantern Hand\nlocation: "[[The Salt Inn]]"\n---\n\nA harbour clerk.\n');
+    const wrap = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
+    const text = fs.readFileSync(wrap, 'utf8');
+    const from = '- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n';
+    assert.ok(text.includes(from));
+    fs.writeFileSync(wrap, text.replace(from, `${from}- **Night visitors:** [[Mott Ferrage]] and [[Dace Lorrimer]] came by [[The Salt Inn]] after dark.\n`));
+
+    const session = pickSession(listSessions(vault), null, vault).session;
+    const { file, stateId } = stateFileFor(vault, session);
+    const run = createTableServer({ vaultPath: vault, session, stateFile: file, stateId, deps: { delayMs: 50, log: () => {} } });
+    const port = await listenLocal(run.server, 0);
+    const base = `http://127.0.0.1:${port}/`;
+    const pstream = stream(port, '/api/players/events');
+    try {
+      const gmModel = await req(port, 'GET', '/api/model');
+      const model = JSON.parse(gmModel.text).model;
+      // a name the players may read: one the sheet starts seen, and Dace's own name, shown on purpose below
+      const seen = new Set([...Object.keys(model.seenFrom || {}), DACE].map((n) => (matter(fs.readFileSync(path.join(vault, n), 'utf8')).data || {}).name));
+      const forbidden = forbiddenList(vault, model, { plan: null }).filter((x) => !(x.why === 'an unshown name' && seen.has(x.text)));
+      for (const must of ['Mott Ferrage', 'The Lantern Hand']) assert.ok(forbidden.some((x) => x.text === must), `the forbidden list holds ${must}`);
+      // the control: the GM's own model holds both, so the players' filter is what keeps them back
+      for (const must of ['Mott Ferrage', 'The Lantern Hand']) assert.ok(gmModel.text.includes(must), `the GM's model holds ${must}`);
+      const checks = forbidden.map((x) => ({ ...x, hit: matcher(x) }));
+      const views = [];
+      const look = async () => { views.push((await req(port, 'GET', '/api/players/view')).text); };
+      const clean = (where) => {
+        for (const c of checks) {
+          for (const v of views) assert.ok(!c.hit(v), `${where}: the players' view holds ${c.text} (${c.why})`);
+          assert.ok(!c.hit(pstream.raw()), `${where}: the players' stream holds ${c.text} (${c.why})`);
+        }
+      };
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        const settled = () => page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && document.getElementById('where') && p; })()`);
+        await page.goto(`${base}?probe=1`);
+        await settled();
+        await look(); clean('opened');
+        const fightHere = async (where) => {
+          await page.click(`#where .wrow [data-fplace="${SALT}"]`);
+          await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+          await look(); clean(where);
+        };
+        // Fight here at the card's place (it places the crew there, so Show has a group), then end it
+        await fightHere('Fight here');
+        await page.click('#fEnd');
+        await page.click('#fEnd');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
+        await settled();
+        // Show each from the card's link
+        for (const n of [MOTT, DACE]) {
+          await page.click(`#scenes a[data-note="${n}"]`);
+          // the drawer slides in: the button is pressed once it is wholly on screen and still
+          const at = `(() => { const b = document.querySelector('#drawer.open #dshow [data-dshow="${n}"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && r.left >= 0 ? Math.round(r.left) : null; })()`;
+          await page.waitFor(at);
+          for (let last = null, now = await page.evaluate(at); now !== last; last = now, now = await page.evaluate(at)) await page.sleep(100);
+          await page.click(`#dshow [data-dshow="${n}"]`);
+          await waitFor(async () => Object.values((await req(port, 'GET', '/api/state')).json.state.panels || {}).some((x) => (x.people || []).includes(n)), `${n} shown`);
+          await page.key('Escape');
+          await look(); clean(`Show ${n}`);
+        }
+        // the shown: Dace by his own name, Mott only as the withheld word
+        const shown = JSON.parse(views[views.length - 1]).panels.flatMap((p) => p.people.map((w) => w.name));
+        assert.ok(shown.includes('Dace Lorrimer') && shown.length === 2, JSON.stringify(shown));
+        // and a fight there with both on the players' screen
+        await fightHere('Fight here after Show');
+        await page.sleep(300);
+      });
+      await look();
+      clean('at the end');
+      assert.match(pstream.raw(), /event: (hello|view)/, 'the players\' stream was read');
+    } finally {
+      pstream.close();
+      await run.close();
+    }
+  });
 });
