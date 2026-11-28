@@ -268,6 +268,10 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
     return 0;
   }
 
+  // The array form files a Table Log for an index that is there; a session not filed yet needs the form that files it
+  // too, or every action would fail (CodeRabbit #895).
+  if (!chosen.index && Array.isArray(fileLog)) return refuse(`${chosen.label} is not in the vault yet, and this --file-log only files a Table Log for a session that is: update gma (gma update), then start it with \`gma table\`.`);
+
   if (picked.others.length) out(`Also in progress: ${picked.others.map((s) => s.label).join(', ')}. Running ${chosen.label}; name another with --session.`);
 
   // Flush the PC sheets first, when the site has live stats or an inbox. Never a reason not to start.

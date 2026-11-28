@@ -201,6 +201,21 @@ describe('gm-publish table: a session from the record', () => {
     assert.ok(b.lines.join('\n').includes('Session 15 is not in the vault yet: start it with `gma table` to have it filed and the record written.'), b.lines.join('\n'));
   });
 
+  // CodeRabbit #895: the array form files a Table Log for an index that exists; for a session not filed yet it would fail
+  // on every action, so it is refused before anything is served.
+  it('a session not filed yet refuses the array --file-log, before the flush', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const a = await start({ vault, fileLog: ['gma-never-run'] });
+    assert.strictEqual(a.h, 1, a.lines.join('\n'));
+    assert.match(a.errs.join('\n'), /Session 15 is not in the vault yet/);
+    assert.strictEqual(a.deps.flushed, undefined);
+    assert.ok(!fs.existsSync(path.join(vault, '_meta', 'table')) || !fs.readdirSync(path.join(vault, '_meta', 'table')).some((n) => n.endsWith('.lock')));
+    // --pick is not affected
+    const pick = quiet();
+    assert.strictEqual(await runTable({ vault, port: await freePort(), pick: true, json: true, fileLog: ['gma-never-run'] }, pick.deps), 0);
+  });
+
   it('a record that cannot be read is refused in its own words (Task 7)', async () => {
     const vault = copyRecordFixture();
     after(() => removeFixture(vault));
