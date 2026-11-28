@@ -67,7 +67,7 @@ function rewriteAll(dir, fn) {
   }
 }
 
-async function startRec({ crlf = false, prepped = null, noPlace = false, underscored = false } = {}) {
+async function startRec({ crlf = false, prepped = null, noPlace = false, underscored = false, pcOnly = false } = {}) {
   const vault = copyRecordFixture({ crlf });
   made.push(vault);
   // Task 11b, F11: a vault whose notes are named by their stems with `_` (Canticle's shape): Mirren's PC note is
@@ -92,6 +92,16 @@ async function startRec({ crlf = false, prepped = null, noPlace = false, undersc
     };
     blank('Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md', '**Location:** [[The Salt Inn]]', '**Location:**');
     blank('Characters/PCs/Pell Rowan.md', '**Location:** [[The Salt Inn]]', '**Location:**');
+    // Changed on purpose (Task 11b, F8): the Handoff's first place now places the crew too, so it goes as well
+    blank('Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md', 'The crew sits in [[The Salt Inn]]', 'The crew sits in the inn');
+  }
+  // Task 11b, F8: a record that says nothing of where the crew is (no Location, no place in the Handoff): only Pell's
+  // PC note places them
+  if (pcOnly) {
+    const w = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
+    const t = fs.readFileSync(w, 'utf8');
+    assert.ok(t.includes('**Location:** [[The Salt Inn]]') && t.includes('The crew sits in [[The Salt Inn]]'));
+    fs.writeFileSync(w, t.replace('**Location:** [[The Salt Inn]]', '**Location:**').replace('The crew sits in [[The Salt Inn]]', 'The crew sits in the inn'));
   }
   // session-prep filed Session 15's index (no Plan, no Table Log): the sheet opens it, named
   if (prepped) {
@@ -731,6 +741,21 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         const s = await stateOf(run);
         assert.match(JSON.stringify(s.events), /Mirren/);
         assert.doesNotMatch(JSON.stringify(s.events), /Mirren_Fell(?!\.md)/);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // Task 11b, F8: a place only the PC notes give is said to come from them, not from the record.
+    it(`F8: where they are says "from the PC notes" when only the PC notes place the crew (${width})`, async () => {
+      const run = await startRec({ pcOnly: true, crlf: width === 1100 });
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const row = await page.evaluate('document.querySelector("#where .wrow").textContent');
+        assert.match(row, /at The Salt Inn from the PC notes/);
+        assert.doesNotMatch(row, /from the record/);
+        const v = await inView(page, '#where .wrow .at .note');
+        assert.ok(v.found && v.whole, JSON.stringify(v));
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });

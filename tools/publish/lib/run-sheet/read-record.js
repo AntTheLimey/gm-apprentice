@@ -226,14 +226,21 @@ function readRecord(vaultPath, session, { party = [], deps } = {}) {
   const logNote = tableLogOf(index, given.after || null).log;
   const logPlaces = logNote ? placesIn(sectionText(nl(index.read(logNote).body), 2, /^where everyone ended$/i)) : [];
   const pcPlaces = Object.values(byPc).filter(Boolean);
+  // Task 11b, F8: then the first place the Handoff links (a place it says they came "from" is where they were, not where
+  // they are), and the PC notes last, only when the record says nothing of where they are: a World State Location in
+  // words ("the party has walked down") is newer than any PC note, so it never falls back to a stale one.
+  const handoffText = prose(sectionText(gm, 3, /^handoff to session-prep$/i));
+  const handoffPlace = [...handoffText.matchAll(/(\bfrom\s+)?\[\[([^\]|#]+)/gi)].filter((m) => !m[1])
+    .map((m) => index.resolve(m[2].trim())).find(isPlace) || null;
   if (logPlaces.length) Object.assign(whereNow, { place: deepest(logPlaces), from: 'table-log' });
   else if (worldLoc) Object.assign(whereNow, { place: worldLoc, from: 'world-state' });
-  else if (pcPlaces.length) Object.assign(whereNow, { place: deepest(pcPlaces), from: 'pc-notes' });
+  else if (handoffPlace) Object.assign(whereNow, { place: handoffPlace, from: 'handoff' });
+  else if (pcPlaces.length && !locItems.length) Object.assign(whereNow, { place: deepest(pcPlaces), from: 'pc-notes' });
   if (whereNow.place) whereNow.text = nameOf(whereNow.place);
 
   // Coming up
   const carries = sectionText(gm, 3, /^what carries forward$/i);
-  const handoff = prose(sectionText(gm, 3, /^handoff to session-prep$/i));
+  const handoff = handoffText;
   const intentions = bulletsOf(sectionText(carries, 4, /^player-stated intentions$/i));
   const comingUp = { handoff, intentions, lead: null, empty: null };
   if (!wrapUp) comingUp.empty = 'No record yet: nothing is coming up.';

@@ -622,7 +622,7 @@
   }
   // A group's place note: its spot's or beat's place; null for a place typed tonight (no note, so nothing ranks Here).
   // Where the record has the crew the sheet has not placed: the reader's whereNow (the last session's Table Log, the World
-  // State, the PC notes; never tonight's log, whose positions live in the state).
+  // State, the Handoff's first place, the PC notes; never tonight's log, whose positions live in the state).
   const crewPlace = () => { const r = REC(); return (r && r.whereNow && r.whereNow.place) || null; };
   function groupPlaceNote(g, d = D()) {
     if (g.key === CREW) return crewPlace();
@@ -1006,7 +1006,9 @@
     else place = '<span class="muted">a place the record does not name</span>';
     // a place typed tonight has no note: its beat's own Fight
     const fight = note ? fightAt(note) : (b ? parts.map((x) => (x.beatButtons && x.beatButtons(b)) || '').join('') : '');
-    const from = g.key === CREW && note ? ' <span class="note">from the record</span>' : '';
+    // a place only the PC notes give is said to come from them (Task 11b, F8): the record said nothing of where
+    const fromPcs = ((REC() || {}).whereNow || {}).from === 'pc-notes';
+    const from = g.key === CREW && note ? ` <span class="note">${fromPcs ? 'from the PC notes' : 'from the record'}</span>` : '';
     // each PC a chip: picked, Move them moves the picked ones alone; "off" sends that PC off-screen (the rail's own action)
     const chip = (p) => {
       const on = (G.ui.picked || {})[p] === g.key;

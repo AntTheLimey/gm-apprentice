@@ -214,9 +214,12 @@ describe('readRecord', () => {
       assert.strictEqual(readRecord(dir, session()).record.whereNow.place, loc('Dock Row'));
     });
 
+    // Changed on purpose (Task 11b, F8): the Handoff's first place now comes before the PC notes, so this test takes the
+    // fixture Handoff's link out too, to leave the PC notes as the only place
     it(`with no Location anywhere but the PC notes, the PC notes give the place${tag}`, () => {
       const dir = open({ crlf });
-      edit(dir, W14, (t) => t.replace('- **Location:** [[The Salt Inn]]\n', '- **Location:**\n'));
+      edit(dir, W14, (t) => t.replace('- **Location:** [[The Salt Inn]]\n', '- **Location:**\n')
+        .replace('The crew sits in [[The Salt Inn]] after dark', 'The crew sits in the inn after dark'));
       const w = readRecord(dir, session()).record.whereNow;
       assert.strictEqual(w.place, loc('The Salt Inn'));
       assert.strictEqual(w.from, 'pc-notes');
@@ -705,6 +708,26 @@ describe('real-vault shapes (Task 11b)', () => {
       const joined = r.cards.find((c) => c.items.some((i) => /Mags_Orrel/.test(i.md)));
       assert.ok(joined.items.some((i) => /Tobin Reave/.test(i.md)), 'the two join on Dock Row');
       assert.strictEqual(joined.title, 'Mags Orrel');
+    });
+
+    // F8: where they are: the last Table Log's Where everyone ended, the World State's Location, the first place the
+    // Handoff links (never one it says they came "from"), and the PC notes only when the record says nothing of where.
+    it(`F8: the Handoff's first place comes before the PC notes${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Location:** [[The Salt Inn]]\n', '- **Location:**\n')
+        .replace('The crew sits in [[The Salt Inn]] after dark', 'The crew waits in [[Marrow Market]] after dark, a day from [[The Salt Inn]]'));
+      const w = readRecord(dir, session()).record.whereNow;
+      assert.deepStrictEqual([w.place, w.from, w.text], [loc('Marrow Market'), 'handoff', 'Marrow Market']);
+    });
+
+    it(`F8: a record that says the crew left a place, and names no other, puts them nowhere, whatever the PC notes say${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Location:** [[The Salt Inn]]', '- **Location:** the crew has walked down to the coast; [[Mirren Fell]] went ahead.')
+        .replace('The crew sits in [[The Salt Inn]] after dark, arguing', 'Dawn; the crew has walked down from [[The Salt Inn]], arguing'));
+      const w = readRecord(dir, session()).record.whereNow;
+      // Pell's note still says The Salt Inn: that note is older than the record
+      assert.strictEqual(w.byPc['Characters/PCs/Pell Rowan.md'], loc('The Salt Inn'));
+      assert.deepStrictEqual([w.place, w.from, w.text], [null, null, '']);
     });
 
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {
