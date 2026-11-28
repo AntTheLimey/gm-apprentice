@@ -1729,14 +1729,14 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
     made.push(vault);
     const SALT = 'Locations/The Salt Inn.md';
     const MOTT = 'Characters/NPCs/Mott Ferrage.md';
-    const DACE = 'Characters/NPCs/Dace Lorrimer.md';
+    const EWART = 'Characters/NPCs/Ewart Lorrimer.md';
     fs.writeFileSync(path.join(vault, MOTT), '---\nname: Mott Ferrage\ntype: npc\nwithheld: true\nlocation: "[[The Salt Inn]]"\n---\n\nA lamp thief.\n');
-    fs.writeFileSync(path.join(vault, DACE), '---\nname: Dace Lorrimer\ntype: npc\ngm_aliases:\n  - The Lantern Hand\nlocation: "[[The Salt Inn]]"\n---\n\nA harbour clerk.\n');
+    fs.writeFileSync(path.join(vault, EWART), '---\nname: Ewart Lorrimer\ntype: npc\ngm_aliases:\n  - The Lantern Hand\nlocation: "[[The Salt Inn]]"\n---\n\nA harbour clerk.\n');
     const wrap = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
     const text = fs.readFileSync(wrap, 'utf8');
     const from = '- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n';
     assert.ok(text.includes(from));
-    fs.writeFileSync(wrap, text.replace(from, `${from}- **Night visitors:** [[Mott Ferrage]] and [[Dace Lorrimer]] came by [[The Salt Inn]] after dark.\n`));
+    fs.writeFileSync(wrap, text.replace(from, `${from}- **Night visitors:** [[Mott Ferrage]] and [[Ewart Lorrimer]] came by [[The Salt Inn]] after dark.\n`));
 
     const session = pickSession(listSessions(vault), null, vault).session;
     const { file, stateId } = stateFileFor(vault, session);
@@ -1747,8 +1747,8 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
     try {
       const gmModel = await req(port, 'GET', '/api/model');
       const model = JSON.parse(gmModel.text).model;
-      // a name the players may read: one the sheet starts seen, and Dace's own name, shown on purpose below
-      const seen = new Set([...Object.keys(model.seenFrom || {}), DACE].map((n) => (matter(fs.readFileSync(path.join(vault, n), 'utf8')).data || {}).name));
+      // a name the players may read: one the sheet starts seen, and Ewart's own name, shown on purpose below
+      const seen = new Set([...Object.keys(model.seenFrom || {}), EWART].map((n) => (matter(fs.readFileSync(path.join(vault, n), 'utf8')).data || {}).name));
       const forbidden = forbiddenList(vault, model, { plan: null }).filter((x) => !(x.why === 'an unshown name' && seen.has(x.text)));
       for (const must of ['Mott Ferrage', 'The Lantern Hand']) assert.ok(forbidden.some((x) => x.text === must), `the forbidden list holds ${must}`);
       // the control: the GM's own model holds both, so the players' filter is what keeps them back
@@ -1779,7 +1779,7 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
         await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
         await settled();
         // Show each from the card's link
-        for (const n of [MOTT, DACE]) {
+        for (const n of [MOTT, EWART]) {
           await page.click(`#scenes a[data-note="${n}"]`);
           // the drawer slides in: the button is pressed once it is wholly on screen and still
           const at = `(() => { const b = document.querySelector('#drawer.open #dshow [data-dshow="${n}"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && r.left >= 0 ? Math.round(r.left) : null; })()`;
@@ -1790,9 +1790,9 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
           await page.key('Escape');
           await look(); clean(`Show ${n}`);
         }
-        // the shown: Dace by his own name, Mott only as the withheld word
+        // the shown: Ewart by his own name, Mott only as the withheld word
         const shown = JSON.parse(views[views.length - 1]).panels.flatMap((p) => p.people.map((w) => w.name));
-        assert.ok(shown.includes('Dace Lorrimer') && shown.length === 2, JSON.stringify(shown));
+        assert.ok(shown.includes('Ewart Lorrimer') && shown.length === 2, JSON.stringify(shown));
         // and a fight there with both on the players' screen
         await fightHere('Fight here after Show');
         await page.sleep(300);

@@ -843,9 +843,9 @@ describe('real-vault shapes (Task 11b)', () => {
     it(`a card joined on a place, tied with a person, is titled by the place${tag}`, () => {
       const dir = open({ crlf });
       put(dir, npc('Tamsin Reed'), '---\nname: Tamsin Reed\ntype: npc\n---\n');
-      put(dir, npc('Bram Holt'), '---\nname: Bram Holt\ntype: npc\n---\n');
+      put(dir, npc('Bram Kettering'), '---\nname: Bram Kettering\ntype: npc\n---\n');
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
-        '- **Stall fire:** [[Tamsin Reed]] watches the stalls at [[Marrow Market]].\n- **Smoke:** Bram Holt tells Tamsin Reed about [[Marrow Market]].\n'));
+        '- **Stall fire:** [[Tamsin Reed]] watches the stalls at [[Marrow Market]].\n- **Smoke:** Bram Kettering tells Tamsin Reed about [[Marrow Market]].\n'));
       const card = readRecord(dir, session()).record.cards.find((c) => c.items.some((i) => /Stall fire/.test(i.md)));
       assert.ok(card.items.some((i) => /Smoke/.test(i.md)), 'the two joined');
       assert.strictEqual(card.title, 'Marrow Market');
