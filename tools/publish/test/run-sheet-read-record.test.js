@@ -675,6 +675,24 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.deepStrictEqual(solo.people, [npc('Corvin')]);
     });
 
+    // Fix round 1: the same shape said in plain words, no link: the full name "Corvin Tash" holds "Corvin", and only
+    // the longer name counts; a lone "Corvin" later in the line is the other man.
+    it(`F2: a full name said without a link names only that person; the short name alone names the other${tag}`, () => {
+      const dir = open({ crlf });
+      put(dir, npc('Corvin'), '---\nname: Corvin\ntype: npc\n---\n\nAn old ferryman.\n');
+      const LINE = '- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n';
+      const peopleOn = (line, re) => {
+        edit(dir, W14, (t) => t.replace(LINE, line));
+        const card = readRecord(dir, session()).record.cards.find((c) => c.items.some((i) => re.test(i.md)));
+        edit(dir, W14, (t) => t.replace(line, LINE));
+        return card.people;
+      };
+      const one = peopleOn('- **Unsigned notes:** Corvin Tash says the notes come from the quay.\n', /come from the quay/);
+      assert.ok(one.includes(CORVIN) && !one.includes(npc('Corvin')), JSON.stringify(one));
+      const both = peopleOn('- **The ferry:** Corvin Tash and old Corvin both want the crossing.\n', /want the crossing/);
+      assert.ok(both.includes(CORVIN) && both.includes(npc('Corvin')), JSON.stringify(both));
+    });
+
     it(`F10: an alias is not named inside another person's full name${tag}`, () => {
       const dir = open({ crlf });
       put(dir, npc('Harl Dunmore'), '---\nname: Harl Dunmore\ntype: npc\naliases: [Harl, Harl the Ferryman]\n---\n\nThe ferryman.\n');
