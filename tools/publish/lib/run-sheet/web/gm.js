@@ -990,11 +990,11 @@
   }
 
   const filedNow = () => Boolean((G.session && G.session.filed) || (G.state && G.state.filed));
-  // The title box (D2, D8): typed before the filing, the index's name once there is an index, "Filed as" once filed.
+  // The title box (D2, D8): typed before the filing, the index's name once there is an index, "Filed as:" once there is one (an index is a filed session, Task 12, F7).
   function titleHTML() {
     const ses = G.session || {};
-    if (filedNow() && ses.filed) return `<div class="rtitle" id="rfiled"><span class="muted">Filed as</span> <b>${esc(ses.title || ses.label || '')}</b></div>`;
-    if (ses.index) return `<div class="rtitle" id="rindex"><span class="muted">Named by session-prep:</span> <b>${esc(ses.title || stem(ses.index))}</b></div>`;
+    if (filedNow() && ses.filed) return `<div class="rtitle" id="rfiled"><span class="muted">Filed as:</span> <b>${esc(ses.title || ses.label || '')}</b></div>`;
+    if (ses.index) return `<div class="rtitle" id="rindex"><span class="muted">Filed as:</span> <b>${esc(ses.title || stem(ses.index))}</b></div>`;
     if (filedNow()) return '<div class="rtitle"><span class="muted">Filing…</span></div>';
     const v = G.ui.titleDraft != null ? G.ui.titleDraft : (G.state.title || '');
     // while the filing runs the box holds what it was filed with, read-only, and says so beside it (Task 11b, F3)

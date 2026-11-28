@@ -308,7 +308,7 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await page.click('#hjot');
         await page.type('The crew lands at Dock Row.');
         await page.key('Enter');
-        await page.waitFor('/Filed as Session 15 - The Lamp Fair/.test((document.getElementById("rfiled") || {}).textContent || "")');
+        await page.waitFor('/Filed as: Session 15 - The Lamp Fair/.test((document.getElementById("rfiled") || {}).textContent || "")');
         assert.strictEqual(await page.evaluate('document.getElementById("rtitle")'), null, 'the box is gone once filed');
         assert.strictEqual(run.filer.calls.length, 1);
         assert.ok(run.filer.calls[0].includes('--title=The Lamp Fair'), JSON.stringify(run.filer.calls[0]));
@@ -465,14 +465,13 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
       });
     });
 
-    it(`a Session 15 that session-prep filed is named, read-only (${width})`, async () => {
+    it(`a Session 15 that session-prep filed says Filed as, read-only (${width})`, async () => {
       const run = await startRec({ prepped: 'Session 15 - The Lamp Fair' });
       await withPage({ width, height: HEIGHT }, async (page) => {
         await page.goto(`${run.base}?probe=1`);
         await settled(page);
         assert.strictEqual(await page.evaluate('document.getElementById("rtitle")'), null, 'no title box');
-        assert.strictEqual(await page.evaluate('document.getElementById("rindex").textContent.replace(/\\s+/g, " ").trim()'), 'Named by session-prep: Session 15 - The Lamp Fair');
-        assert.doesNotMatch(await page.evaluate('document.querySelector(".rtop").textContent'), /Filed as/);
+        assert.strictEqual(await page.evaluate('document.getElementById("rindex").textContent.replace(/\\s+/g, " ").trim()'), 'Filed as: Session 15 - The Lamp Fair');
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
@@ -781,7 +780,7 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         await page.click('#rtitle');
         await page.type('Late');
         assert.strictEqual(await page.evaluate('document.getElementById("rtitle").value'), '');
-        await page.waitFor('/Filed as Session 15 - 29 Nov 2026/.test((document.getElementById("rfiled") || {}).textContent || "")', 5000);
+        await page.waitFor('/Filed as: Session 15 - 29 Nov 2026/.test((document.getElementById("rfiled") || {}).textContent || "")', 5000);
         assert.strictEqual(await page.evaluate('document.getElementById("rfiling")'), null);
         assert.strictEqual(run.filer.calls.length, 1);
         assert.ok(run.filer.calls[0].includes('--title=29 Nov 2026'), JSON.stringify(run.filer.calls[0]));

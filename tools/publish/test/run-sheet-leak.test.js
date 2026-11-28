@@ -1699,7 +1699,7 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
           await page.click('#hjot');
           await page.type('The crew lands at Dock Row.');
           await page.key('Enter');
-          await page.waitFor('/Filed as Session 15/.test((document.getElementById("rfiled") || {}).textContent || "")');
+          await page.waitFor('/Filed as: Session 15/.test((document.getElementById("rfiled") || {}).textContent || "")');
           await settled();
           await look(); noWord('the jot and the filing');
           await page.sleep(300);
