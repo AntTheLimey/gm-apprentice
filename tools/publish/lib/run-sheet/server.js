@@ -218,7 +218,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   // the vault said no, so it is tried again on the GM's next action, never on the timer.
   // A filing over its time is stopped. On POSIX it gets SIGINT first, which Python raises as KeyboardInterrupt, so the
   // batch rolls back (vault_write.apply); SIGTERM ends Python with no rollback, so it is sent only if the child is still
-  // alive a second later (Task 12, F4), and SIGKILL a second after that. The filing ends when the child does. Windows has no SIGINT to send: kill() as before.
+  // alive a second later (Task 12, F4), and SIGKILL a second after that. The filing ends when the child does. Windows
+  // has no SIGINT to send: kill() as before.
   const timeoutMs = deps.fileLogTimeoutMs || FILE_LOG_TIMEOUT_MS;
   const graceMs = deps.fileLogGraceMs || FILE_LOG_GRACE_MS;
   const runFileLog = deps.runFileLog || ((cmd) => new Promise((resolve) => {
