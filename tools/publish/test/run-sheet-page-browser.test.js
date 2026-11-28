@@ -1031,6 +1031,13 @@ describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browser
         assert.strictEqual(await mark(), 'missed', 'the other button changes it');
         await tap(page, `${li} [data-ptalt="missed"]`);
         assert.strictEqual(await mark(), '', 'the same button again clears it');
+        // CodeRabbit #895: Enter on a button keeps the focus on that button of that point through the redraw
+        for (const m of ['overtaken', 'missed']) {
+          await page.evaluate(`document.querySelector('${li} [data-ptalt="${m}"]').focus()`);
+          await page.key('Enter');
+          assert.strictEqual(await mark(), m);
+          await page.waitFor(`(() => { const a = document.activeElement; return Boolean(a) && a.dataset.ptalt === '${m}' && a.dataset.ptkey === ${JSON.stringify(pt.key)}; })()`, 2000);
+        }
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });

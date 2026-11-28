@@ -704,7 +704,7 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire', 'data-wpick', 'data-wback'];
+    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-ptfocus', 'data-hand', 'data-stop', 'data-fire', 'data-wpick', 'data-wback'];
     for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
@@ -1258,7 +1258,7 @@
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
   const PT_TITLE = { '': 'Not marked. Click: landed ✓', landed: 'Landed ✓. Click: clear', missed: 'Tried and missed ✗. Click: clear', overtaken: 'Overtaken ⊘. Click: clear' };
   const PT_ALT = [['missed', '✗', 'Tried and missed'], ['overtaken', '⊘', 'Overtaken']];
-  const ptAltHTML = (p, b, st) => `<span class="ptalt">${PT_ALT.map(([m, sym, words]) => `<button type="button" class="mini ${st === m ? 'on' : ''}" data-ptalt="${m}" data-ptkey="${esc(p.key)}" data-beat="${esc(b.key)}" aria-pressed="${st === m}" title="${st === m ? `${words} ${sym}. Click: clear` : `${words} ${sym}`}" aria-label="${words}">${sym}</button>`).join('')}</span>`;
+  const ptAltHTML = (p, b, st) => `<span class="ptalt">${PT_ALT.map(([m, sym, words]) => `<button type="button" class="mini ${st === m ? 'on' : ''}" data-ptalt="${m}" data-ptkey="${esc(p.key)}" data-ptfocus="${esc(`${p.key}:${m}`)}" data-beat="${esc(b.key)}" aria-pressed="${st === m}" title="${st === m ? `${words} ${sym}. Click: clear` : `${words} ${sym}`}" aria-label="${words}">${sym}</button>`).join('')}</span>`;
 
   function beatHTML(b, d) {
     const lbl = b.contingency ? 'If triggered' : b.newPlace ? 'New place (typed tonight)' : b.placeBeat ? 'Place' : b.impro ? 'Improvised' : (b.place ? esc(nameOf(b.place)) : esc(b.placeText || ''));
