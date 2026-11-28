@@ -801,6 +801,27 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.deepStrictEqual(r.world.clocks, ['Nothing new, but the bell rings at dusk.']);
     });
 
+    // Task 12, F2: a bold nothing-heading keeps its item when the rest turns against it (still, except, but…) about a note
+    // it links or a person or place it names: that rest is a live fact, and the item stays, heading and all. A gloss of
+    // why nothing is open drops, even one that names people (Snowbound's shape: "The dragon is dead, … [[Sister X]]").
+    it(`F2: a bold nothing-heading over a live fact keeps the item; over a gloss it drops${tag}`, () => {
+      const keep = ['**Nothing new.** Except Odalys still wants the ledger back.',
+        '**No threats.** The guild still watches [[Dock Row]].',
+        '**Nothing pending.** But the Marrow Market opens at dawn.'];
+      const drop = ['**None left open by the quay.** The lamp is lit again and the guild has gone quiet.',
+        '**None left open by the story.** The safe is shut, Corvin is mended and [[Harl Brannock]] has closed the case.',
+        '**No threats.** But the bell still rings at dusk.'];
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+        `${[...keep, ...drop].map((k) => `- ${k}`).join('\n')}\n`)
+        .replace(/- \*\*Active threats:\*\*.*\n/, '- **Active threats:** **No threats.** The guild still watches [[Dock Row]].\n'));
+      const r = readRecord(dir, session()).record;
+      const all = r.cards.flatMap((c) => c.items.map((i) => i.md));
+      for (const k of keep) assert.ok(all.includes(k), `${k} stays: ${all.join(' | ')}`);
+      for (const d of drop) assert.ok(!all.includes(d), `${d} drops: ${all.join(' | ')}`);
+      assert.deepStrictEqual(r.world.threats, ['**No threats.** The guild still watches [[Dock Row]].']);
+    });
+
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Q.R.L. Council marches on the Harbour Festival Grounds at noon. The bell rings at dusk.\n'));

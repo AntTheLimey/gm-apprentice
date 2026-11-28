@@ -71,11 +71,19 @@ const nothingPhrase = (s) => {
   if (NOTHING_WORD.test(t)) return true;
   return !MORE.test(t) && (NOTHING_OPEN.test(t) || NO_KIND.test(t));
 };
-const isNothing = (s) => {
+// Words by which the text after an all-clear heading turns against it ("**Nothing new.** Except Odalys still wants…").
+const AGAINST = /\b(?:still|except|but|yet|save|unless|besides|apart from|other than|though|however)\b/i;
+// `live(rest)`: whether the text after a bold nothing-heading links a note or names a known person or place (Task 12,
+// F2). Such an item stays, heading and all, when the rest also turns against the heading: "**No threats.** The Guild
+// still watches [[Dock Row]]" is a live fact. A rest that only glosses why nothing is open drops, people and all
+// ("**None left open by the story.** The dragon is dead, … the order has chosen [[Sister X]].").
+const isNothing = (s, live = null) => {
   const t = String(s || '').trim();
   if (nothingPhrase(t)) return true;
   const head = /^\*\*([^*]+)\*\*/.exec(t);
-  return Boolean(head) && nothingPhrase(head[1]);
+  if (!head || !nothingPhrase(head[1])) return false;
+  const rest = t.slice(head[0].length);
+  return !(live && AGAINST.test(stripMd(rest)) && live(rest));
 };
 const stripComments = (s) => nl(s).replace(/<!--[\s\S]*?-->/g, '');
 // Text read as prose: comments gone, placeholder paragraphs gone, blank edges trimmed.
@@ -85,7 +93,7 @@ const sectionText = (body, level, re) => {
   const hit = pt.sections(body, level).find((s) => re.test(s.title));
   return hit ? hit.text : '';
 };
-const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.trim()).filter((t) => !isPlaceholder(t) && !isNothing(t));
+const bulletsOf = (text, live) => pt.bullets(stripComments(text)).map((b) => b.text.trim()).filter((t) => !isPlaceholder(t) && !isNothing(t, live));
 
 // A sentence end: a stop and a space, but never the dot after a lone capital ("Q.R.L. Council", "J. Smith"), which is
 // an initialism's or an initial's, not a sentence's end (Task 11b, F1).
@@ -99,7 +107,7 @@ const CARRIED = /\bcarried\s+forward\b|\bcarried\s+on\s+to\b|\bcarried\s+on\s+(?
 const CLOSURE = /(?:^|(?:^|\s)[—–-]\s*|\()closed:\s*([\s\S]*)$/i;
 // One World State label's items, word for word (Task 11b, F5 and F9): the line's own words and each nested bullet, a
 // wrapped line joined to the one above. What the page shows.
-function labelRaw(text, name) {
+function labelRaw(text, name, live) {
   const lines = nl(text).split('\n');
   const want = low(name);
   const at = lines.findIndex((l) => { const m = pt.LABEL.exec(l); return m && low(m[1]) === want; });
@@ -112,11 +120,11 @@ function labelRaw(text, name) {
     else if (/^\s+\S/.test(lines[i])) parts[parts.length - 1] += ` ${lines[i].trim()}`;
     else break;
   }
-  return parts.map((p) => p.trim()).filter((p) => !isPlaceholder(p) && !isNothing(p));
+  return parts.map((p) => p.trim()).filter((p) => !isPlaceholder(p) && !isNothing(p, live));
 }
 // The same items split on sentence ends and `;`, for the lead card's search only: never shown re-joined.
-const labelItems = (text, name) => labelRaw(text, name).flatMap((p) => p.split(ITEM_BREAK))
-  .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p) && !isNothing(p));
+const labelItems = (text, name, live) => labelRaw(text, name, live).flatMap((p) => p.split(ITEM_BREAK))
+  .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p) && !isNothing(p, live));
 // A World line as the record wrote it: one item on the label's line, several as nested bullets.
 const worldLine = (label, items) => {
   if (!items.length) return '';
@@ -193,6 +201,24 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
     if (at && loc[at]) peopleAt[p] = at;
   }
 
+  // People: NPC and creature notes. A full name, an alias or a link always names one; a first name or surname only when no
+  // other NPC note shares that word. Inside a longer match it names nobody (namedIn: the longest match wins).
+  const npcs = index.notes().filter((n) => PEOPLE_TYPES.has(typeOf(n)));
+  const partsOf = (n) => nameOf(n).split(/\s+/).filter(Boolean);
+  const wordOwners = new Map();
+  for (const n of npcs) for (const w of new Set([...partsOf(n), ...stemOf(n).split(/\s+/)].map(low))) wordOwners.set(w, (wordOwners.get(w) || 0) + 1);
+  const namesFor = (n) => {
+    const ps = partsOf(n);
+    const single = ps.length > 1 ? [ps[0], ps[ps.length - 1]].filter((w) => w.length >= 3 && wordOwners.get(low(w)) === 1) : [];
+    return { note: n, whole: namesOf(n), single };
+  };
+  const npcNames = npcs.map(namesFor);
+  const peopleOf = (md) => namedIn(md, npcNames, (n) => PEOPLE_TYPES.has(typeOf(n)));
+  // Task 12, F2: the rest of a bold nothing-heading is live when it links a note, or names a person or a place by name.
+  const placeNames = Object.keys(loc).map((n) => ({ note: n, whole: namesOf(n) }));
+  const live = (rest) => pt.links(rest).some((t) => index.resolve(t)) || peopleOf(rest).length > 0
+    || namedIn(rest, placeNames, isPlace).length > 0;
+
   const label = given.number !== null && given.number !== undefined ? `Session ${given.number}` : (given.title || 'Session');
   const sessions = listSessions(vaultPath, { deps, index });
   const afterSession = given.after ? sessions.find((s) => s.index === given.after) : null;
@@ -215,16 +241,16 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   // World: the World State's labelled bullets
   const gm = sectionText(wrapBody, 2, /^gm notes$/i) || wrapBody;
   const worldText = stripComments(sectionText(gm, 3, /^world state$/i));
-  const locItems = labelRaw(worldText, 'Location');
+  const locItems = labelRaw(worldText, 'Location', live);
   const worldLoc = placesIn(locItems.join('\n'))[0] || null;
   // the In-game date's items, one per line (fix round 1): never joined into one sentence
-  const dateItems = labelRaw(worldText, 'In-game date');
+  const dateItems = labelRaw(worldText, 'In-game date', live);
   const date = dateItems.join('\n');
-  const threats = labelRaw(worldText, 'Active threats');
-  const clocks = labelRaw(worldText, 'Ticking clocks');
+  const threats = labelRaw(worldText, 'Active threats', live);
+  const clocks = labelRaw(worldText, 'Ticking clocks', live);
   // the lead card searches these: each item split on sentence ends and `;`
-  const threatItems = labelItems(worldText, 'Active threats');
-  const clockItems = labelItems(worldText, 'Ticking clocks');
+  const threatItems = labelItems(worldText, 'Active threats', live);
+  const clockItems = labelItems(worldText, 'Ticking clocks', live);
   const world = {
     date, location: worldLoc, threats, clocks,
     md: [
@@ -263,7 +289,7 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   // Coming up
   const carries = sectionText(gm, 3, /^what carries forward$/i);
   const handoff = handoffText;
-  const intentions = bulletsOf(sectionText(carries, 4, /^player-stated intentions$/i));
+  const intentions = bulletsOf(sectionText(carries, 4, /^player-stated intentions$/i), live);
   const comingUp = { handoff, intentions, lead: null, empty: null };
   if (!wrapUp) comingUp.empty = 'No record yet: nothing is coming up.';
   else if (!handoff) comingUp.empty = 'The last Wrap-Up has no Handoff yet.';
@@ -311,7 +337,7 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
 
   // Possible scenes: the open items of the last Wrap-Up (rounds 8 and 9). Cards come only from Unresolved Threads, NPCs
   // Needing Follow-Up and Player-Stated Intentions; PC Carry-Forward never makes one.
-  const sectionBullets = (re) => bulletsOf(sectionText(carries, 4, re));
+  const sectionBullets = (re) => bulletsOf(sectionText(carries, 4, re), live);
   const doneLines = nl(sectionText(gm, 3, /^keeper checklist$/i)).split('\n').filter((l) => /^\s*[-*+]\s*\[x\]/i.test(l)).map(wordSet);
   // A ticked line drops at most one open item: the one sharing the most words with it (three or more). On a tie it drops
   // nothing: keeping a finished item costs a glance, dropping a live one loses it.
@@ -337,19 +363,6 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
     }
   }
 
-  // People: NPC and creature notes. A full name, an alias or a link always names one; a first name or surname only when no
-  // other NPC note shares that word. Inside a longer match it names nobody (namedIn: the longest match wins).
-  const npcs = index.notes().filter((n) => PEOPLE_TYPES.has(typeOf(n)));
-  const partsOf = (n) => nameOf(n).split(/\s+/).filter(Boolean);
-  const wordOwners = new Map();
-  for (const n of npcs) for (const w of new Set([...partsOf(n), ...stemOf(n).split(/\s+/)].map(low))) wordOwners.set(w, (wordOwners.get(w) || 0) + 1);
-  const namesFor = (n) => {
-    const ps = partsOf(n);
-    const single = ps.length > 1 ? [ps[0], ps[ps.length - 1]].filter((w) => w.length >= 3 && wordOwners.get(low(w)) === 1) : [];
-    return { note: n, whole: namesOf(n), single };
-  };
-  const npcNames = npcs.map(namesFor);
-  const peopleOf = (md) => namedIn(md, npcNames, (n) => PEOPLE_TYPES.has(typeOf(n)));
   for (const it of items) {
     it.links = uniq(pt.links(it.md).map((x) => index.resolve(x)).filter(Boolean));
     it.people = peopleOf(it.md);
