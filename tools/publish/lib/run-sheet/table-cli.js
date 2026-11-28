@@ -7,7 +7,7 @@ const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn: nodeSpawn, spawnSync: nodeSpawnSync, execFile } = require('node:child_process');
-const { listSessions, pickSession, stateIdOf } = require('./sessions');
+const { listSessions, pickSession, stateFileFor, noPlanIdOf } = require('./sessions');
 const { createTableServer, listenLocal } = require('./server');
 const { lockHolder, inCloudOnly } = require('./store');
 const { siteFileNamedBy } = require('../settings/site-tool');
@@ -243,19 +243,34 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   const busy = await checkPort(port);
   if (busy) return refuse(await busyMessage(port, busy, deps));
   // One server per session: another one (on another port) would write the same state and Table Log.
-  const stateFile = path.join(vaultPath, '_meta', 'table', `${stateIdOf(chosen)}.json`);
+  const { file: stateFile, stateId } = stateFileFor(vaultPath, chosen);
   const hello = deps.hello || defaultHello;
-  const holder = await lockHolder(stateFile, { hello });
+  // A session prep filed with a Plan while a no-Plan sheet had it open: that sheet holds the number-named lock, and may
+  // have saved nothing yet (CodeRabbit #895). Its lock is asked too, so the session never has two sheets.
+  const numbered = chosen.plan && chosen.number !== null && chosen.number !== undefined ? path.join(path.dirname(stateFile), `${noPlanIdOf(chosen)}.json`) : null;
+  const lockedNow = async () => (await lockHolder(stateFile, { hello })) || (numbered && numbered !== stateFile ? await lockHolder(numbered, { hello }) : null);
+  const holder = await lockedNow();
   if (holder) return refuse(lockedMessage(chosen.label, holder));
   // A saved state iCloud has taken off this computer would read as none: the sheet would start empty.
   if ((deps.inCloud || inCloudOnly)(stateFile)) return refuse(inCloudMessage(chosen.label, vaultPath, stateFile));
 
   if (pick) {
-    const stateId = stateIdOf(chosen);
-    if (json) out(JSON.stringify({ ok: true, index: chosen.index, plan: chosen.plan, tableLog: chosen.tableLog, label: chosen.label, stateId, others: picked.others.map((s) => s.index) }));
-    else out(`${chosen.label}: ${chosen.index}`);
+    if (json) {
+      out(JSON.stringify({
+        ok: true, index: chosen.index, plan: chosen.plan, tableLog: chosen.tableLog, label: chosen.label, stateId,
+        // a session opened from the record: the number, chapter and date `gma table` files it under
+        fromRecord: !!chosen.fromRecord, number: chosen.number === undefined ? null : chosen.number,
+        chapter: chosen.chapter || null, after: chosen.after || null, planVault: chosen.planVault === undefined ? null : chosen.planVault,
+        playDate: chosen.playDate || null,
+        others: picked.others.map((s) => s.index),
+      }));
+    } else out(`${chosen.label}: ${chosen.index || 'not filed yet'}`);
     return 0;
   }
+
+  // The array form files a Table Log for an index that is there; a session not filed yet needs the form that files it
+  // too, or every action would fail (CodeRabbit #895).
+  if (!chosen.index && Array.isArray(fileLog)) return refuse(`${chosen.label} is not in the vault yet, and this --file-log only files a Table Log for a session that is: update gma (gma update), then start it with \`gma table\`.`);
 
   if (picked.others.length) out(`Also in progress: ${picked.others.map((s) => s.label).join(', ')}. Running ${chosen.label}; name another with --session.`);
 
@@ -272,17 +287,21 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
     if (!res.ok) out(res.why === 'timeout' ? `Flush took over 20 s and was stopped: ${TAIL}` : `Flush failed (${res.why}): ${TAIL}`);
   }
 
-  if (!chosen.tableLog) {
+  if (!chosen.index) {
+    // a session from the record that is not in the vault yet: it is filed with its Table Log (Task 7)
+    out(fileLog ? `${chosen.label} is not in the vault yet: it is filed with its Table Log on the first thing that happens at the table, so a look leaves nothing.`
+      : `${chosen.label} is not in the vault yet: start it with \`gma table\` to have it filed and the record written.`);
+  } else if (!chosen.tableLog) {
     out(fileLog ? 'No Table Log yet: it is filed on the first thing that happens at the table, so a look leaves nothing.'
       : 'No Table Log note yet: start it with `gma table` to have the record written.');
   }
 
   // Asked again: another start may have taken the session while this one flushed.
-  const late = await lockHolder(stateFile, { hello });
+  const late = await lockedNow();
   if (late) return refuse(lockedMessage(chosen.label, late));
 
   let app;
-  try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, fileLog, deps: deps.server }); } catch (e) {
+  try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, stateFile, stateId, fileLog, deps: deps.server }); } catch (e) {
     if (e.code === 'LOCKED') return refuse(lockedMessage(chosen.label, e));
     if (e.code === 'IN_CLOUD') return refuse(inCloudMessage(chosen.label, vaultPath, e.file));
     throw e;
@@ -297,7 +316,8 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   const model = await fetchModel(bound);
   if (model.status !== 200) {
     await app.close();
-    return refuse(`The Plan for ${chosen.label} cannot be read: ${(model.body && model.body.error) || 'no answer'}`);
+    const what = chosen.plan ? 'The Plan' : 'The record';
+    return refuse(`${what} for ${chosen.label} cannot be read: ${(model.body && model.body.error) || 'no answer'}`);
   }
 
   out(`Run sheet for ${chosen.title}: ${url}`);

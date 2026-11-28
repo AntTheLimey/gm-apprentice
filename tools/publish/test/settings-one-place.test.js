@@ -355,10 +355,12 @@ test('a build step is run only by the steps module', () => {
   assert.equal((serveSrc.match(/\bspawn(?:Sync)?\)?\(/g) || []).length, 1, 'serve.js: one call');
   assert.match(serveSrc, /\(deps\.spawn \|\| spawn\)\(process\.execPath, args,/);
   assert.match(serveSrc, /const args = \[bin, 'serve', '--site', site, '--port', String\(port\), '--config', path\.resolve\(configPath\)\];/);
-  // server.js starts exactly one process, the --file-log command, with no shell.
+  // server.js starts exactly one process, the --file-log command, with no shell. Changed on purpose (no-Plan Task 7,
+  // D9): it is `spawn` now, not `spawnSync`, so the server answers while the filing runs.
   const serverSrc = code(path.join(ROOT, 'lib', 'run-sheet', 'server.js'));
-  assert.equal((serverSrc.match(/\bspawnSync\(/g) || []).length, 1, 'server.js: one call');
-  assert.match(serverSrc, /spawnSync\(cmd\[0\], cmd\.slice\(1\), \{ encoding: 'utf8', windowsHide: true/);
+  assert.equal((serverSrc.match(/\bspawn(?:Sync)?\(/g) || []).length, 1, 'server.js: one call');
+  assert.match(serverSrc, /spawn\(cmd\[0\], cmd\.slice\(1\), \{ windowsHide: true, stdio: \['ignore', 'pipe', 'pipe'\] \}\)/);
+  assert.doesNotMatch(serverSrc, /\bshell\s*:/, 'server.js: no shell');
   // site-tool.js starts exactly one process: this tool, to ask update-pin about the site.
   const spawns = code(path.join(SETTINGS, 'site-tool.js')).match(/\bspawnSync\(/g) || [];
   assert.equal(spawns.length, 1, 'site-tool.js: one call');

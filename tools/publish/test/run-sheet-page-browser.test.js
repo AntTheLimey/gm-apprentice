@@ -746,13 +746,10 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       const northKey = model.placeKeys[NORTH];
       assert.strictEqual(s.positions[ADA].beat, northKey);
       await page.waitFor(`document.querySelector('${beat(northKey)}')`);
-      // a name no place has: Enter makes nothing; the explicit choice makes the new place
+      // a name no place has: the explicit choice makes the new place. Changed on purpose (Task 9, audit S6): Enter here
+      // used to make nothing (final review P-S10); now Enter makes it too, and the S6 test below pins that
       await page.click(`${beat(northKey)} input[data-moveg]`);
       await page.type('Rusty Anchor');
-      await page.key('Enter');
-      await page.sleep(200);
-      s = await stateOf(run);
-      assert.ok(!s.improvised.some((i) => i.newPlace), 'Enter never makes a new place');
       await page.waitFor(`document.querySelector('${beat(northKey)} [data-movenew]')`);
       await page.click(`${beat(northKey)} [data-movenew]`);
       await settled(page);
@@ -954,4 +951,294 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       assert.deepStrictEqual((await probe(page)).errors, []);
     });
   });
+});
+
+// Task 9: the frustration audit's items on the Plan sheet (docs/superpowers/plans/2026-11-22-run-sheet-no-plan-ux-audit.md),
+// each named by its number, by real input only (held clicks, key events, insertText), at 1449, 1280 and 1100 wide, 762 high.
+describe('the audit\'s frustrations on the Plan sheet (Task 9)', { skip: browserSkip() }, () => {
+  const WIDTHS = [1449, 1280, 1100];
+  const PLAN = path.join('Chapters', 'Chapter 1', 'Sessions', 'Session 02', 'Session 02 - The Test - Plan.md');
+  // the fixture with `edit(vault)` applied to a copy first
+  async function startApp(edit) {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-src-'));
+    made.push(src);
+    fs.cpSync(FIXTURE, src, { recursive: true });
+    if (edit) edit(src);
+    return start(src, 'Session 02 - The Test');
+  }
+  const tap = async (page, sel) => {
+    const r = await page.click(sel);
+    assert.ok(r.inView && r.hit, `click ${sel}: ${JSON.stringify(r)}`);
+    return r;
+  };
+
+  for (const width of WIDTHS) {
+    // S5: a Scene cell that is a link (Dead Air's shape) read "Page Two ([[The Loop]])"
+    it(`S5: Hand over shows plain names, never [[ (${width})`, async () => {
+      const run = await startApp((vault) => {
+        const f = path.join(vault, PLAN);
+        const t = fs.readFileSync(f, 'utf8');
+        const row = "| [[Ash's Note]] | Scene 1 | to build | What Ash passes down the wall |";
+        assert.ok(t.includes(row));
+        fs.writeFileSync(f, t.replace(row, "| [[Ash's Note]] | [[The Gate]] | to build | What Ash passes down the wall |\n| Dock ledger | [[Nowhere Hall]] | to build | names the night crew |"));
+      });
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const text = await page.evaluate('document.getElementById("handover").innerText');
+        assert.ok(!text.includes('[['), `no link marks: ${text}`);
+        assert.match(text, /Ash's Note \(The Gate\)/);
+        assert.match(text, /Dock ledger \(Nowhere Hall\)/);
+        // the scene's place opens in the drawer, as the handout's own name does
+        await tap(page, '#handover a[data-note="Locations/The Gate.md"]');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Gate"');
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // S7: the box cycled landed, missed, overtaken, clear: three more clicks to undo a mistake, and only the 30 px box
+    // took the click
+    it(`S7: a point marked by mistake goes back with one click, and its words take the click (${width})`, async () => {
+      const run = await startApp();
+      const { model } = await api(run, 'GET', '/api/model');
+      const b = model.beats.find((x) => (x.points || []).length);
+      const pt = b.points[0];
+      const li = `${beatSel(b.key)} ul.pts li:first-child`;
+      const mark = async () => { await settled(page0); const s = (await api(run, 'GET', '/api/state')).state; return (s.points[pt.key] || {}).mark || ''; };
+      let page0;
+      await withPage({ width, height: 762 }, async (page) => {
+        page0 = page;
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `${li} .ptb[data-pt]`);
+        assert.strictEqual(await mark(), 'landed');
+        await tap(page, `${li} .ptb[data-pt]`);
+        assert.strictEqual(await mark(), '', 'a second click on the same mark clears it');
+        // the words take the click as well as the box
+        await tap(page, `${li} .pt-t`);
+        assert.strictEqual(await mark(), 'landed', 'a click on the words marks it');
+        await tap(page, `${li} .pt-t`);
+        assert.strictEqual(await mark(), '', 'and a second one clears it');
+        // missed and overtaken have their own buttons; one click on the box, or on the same button, clears either
+        await tap(page, `${li} [data-ptalt="missed"]`);
+        assert.strictEqual(await mark(), 'missed');
+        assert.strictEqual(await page.evaluate(`document.querySelector('${li} .ptb[data-pt]').textContent`), '✗');
+        await tap(page, `${li} .ptb[data-pt]`);
+        assert.strictEqual(await mark(), '', 'one click on the box clears a missed mark');
+        await tap(page, `${li} [data-ptalt="overtaken"]`);
+        assert.strictEqual(await mark(), 'overtaken');
+        await tap(page, `${li} [data-ptalt="missed"]`);
+        assert.strictEqual(await mark(), 'missed', 'the other button changes it');
+        await tap(page, `${li} [data-ptalt="missed"]`);
+        assert.strictEqual(await mark(), '', 'the same button again clears it');
+        // CodeRabbit #895: Enter on a button keeps the focus on that button of that point through the redraw
+        for (const m of ['overtaken', 'missed']) {
+          await page.evaluate(`document.querySelector('${li} [data-ptalt="${m}"]').focus()`);
+          await page.key('Enter');
+          assert.strictEqual(await mark(), m);
+          await page.waitFor(`(() => { const a = document.activeElement; return Boolean(a) && a.dataset.ptalt === '${m}' && a.dataset.ptkey === ${JSON.stringify(pt.key)}; })()`, 2000);
+        }
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // S8: the drawer stayed open over the players' column and the sheet's right edge until Esc or Close
+    it(`S8: a click on the sheet outside the drawer closes it (${width})`, async () => {
+      const run = await startApp();
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        const open = () => page.evaluate('document.getElementById("drawer").classList.contains("open")');
+        await tap(page, '#brief a.lk[data-note]');
+        await page.waitFor('document.querySelector("#drawer.open h2")');
+        // the drawer slides in (0.18 s): a hand waits for it to stop
+        await page.waitFor('Math.round(document.getElementById("drawer").getBoundingClientRect().right) === innerWidth');
+        await page.sleep(250);
+        // a click inside the drawer keeps it
+        await tap(page, '#drawer h2');
+        assert.strictEqual(await open(), true, 'a click inside keeps it open');
+        // another note's link opens that note
+        const r = await page.click('#handover a.lk[data-note]', { offsetX: 4 });
+        assert.ok(r.inView && r.hit, JSON.stringify(r));
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "Ash\'s Note"');
+        // a click on the sheet, left of the drawer
+        const h = await page.click('#pcs h2', { offsetX: 6 });
+        assert.ok(h.inView && h.hit, `the heading is clear of the drawer: ${JSON.stringify(h)}`);
+        await page.waitFor('!document.getElementById("drawer").classList.contains("open")', 2000);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // S8, fix round 1: a held press on a button outside the open drawer closes it, and the button still acts
+    it(`S8: with the drawer open, Show and Fight here outside it close it and act (${width})`, async () => {
+      const run = await startApp();
+      const { model } = await api(run, 'GET', '/api/model');
+      const gate = model.beats[0];
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `${beatSel(gate.key)} [data-all]`);
+        await settled(page);
+        const openDrawer = async () => {
+          await tap(page, '#brief a.lk[data-note]');
+          await page.waitFor('document.querySelector("#drawer.open h2")');
+          await page.waitFor('Math.round(document.getElementById("drawer").getBoundingClientRect().right) === innerWidth');
+          await page.sleep(250);
+        };
+        const closed = () => page.waitFor('!document.getElementById("drawer").classList.contains("open")', 2000);
+        await openDrawer();
+        await tap(page, `${beatSel(gate.key)} .bbtns [data-showbeat]`);
+        await closed();
+        await settled(page);
+        const s = (await api(run, 'GET', '/api/state')).state;
+        assert.ok(Object.values(s.panels || {}).some((x) => (x.people || []).length), `Show acted: ${JSON.stringify(s.panels)}`);
+        await openDrawer();
+        // a Fight here clear of the drawer: the first place tile's (a beat's own sits under the drawer at 1100)
+        await tap(page, '#places .place [data-fplace]');
+        await closed();
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // S6: Enter on a typed new place did nothing (only a click on "+ New place" made it), and an empty box said nothing
+    it(`S6: Enter in Move them makes a typed new place; with nothing typed it says why beside the box (${width})`, async () => {
+      const run = await startApp();
+      const { model } = await api(run, 'GET', '/api/model');
+      const gate = model.beats[0];
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `${beatSel(gate.key)} [data-all]`);
+        await settled(page);
+        const box = `${beatSel(gate.key)} input[data-moveg]`;
+        await tap(page, box);
+        await page.key('Enter');
+        const say = `${beatSel(gate.key)} .movebox [data-movesay]`;
+        await page.waitFor(`(document.querySelector('${say}') || {}).textContent === 'Type a place, or pick one from the list'`, 2000);
+        const r = await page.evaluate(`(() => { const e = document.querySelector('${say}').getBoundingClientRect(); const b = document.querySelector('${box}').getBoundingClientRect();
+          return { inView: e.top >= 0 && e.bottom <= innerHeight && e.left >= 0 && e.right <= innerWidth && e.width > 0, near: Math.abs(e.top - b.bottom) < 40 }; })()`);
+        assert.deepStrictEqual(r, { inView: true, near: true }, `the words are beside the box, in view: ${await page.evaluate(`JSON.stringify(document.querySelector('${say}').getBoundingClientRect())`)}`);
+        let s = (await api(run, 'GET', '/api/state')).state;
+        assert.ok(Object.values(s.positions).every((x) => x.beat === gate.key), 'nobody moved');
+        // typing takes the words away; Enter on a name no place has makes it
+        await page.type('Rusty Anchor');
+        assert.strictEqual(await page.evaluate(`document.querySelector('${say}').textContent`), '');
+        await page.key('Enter');
+        await settled(page);
+        s = (await api(run, 'GET', '/api/state')).state;
+        const typed = s.improvised.find((i) => i.newPlace);
+        assert.strictEqual(typed && typed.title, 'Rusty Anchor');
+        assert.ok(Object.values(s.positions).every((x) => x.beat === typed.key), 'both PCs went there');
+        // fix round 1: "North Gate" shares only its last word with The Gate: Enter makes the typed place, never The Gate
+        const nbox = `${beatSel(typed.key)} input[data-moveg]`;
+        await page.waitFor(`document.querySelector('${nbox}')`);
+        await tap(page, nbox);
+        await page.type('North Gate');
+        await page.waitFor(`document.querySelector('${beatSel(typed.key)} [data-movepick]')`);
+        await page.key('Enter');
+        await settled(page);
+        s = (await api(run, 'GET', '/api/state')).state;
+        const ng = s.improvised.find((i) => i.newPlace && i.title === 'North Gate');
+        assert.ok(ng, `North Gate made: ${JSON.stringify(s.improvised.map((i) => i.title))}`);
+        assert.ok(Object.values(s.positions).every((x) => x.beat === ng.key), 'both PCs went to North Gate');
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // S4: J, a line, Enter: stored at the end of the beat, 1,100 to 1,640 px below the window, and nothing said it took
+    // fix round 1 ruling: a jot never scrolls the page; the Noted line names where the jot went
+    it(`S4: a jot says "Noted under" its beat beside its box for 3 s, and never scrolls the page (${width})`, async () => {
+      const run = await startApp();
+      const { model } = await api(run, 'GET', '/api/model');
+      const gate = model.beats[0];
+      const B = beatSel(gate.key);
+      const NOTED = `Noted under ${gate.title}`;
+      await withPage({ width, height: 762 }, async (page) => {
+        const inWindow = (sel) => page.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect();
+          return r.width > 0 && r.top >= 0 && Math.round(r.bottom) <= innerHeight && r.left >= 0 && Math.round(r.right) <= innerWidth; })()`);
+        // what the GM reads stays put: the beat's heading on screen (scrollY itself may change, as the browser keeps the
+        // view steady when a line above goes, e.g. the "No Table Log" box once the first action files it)
+        const y = () => page.evaluate(`Math.round(document.querySelector('${B} h3').getBoundingClientRect().top)`);
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await tap(page, `${B} [data-all]`);
+        await settled(page);
+        // the beat's heading on screen, its jots below the window
+        const top = await page.evaluate(`document.querySelector('${B} h3').getBoundingClientRect().top`);
+        await page.wheel(600, 400, Math.round(top - 250));
+        await page.key('j');
+        await page.waitFor('document.activeElement.id === "hjot"', 2000);
+        // J leaves the page where the GM is reading (it jumped to the top)
+        const y0 = await y();
+        assert.ok(await page.evaluate('scrollY') > 0, 'scrolled down to the beat');
+        await page.type('the bell rang twice');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor(`(document.getElementById('hnoted') || {}).textContent === ${JSON.stringify(NOTED)}`, 1000);
+        assert.strictEqual(await inWindow('#hnoted'), true, 'the header\'s Noted is in view');
+        assert.strictEqual(await y(), y0, 'the page did not move');
+        await page.waitFor(`(document.getElementById('hnoted') || {}).textContent === ''`, 4000);
+        // the beat's own box, mid-window: Noted beside it, and the page stays
+        const box = await page.box(`${B} input[data-jot]`);
+        await page.wheel(600, 400, Math.round(box.top - 400));
+        const y1 = await y();
+        await tap(page, `${B} input[data-jot]`);
+        await page.type('Ash lowers the rope');
+        await page.key('Enter');
+        await settled(page);
+        await page.waitFor(`(document.querySelector('${B} .jot [data-noted]') || {}).textContent === ${JSON.stringify(NOTED)}`, 1000);
+        assert.strictEqual(await inWindow(`${B} .jot [data-noted]`), true, 'Noted beside the beat\'s box');
+        assert.strictEqual(await y(), y1, 'the page did not move');
+        const s = (await api(run, 'GET', '/api/state')).state;
+        assert.deepStrictEqual(s.jots.map((j) => j.text), ['the bell rang twice', 'Ash lowers the rope']);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // S3: no find box anywhere outside a fight; People in Plan order, 2,640 px tall at 1100
+    it(`S3: one find box over people and places, near matches, Enter and the arrows; People A to Z; no datalist (${width})`, async () => {
+      const run = await startApp();
+      await withPage({ width, height: 762 }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.querySelectorAll("datalist, input[list]").length'), 0, 'no datalist in the page');
+        const names = await page.evaluate('Array.from(document.querySelectorAll("#people tbody tr td:first-child a[data-note]"), (a) => a.textContent.trim())');
+        assert.ok(names.length >= 3, names.join(", "));
+        assert.deepStrictEqual(names, [...names].sort((a, b) => a.localeCompare(b)), 'People A to Z');
+        // keyboard-reachable: from the rail's heading, Tab passes its fold and lands in the box
+        await page.click('#rail .rhd', { offsetX: 6 });
+        await page.key('Tab');
+        await page.key('Tab');
+        assert.strictEqual(await page.evaluate('document.activeElement.id'), 'find', 'Tab reaches the find box');
+        const box = await page.evaluate('(() => { const r = document.getElementById("find").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.width > 0; })()');
+        assert.strictEqual(box, true, 'the box is on the first screen');
+        const hits = () => page.evaluate('Array.from(document.querySelectorAll("#findHits [data-findhit]"), (b) => [b.querySelector(".n").textContent, b.querySelector(".k").textContent, b.classList.contains("sel")])');
+        // case and accents never matter; a word's start finds it; people and places together, by kind
+        await page.type('GÁTE');
+        await page.waitFor('document.querySelectorAll("#findHits [data-findhit]").length > 0');
+        assert.deepStrictEqual(await hits(), [['The Gate', 'place', true], ['The Gate House', 'place', false]]);
+        // the arrows move through the hits; Enter opens the one picked in the drawer
+        await page.key('ArrowDown');
+        assert.deepStrictEqual((await hits()).map((h) => h[2]), [false, true]);
+        await page.key('Enter');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Gate House"');
+        await page.key('Escape');
+        await page.waitFor('!document.getElementById("drawer").classList.contains("open")');
+        // Enter takes the first hit; a person and a creature carry their kind
+        await page.click('#find');
+        await page.type('fro');
+        await page.waitFor('document.querySelector("#findHits [data-findhit]") && /Frost/.test(document.querySelector("#findHits [data-findhit]").textContent)');
+        assert.deepStrictEqual((await hits())[0].slice(0, 2), ['Frost Wolf', 'creature']);
+        await page.key('Enter');
+        await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "Frost Wolf"');
+        await page.key('Escape');
+        await page.click('#find');
+        await page.type('ash');
+        await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+        assert.deepStrictEqual((await hits()).map((h) => h.slice(0, 2)), [['Brother Ash', 'person']]);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+  }
 });

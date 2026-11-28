@@ -31,6 +31,7 @@ const { listSessions, pickSession, stateIdOf } = require('../lib/run-sheet/sessi
 const { readRunSheet } = require('../lib/run-sheet/read');
 const { forPlayers } = require('../lib/run-sheet/players');
 const S = require('./helpers/run-sheet-leak-script');
+const { browserSkip } = require('./helpers/browser');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-players');
 const made = [];
@@ -95,6 +96,21 @@ function stream(port, url) {
   return { events, raw: () => raw, headers: () => (resp ? resp.headers : null), close: () => { r.destroy(); if (resp) resp.destroy(); } };
 }
 
+// A players' view, read over HTTP and seen on the players' stream too, or the test fails: an error body or a stream of
+// only `hello` holds no secret and proves nothing (CodeRabbit #895). The view's text is returned.
+async function playersView(port, pstream) {
+  const r = await req(port, 'GET', '/api/players/view');
+  assert.equal(r.status, 200, r.text);
+  const v = JSON.parse(r.text);
+  assert.ok(v && typeof v.campaign === 'string' && Array.isArray(v.panels), `a players' view: ${r.text.slice(0, 200)}`);
+  const want = JSON.stringify(v);
+  await waitFor(() => {
+    const last = pstream.events.filter((e) => e.event === 'view').pop();
+    return last && JSON.stringify(JSON.parse(last.text)) === want;
+  }, "the players' stream to send that view");
+  return r.text;
+}
+
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -105,7 +121,8 @@ const clean = (line) => String(line).replace(/^#+\s*/, '').replace(/^[-*]\s+/, '
 
 // ---- the forbidden list, read from the fixture ----
 // Each entry: { text | re, short, why, control } — `short` matches on word boundaries in the views, events
-// and markup only; `control: false` for a string the GM's answers cannot hold (the temp folder).
+// and markup only; `control: false` for a string the GM's answers cannot hold (the temp folder). `plan: null` (a no-Plan
+// sheet, Task 12): the notes' own entries only, nothing read from a Plan or its beats.
 function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: sessionName = S.SESSION, figures = true } = {}) {
   const out = [];
   const add = (text, why, opts = {}) => {
@@ -115,7 +132,7 @@ function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: session
   const files = walk(vault).map((f) => path.relative(vault, f).split(path.sep).join('/'));
   const notes = files.filter((f) => f.endsWith('.md'));
   const pictures = files.filter((f) => /\.(png|jpe?g|gif|webp|svg)$/i.test(f));
-  const sessionFoes = new Set(model.beats.flatMap((b) => (b.foes || []).map((f) => f.note).concat((b.who || []).map((w) => w.note))));
+  const sessionFoes = new Set((model.beats || []).flatMap((b) => (b.foes || []).map((f) => f.note).concat((b.who || []).map((w) => w.note))));
 
   for (const rel of notes) {
     add(rel, 'a vault path');
@@ -146,7 +163,7 @@ function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: session
       const stop = rest.search(/^(?:#{2,3}\s|<!--)/m);
       const stats = stop >= 0 ? rest.slice(0, stop) : rest;
       // an ally's HP is on the players' order (decision 7), once the ally is: allowed with its name
-      const ally = model.beats.some((b) => (b.foes || []).some((f) => f.note === rel && f.ally));
+      const ally = (model.beats || []).some((b) => (b.foes || []).some((f) => f.note === rel && f.ally));
       const hp = new Set([...stats.matchAll(/\b(?:HP|Hit Points)\**\s*(\d+)/g)].map((m) => m[1]));
       for (const m of stats.matchAll(/\d{4,}/g)) add(m[0], 'a foe number (sentinel)', ally && hp.has(m[0]) ? { with: fm.name } : {});
       // `figures: false` (the CoC and GURPS blocks): a foe's small numbers are the test's own named sentinels there,
@@ -167,6 +184,7 @@ function forbiddenList(vault, model, { plan: planPath = S.PLAN, session: session
   add('Legendary', 'a foe\'s legendary counters', { short: true });
   add('Bloodied', 'a foe\'s Bloodied (no PC or ally is Bloodied in the script)', { short: true });
 
+  if (planPath === null) return out.filter((x) => x.re || x.text.length >= 4 || x.short);
   // the session's Plan: titles, each section's first line, and the beats' own words
   add(path.posix.basename(model.plan || planPath, '.md'), 'the Plan note');
   add(sessionName, 'the session\'s title');
@@ -1601,5 +1619,204 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       assert.ok(rowNamed(s, 'Iris Calder').conds.includes('Prone'));
       assert.ok(t.checked.length > 100, 'the test looked at what the players were sent');
     } finally { await t.stop(); }
+  });
+});
+
+// ---- the no-Plan sheet (plan "no-Plan run sheet" Task 10) ----
+// A record vault whose Session 14 Wrap-Up holds a secret word in its GM Notes. The sheet opens from that record,
+// and the word must never reach the players' view or their stream: not on opening, nor after Move them, Fight here,
+// a jot, or the filing (`gma table-file` faked through deps.runFileLog). Real input in the page, as the sheet's own
+// browser tests do.
+describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)', { skip: browserSkip() }, () => {
+  const { withPage } = require('./helpers/cdp');
+  const { copyRecordFixture } = require('./helpers/record-fixture');
+  const { removeFixture } = require('./helpers/systems-fixture');
+  const { stateFileFor } = require('../lib/run-sheet/sessions');
+  const WORD = 'Quillmoth-Sentinel-4417';
+  const S15 = 'Chapters/Chapter 3/Sessions/Session 15';
+  const FESTIVAL = 'Locations/Harbour Festival Grounds.md';
+  const PROBE = 'JSON.parse(document.body.dataset.probe || "null")';
+
+  for (const crlf of [false, true]) {
+    it(`a secret in the Wrap-Up's GM Notes never reaches /api/players (${crlf ? 'CRLF' : 'LF'})`, { timeout: 120000 }, async () => {
+      const vault = copyRecordFixture({ crlf });
+      made.push(vault);
+      const wrap = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
+      const text = fs.readFileSync(wrap, 'utf8').replace(/\r\n/g, '\n');
+      // The word goes where readRecord reads: the Handoff, the Ticking clocks line, an Unresolved Threads bullet and
+      // a Pending Consequences line (a bare bullet under "## GM Notes" is never read: the first version missed it).
+      const put = (t, from, to) => { assert.ok(t.includes(from), `the Wrap-Up holds ${from}`); return t.replace(from, to); };
+      let edited = text;
+      edited = put(edited, 'Odalys Venn]] is upstairs and has heard all of it.', `Odalys Venn]] is upstairs and has heard all of it. Mind the ${WORD}handoff wharf.`);
+      edited = put(edited, 'starts at midnight.', `starts at midnight, when the ${WORD}clock bell rings.`);
+      edited = put(edited, 'someone keeps slipping the crew notes with no name on them.', `someone keeps slipping the crew notes signed ${WORD}thread.`);
+      edited = put(edited, 'will blame the crew to his guild.', `will blame the crew to his guild, citing ${WORD}conseq.`);
+      fs.writeFileSync(wrap, crlf ? edited.replace(/\n/g, '\r\n') : edited);
+
+      const session = pickSession(listSessions(vault), null, vault).session;
+      assert.ok(session && session.fromRecord, 'the record gives Session 15');
+      const { file, stateId } = stateFileFor(vault, session);
+      const filed = [];
+      const runFileLog = async (cmd) => {
+        filed.push(cmd);
+        const a = cmd.find((x) => x.startsWith('--title='));
+        const stem = `Session 15 - ${a ? a.slice('--title='.length) : 'untitled'}`;
+        fs.mkdirSync(path.join(vault, S15), { recursive: true });
+        fs.writeFileSync(path.join(vault, S15, `${stem}.md`), `---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\ndocuments:\n  plan: null\n  table_log: "[[${stem} - Table Log]]"\n  wrap_up: null\n---\n\n# ${stem}\n`);
+        fs.writeFileSync(path.join(vault, S15, `${stem} - Table Log.md`), `---\ntype: session-table-log\nsession: "[[${stem}]]"\ncreated_by: run-sheet\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
+        return { ok: true, out: `CREATED\t${S15}/${stem}.md\t\tsession template\nCREATED\t${S15}/${stem} - Table Log.md\t\tthe Table Log's 18 sections, empty\n` };
+      };
+      const run = createTableServer({ vaultPath: vault, session, stateFile: file, stateId,
+        fileLog: { cmd: ['gma', 'table-file', 'VAULT', '--number', '15', '--chapter', 'Chapter 3'], takesTitle: true },
+        deps: { delayMs: 50, log: () => {}, now: () => new Date(2026, 10, 29, 20, 15), runFileLog } });
+      const port = await listenLocal(run.server, 0);
+      const base = `http://127.0.0.1:${port}/`;
+      const pstream = stream(port, '/api/players/events');
+      try {
+        const views = [];
+        const look = async () => { views.push(await playersView(port, pstream)); };
+        const noWord = (where) => {
+          for (const v of views) assert.ok(!v.toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' view holds the secret word`);
+          assert.ok(!pstream.raw().toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' stream holds the secret word`);
+        };
+        // positive control: the GM's own answer about the note does hold the word
+        const gmNote = await req(port, 'GET', `/api/note?path=${encodeURIComponent('Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md')}`);
+        assert.equal(gmNote.status, 200, gmNote.text);
+        assert.ok(gmNote.text.includes(WORD), 'the GM can read the word');
+        // the control that matters: the word is in the GM's own model, so the players' filter is what keeps it back
+        const gmModel = await req(port, 'GET', '/api/model');
+        assert.equal(gmModel.status, 200, gmModel.text);
+        for (const spot of ['handoff', 'clock', 'thread', 'conseq']) {
+          assert.ok(gmModel.text.includes(`${WORD}${spot}`), `the ${spot} marker reaches the GM's own model`);
+        }
+        await look();
+        noWord('before the page opens');
+
+        await withPage({ width: 1449, height: 762 }, async (page) => {
+          const settled = () => page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && document.getElementById('where') && p; })()`);
+          await page.goto(`${base}?probe=1`);
+          await settled();
+          await look(); noWord('opened');
+          // Fight here at the lead card's place, then end it
+          await page.click(`#coming .lead [data-fplace="${FESTIVAL}"]`);
+          await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+          await look(); noWord('Fight here');
+          await page.click('#fEnd');
+          await page.click('#fEnd');
+          await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
+          await settled();
+          // Move them
+          await page.click('#where .wrow input[data-movebox]');
+          await page.type('Marrow');
+          await page.waitFor('document.querySelector("#where [data-movepick]")');
+          await page.key('Enter');
+          await settled();
+          await look(); noWord('Move them');
+          // a jot, which files the session
+          await page.click('#hjot');
+          await page.type('The crew lands at Dock Row.');
+          await page.key('Enter');
+          await page.waitFor('/Filed as: Session 15/.test((document.getElementById("rfiled") || {}).textContent || "")');
+          await settled();
+          await look(); noWord('the jot and the filing');
+          await page.sleep(300);
+        });
+        assert.equal(filed.length, 1, 'filed once');
+        await look();
+        noWord('at the end');
+        // the Table Log the filing made holds the jot (not the empty stub the filing wrote) and no word
+        const logs = walk(path.join(vault, S15)).filter((x) => /Table Log/.test(x));
+        assert.equal(logs.length, 1, logs.join(', '));
+        const logText = await waitFor(() => { const t = fs.readFileSync(logs[0], 'utf8'); return t.includes('The crew lands at Dock Row.') && t; }, 'the jot in the Table Log');
+        assert.ok(!logText.includes(WORD), `${logs[0]} holds the secret word`);
+      } finally {
+        pstream.close();
+        await run.close();
+      }
+    });
+  }
+
+  // Task 12, F10: the no-Plan page's new routes to the players (Show from a card's link, Fight here at the card's place)
+  // keep back a withheld NPC's name and a gm_aliases name, both linked from a card: the existing forbidden list, read
+  // from the vault's notes, is checked on every view and the stream.
+  it('a withheld NPC and a gm_aliases name on a card reach the players by no route', { timeout: 120000 }, async () => {
+    const vault = copyRecordFixture();
+    made.push(vault);
+    const SALT = 'Locations/The Salt Inn.md';
+    const MOTT = 'Characters/NPCs/Mott Ferrage.md';
+    const EWART = 'Characters/NPCs/Ewart Lorrimer.md';
+    fs.writeFileSync(path.join(vault, MOTT), '---\nname: Mott Ferrage\ntype: npc\nwithheld: true\nlocation: "[[The Salt Inn]]"\n---\n\nA lamp thief.\n');
+    fs.writeFileSync(path.join(vault, EWART), '---\nname: Ewart Lorrimer\ntype: npc\ngm_aliases:\n  - The Lantern Hand\nlocation: "[[The Salt Inn]]"\n---\n\nA harbour clerk.\n');
+    const wrap = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
+    const text = fs.readFileSync(wrap, 'utf8');
+    const from = '- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n';
+    assert.ok(text.includes(from));
+    fs.writeFileSync(wrap, text.replace(from, `${from}- **Night visitors:** [[Mott Ferrage]] and [[Ewart Lorrimer]] came by [[The Salt Inn]] after dark.\n`));
+
+    const session = pickSession(listSessions(vault), null, vault).session;
+    const { file, stateId } = stateFileFor(vault, session);
+    const run = createTableServer({ vaultPath: vault, session, stateFile: file, stateId, deps: { delayMs: 50, log: () => {} } });
+    const port = await listenLocal(run.server, 0);
+    const base = `http://127.0.0.1:${port}/`;
+    const pstream = stream(port, '/api/players/events');
+    try {
+      const gmModel = await req(port, 'GET', '/api/model');
+      const model = JSON.parse(gmModel.text).model;
+      // a name the players may read: one the sheet starts seen, and Ewart's own name, shown on purpose below
+      const seen = new Set([...Object.keys(model.seenFrom || {}), EWART].map((n) => (matter(fs.readFileSync(path.join(vault, n), 'utf8')).data || {}).name));
+      const forbidden = forbiddenList(vault, model, { plan: null }).filter((x) => !(x.why === 'an unshown name' && seen.has(x.text)));
+      for (const must of ['Mott Ferrage', 'The Lantern Hand']) assert.ok(forbidden.some((x) => x.text === must), `the forbidden list holds ${must}`);
+      // the control: the GM's own model holds both, so the players' filter is what keeps them back
+      for (const must of ['Mott Ferrage', 'The Lantern Hand']) assert.ok(gmModel.text.includes(must), `the GM's model holds ${must}`);
+      const checks = forbidden.map((x) => ({ ...x, hit: matcher(x) }));
+      const views = [];
+      const look = async () => { views.push(await playersView(port, pstream)); };
+      const clean = (where) => {
+        for (const c of checks) {
+          for (const v of views) assert.ok(!c.hit(v), `${where}: the players' view holds ${c.text} (${c.why})`);
+          assert.ok(!c.hit(pstream.raw()), `${where}: the players' stream holds ${c.text} (${c.why})`);
+        }
+      };
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        const settled = () => page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && document.getElementById('where') && p; })()`);
+        await page.goto(`${base}?probe=1`);
+        await settled();
+        await look(); clean('opened');
+        const fightHere = async (where) => {
+          await page.click(`#where .wrow [data-fplace="${SALT}"]`);
+          await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+          await look(); clean(where);
+        };
+        // Fight here at the card's place (it places the crew there, so Show has a group), then end it
+        await fightHere('Fight here');
+        await page.click('#fEnd');
+        await page.click('#fEnd');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
+        await settled();
+        // Show each from the card's link
+        for (const n of [MOTT, EWART]) {
+          await page.click(`#scenes a[data-note="${n}"]`);
+          // the drawer slides in: the button is pressed once it is wholly on screen and still
+          const at = `(() => { const b = document.querySelector('#drawer.open #dshow [data-dshow="${n}"]'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && r.left >= 0 ? Math.round(r.left) : null; })()`;
+          await page.waitFor(at);
+          for (let last = null, now = await page.evaluate(at); now !== last; last = now, now = await page.evaluate(at)) await page.sleep(100);
+          await page.click(`#dshow [data-dshow="${n}"]`);
+          await waitFor(async () => Object.values((await req(port, 'GET', '/api/state')).json.state.panels || {}).some((x) => (x.people || []).includes(n)), `${n} shown`);
+          await page.key('Escape');
+          await look(); clean(`Show ${n}`);
+        }
+        // the shown: Ewart by his own name, Mott only as the withheld word
+        const shown = JSON.parse(views[views.length - 1]).panels.flatMap((p) => p.people.map((w) => w.name));
+        assert.ok(shown.includes('Ewart Lorrimer') && shown.length === 2, JSON.stringify(shown));
+        // and a fight there with both on the players' screen
+        await fightHere('Fight here after Show');
+        await page.sleep(300);
+      });
+      await look();
+      clean('at the end');
+    } finally {
+      pstream.close();
+      await run.close();
+    }
   });
 });

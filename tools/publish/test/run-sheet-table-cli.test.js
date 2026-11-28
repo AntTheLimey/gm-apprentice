@@ -9,6 +9,8 @@ const { EventEmitter } = require('node:events');
 const { spawnSync } = require('node:child_process');
 const { runTable, runFlushCapped, killTree, whoHolds, openBrowser, parseParty, STOP_SIGNALS } = require('../lib/run-sheet/table-cli');
 const RS = require('../lib/run-sheet/web/state');
+const { copyRecordFixture } = require('./helpers/record-fixture');
+const { removeFixture } = require('./helpers/systems-fixture');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
@@ -130,6 +132,125 @@ describe('gm-publish table: pick', () => {
     assert.match(errs.join('\n'), /No session matches/);
   });
 });
+
+describe('gm-publish table: a session from the record', () => {
+  it('the pick answer carries a record session', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const { deps, lines } = quiet();
+    const rc = await runTable({ vault, pick: true, json: true, port: await freePort() }, deps);
+    assert.strictEqual(rc, 0);
+    const got = JSON.parse(lines[0]);
+    assert.strictEqual(got.ok, true);
+    assert.strictEqual(got.index, null);
+    assert.strictEqual(got.fromRecord, true);
+    assert.strictEqual(got.number, 15);
+    assert.strictEqual(got.chapter, 'Chapters/Chapter 3/Chapter 3.md');
+    assert.strictEqual(got.plan, null);
+    assert.strictEqual(got.label, 'Session 15');
+    assert.strictEqual(got.stateId, 'chapter-3--session-15');
+    assert.ok('after' in got && 'planVault' in got && 'playDate' in got);
+    assert.deepStrictEqual(got.others, []);
+    // the plain pick line does not print "null"
+    const plain = quiet();
+    assert.strictEqual(await runTable({ vault, pick: true, port: await freePort() }, plain.deps), 0);
+    assert.ok(!plain.lines.join('\n').includes('null'), plain.lines.join('\n'));
+  });
+
+  it('a record session is served, not refused as an unreadable Plan', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const seen = [];
+    const fake = (opts) => {
+      seen.push(opts);
+      const http = require('node:http');
+      const server = http.createServer((req, res) => {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ model: { warnings: [] } }));
+      });
+      return { server, close: () => new Promise((r) => { server.close(r); server.closeAllConnections(); }) };
+    };
+    const { deps, lines, errs } = quiet({ createTableServer: fake });
+    const h = await runTable({ vault, port: await freePort(), open: false, fileLog: { cmd: ['x'], takesTitle: true } }, deps);
+    assert.notStrictEqual(typeof h, 'number', errs.join('\n'));
+    handles.push(h);
+    assert.ok(lines.join('\n').includes('Run sheet for'), lines.join('\n'));
+    assert.ok(!errs.join('\n').includes('cannot be read'));
+    assert.strictEqual(seen[0].session.fromRecord, true);
+    assert.strictEqual(seen[0].stateId, 'chapter-3--session-15');
+    assert.strictEqual(seen[0].stateFile, path.join(path.resolve(vault), '_meta', 'table', 'chapter-3--session-15.json'));
+    assert.deepStrictEqual(seen[0].fileLog, { cmd: ['x'], takesTitle: true });
+  });
+
+  it('a record session not filed yet is served by the real server, with its own line, and filed on the first thing (Task 7)', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const a = await start({ vault, fileLog: { cmd: ['gma-never-run'], takesTitle: true } });
+    assert.ok(a.h && a.h.url, a.errs.join('\n'));
+    const text = a.lines.join('\n');
+    assert.ok(text.includes('Session 15 is not in the vault yet: it is filed with its Table Log on the first thing that happens at the table, so a look leaves nothing.'), text);
+    assert.ok(!/No Table Log/.test(text), text);
+    const body = await (await fetch(`${a.h.url}api/model`)).json();
+    assert.strictEqual(body.session.fromRecord, true);
+    assert.strictEqual(body.session.filed, false);
+    assert.ok(body.model.record);
+
+    const v2 = copyRecordFixture();
+    after(() => removeFixture(v2));
+    const b = await start({ vault: v2 });
+    assert.ok(b.lines.join('\n').includes('Session 15 is not in the vault yet: start it with `gma table` to have it filed and the record written.'), b.lines.join('\n'));
+  });
+
+  // CodeRabbit #895: the array form files a Table Log for an index that exists; for a session not filed yet it would fail
+  // on every action, so it is refused before anything is served.
+  it('a session not filed yet refuses the array --file-log, before the flush', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const a = await start({ vault, fileLog: ['gma-never-run'] });
+    assert.strictEqual(a.h, 1, a.lines.join('\n'));
+    assert.match(a.errs.join('\n'), /Session 15 is not in the vault yet/);
+    assert.strictEqual(a.deps.flushed, undefined);
+    assert.ok(!fs.existsSync(path.join(vault, '_meta', 'table')) || !fs.readdirSync(path.join(vault, '_meta', 'table')).some((n) => n.endsWith('.lock')));
+    // --pick is not affected
+    const pick = quiet();
+    assert.strictEqual(await runTable({ vault, port: await freePort(), pick: true, json: true, fileLog: ['gma-never-run'] }, pick.deps), 0);
+  });
+
+  it('a record that cannot be read is refused in its own words (Task 7)', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const { deps, errs } = quiet({ server: { readRecord: () => { throw new Error('the Wrap-Up is torn'); } } });
+    const rc = await runTable({ vault, port: await freePort(), open: false }, deps);
+    assert.strictEqual(rc, 1);
+    assert.strictEqual(errs.join('\n'), 'The record for Session 15 cannot be read: the Wrap-Up is torn');
+  });
+
+  // CodeRabbit #895: a no-Plan sheet open for an unfiled session holds the number-named lock with no state saved yet. Prep
+  // then files that session with a Plan; a second start finds the Plan-named state file, and must still find the first sheet.
+  it('a sheet started once prep has filed a Plan still finds the no-Plan sheet open for that session', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const a = await start({ vault, fileLog: { cmd: ['gma-never-run'], takesTitle: true } });
+    assert.ok(a.h && a.h.url, a.errs.join('\n'));
+    const dir = path.join(vault, 'Chapters', 'Chapter 3', 'Sessions', 'Session 15');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Session 15 - Wickwork.md'), '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\ndocuments:\n  plan: "[[Session 15 - Wickwork - Plan]]"\n---\n\n# Session 15 - Wickwork\n');
+    fs.writeFileSync(path.join(dir, 'Session 15 - Wickwork - Plan.md'), '---\ntype: session-plan\nsession: "[[Session 15 - Wickwork]]"\nchapter: "[[Chapter 3]]"\n---\n\n## Session Intent\n\nWickwork.\n');
+    const b = await start({ vault });
+    assert.strictEqual(b.h, 1, b.lines.join('\n'));
+    assert.match(b.errs.join('\n'), new RegExp(`already running \\(pid ${process.pid}, port ${a.port}`));
+  });
+
+  it('a state iCloud has taken is found under the number name (the lock and iCloud checks use stateFileFor)', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const { deps, errs } = quiet({ inCloud: (f) => f.endsWith('chapter-3--session-15.json') });
+    const rc = await runTable({ vault, port: await freePort(), open: false }, deps);
+    assert.strictEqual(rc, 1);
+    assert.match(errs.join('\n'), /iCloud/);
+  });
+});
+
 
 describe('gm-publish table: serving', () => {
   it('serves, prints the address and Ctrl+C, and opens the browser unless told not to', async () => {
@@ -518,6 +639,16 @@ describe('the table command line', () => {
     const r = spawnSync(process.execPath, [BIN, 'table', FIXTURE, '--pick', '--json', '--port', '0'], { encoding: 'utf8', timeout: 30000 });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.strictEqual(JSON.parse(r.stdout).index, S2);
+  });
+  it('--file-log takes the array or the { cmd, takesTitle } object, and nothing else', () => {
+    const run = (v) => spawnSync(process.execPath, [BIN, 'table', FIXTURE, '--pick', '--json', '--port', '0', '--file-log', v], { encoding: 'utf8', timeout: 30000 });
+    assert.strictEqual(run('["a","b"]').status, 0);
+    assert.strictEqual(run('{"cmd":["a"],"takesTitle":true}').status, 0);
+    for (const bad of ['{"cmd":"a","takesTitle":true}', '{"cmd":["a"]}', '[]', '3', 'nope']) {
+      const r = run(bad);
+      assert.strictEqual(r.status, 1, bad);
+      assert.match(r.stderr, /--file-log needs/);
+    }
   });
   it('no vault is a usage error', () => {
     const r = spawnSync(process.execPath, [BIN, 'table'], { encoding: 'utf8' });

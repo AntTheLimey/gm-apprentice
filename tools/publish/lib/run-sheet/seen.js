@@ -31,16 +31,18 @@ function wholeName(name) {
 }
 
 // `config` is loadPublishConfig's shape (exclude_sections, exclude_callouts); `publishes(note)` is the
-// players' publish answer, strict (see read.js).
-function readSeen({ vaultPath, index, sessionIndex, publishes, config = {}, deps }) {
+// players' publish answer, strict (see read.js). `after`, for a session not filed yet (no index, or one the
+// order lacks): the sessions read are those up to and including it.
+function readSeen({ vaultPath, index, sessionIndex, after = null, publishes, config = {}, deps }) {
   const fmOf = (p) => (index.has(p) ? index.read(p).fm || {} : {});
   const people = index.notes().filter((p) => TYPES.has(String(fmOf(p).type || '').trim().toLowerCase()));
   const seen = {};
   for (const p of people) if (publishes(p)) seen[p] = 'on the player site';
 
   // The played sessions before this one, in story order, with the texts they hold.
-  const sessions = sessionIndex ? listSessions(vaultPath, { deps, index }) : [];
-  const at = sessions.findIndex((s) => s.index === sessionIndex);
+  const sessions = sessionIndex || after ? listSessions(vaultPath, { deps, index }) : [];
+  const here = sessionIndex ? sessions.findIndex((s) => s.index === sessionIndex) : -1;
+  const at = here >= 0 ? here : (after ? sessions.findIndex((s) => s.index === after) + 1 : -1);
   const records = [];
   for (const s of at < 1 ? [] : sessions.slice(0, at)) {
     if (!isPlayed(index, s.index)) continue;

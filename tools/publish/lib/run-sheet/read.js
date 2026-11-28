@@ -132,6 +132,7 @@ function completeness(planBody, model, { resolve } = {}) {
 const CARRIED = ['hp', 'mp', 'san', 'fp'];
 const COLUMN_WORD = { hp: 'HP', mp: 'MP', san: 'SAN', fp: 'FP' };
 
+// A Plan's sheet: reads the Plan file, then the shared core reads the rest.
 function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const rd = readerFrom(deps);
   const abs = path.resolve(vaultPath, planPath);
@@ -148,10 +149,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
   text = String(text).replace(/\r\n?/g, '\n');
 
-  const warnings = [];
-  const portraits = new Map();
-  const unmasks = new Map();
-  const add = (list) => { for (const w of list || []) warnings.push(w); };
+  const early = [];
   let fm = {};
   let body = text;
   try {
@@ -159,8 +157,23 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     fm = parsed.data || {};
     body = parsed.content;
   } catch (err) {
-    warnings.push({ kind: 'unreadable-frontmatter', note: plan, text: `frontmatter does not parse: ${firstLine(err.message)}` });
+    early.push({ kind: 'unreadable-frontmatter', note: plan, text: `frontmatter does not parse: ${firstLine(err.message)}` });
   }
+  return readSheet(vaultPath, { planRel: plan, fm, body, party, deps, early });
+}
+
+// The shared core. With a Plan (`planRel`, its `fm` and `body`) the session is read from the Plan; with none, `session`
+// ({ index, title, chapter, number, after }) is the session the record gave: its index path (null when not filed yet),
+// and `after`, the latest wrapped-up session, which the carried vitals and the party walk from when there is no index.
+// `early` holds warnings the caller already has (the Plan's frontmatter), kept first.
+// `index`: an index of the vault the caller has just built (the record reader's), else one is built here.
+function readSheet(vaultPath, { planRel = null, fm = {}, body = '', session = null, party = [], deps, early = [], index: built = null } = {}) {
+  const plan = planRel;
+  const given = session || {};
+  const warnings = [...early];
+  const portraits = new Map();
+  const unmasks = new Map();
+  const add = (list) => { for (const w of list || []) warnings.push(w); };
 
   let system = null;
   let campaign = path.basename(path.resolve(vaultPath));
@@ -192,7 +205,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   // the vault's system reads the foes and the PCs and describes the rest (model.rules); none runs as D&D
   const sys = systemFor(system);
-  const index = buildIndex(vaultPath, { deps });
+  const index = built || buildIndex(vaultPath, { deps });
   const fmOf = (p) => (index.has(p) ? index.read(p).fm || {} : {});
   // A link that resolves to no note warns once, saying why (missing, ambiguous, in a skipped folder).
   const warnedLinks = new Set();
@@ -211,9 +224,12 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   };
 
   // Session.
-  const sessionIndex = resolveFm(fm.session);
-  const chapter = resolveFm(fm.chapter);
-  const title = sessionIndex ? stemOf(sessionIndex) : stemOf(plan).replace(/\s+-\s+plan$/i, '');
+  const sessionIndex = plan ? resolveFm(fm.session) : (given.index || null);
+  const chapter = plan ? resolveFm(fm.chapter) : (given.chapter || null);
+  const sessionNumber = Number.isInteger(given.number) ? given.number : null;
+  const title = plan
+    ? (sessionIndex ? stemOf(sessionIndex) : stemOf(plan).replace(/\s+-\s+plan$/i, ''))
+    : (given.title || (sessionNumber !== null ? `Session ${sessionNumber}` : 'Session'));
   const numberOf = (planFm, indexPath, fallback) => {
     for (const v of [fmOf(indexPath).session_number, planFm.session_number]) {
       const n = Number(v);
@@ -222,7 +238,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     const m = /\bsession\s+0*(\d+)\b/i.exec(fallback);
     return m ? Number(m[1]) : null;
   };
-  const number = numberOf(fm, sessionIndex, fmTarget(fm.session) || title);
+  const number = plan ? numberOf(fm, sessionIndex, fmTarget(fm.session) || title) : sessionNumber;
 
   // The parts.
   const sections = pt.sections(body, 2);
@@ -237,7 +253,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const sidesCarried = carried ? carried.sides() : {};
   // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given, and the
   // Plan's NPC Quick Reference: what a row's starting side reads (sides.js). Their warnings are added below.
-  const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party, planPath: plan });
+  let own = sessionParty({ index, sessionPath: sessionIndex || given.after || null, planBody: body, given: party, planPath: plan });
+  // A no-Plan session filed tonight: its new index names no party of its own, so the party stays the one the record gave
+  // (the latest Wrap-Up's), and the PCs the GM placed before the filing stay on the sheet (Task 8).
+  if (!plan && sessionIndex && given.after && own.from === 'given') own = sessionParty({ index, sessionPath: given.after, planBody: body, given: party, planPath: plan });
   add(own.warnings);
   const peopleRead = readPeople(body, index);
   const quickRef = new Map();
@@ -419,7 +438,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     for (const t of pt.links(s)) if (!Object.prototype.hasOwnProperty.call(model.links, t)) model.links[t] = index.resolve(t);
   }
 
-  add(completeness(body, model, { resolve: (t) => index.resolve(t) }));
+  if (plan) add(completeness(body, model, { resolve: (t) => index.resolve(t) }));
   // The index's warnings about notes this sheet touches (a note a warning names among them, such
   // as a PC whose frontmatter does not parse), and those about the vault as a whole. Each touched
   // note's portraits (its unmasked one too) are looked for first, so one that matches no picture warns here.
@@ -439,7 +458,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     if (!index.has(s) || model.notes[s]) continue;
     model.notes[s] = noteOf(s);
   }
-  if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
+  if (plan && !model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
   // Places the party can go (plan 6a Task 7): every location note in the vault, keyed for its place beat
   // (`pl-<hash>`, keys.js), with the npc and creature notes whose `location` links it, and its own entry in
   // `placeNotes` (as `notes` holds one), for its name and picture on both screens. `notes` stays the notes this
@@ -485,7 +504,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       const publishesToPlayers = (rel) => strict.switches.site === true
         && !matchExcludedDir(rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '', strict.exclude_dirs)
         && publishesPage(decidePage({ rel, frontmatter: fmOf(rel) }, { rel, publishConfig: strict, manifest, folderMapped: strictMapped(rel) }));
-      model.seenFrom = readSeen({ vaultPath, index, sessionIndex, publishes: publishesToPlayers, config: strict, deps });
+      // With no Plan, a session not filed yet reads every session up to and including `after` (as readCarried does).
+      model.seenFrom = readSeen({
+        vaultPath, index, sessionIndex: sessionIndex || (plan ? given.after : null) || null, after: plan ? null : given.after || null, publishes: publishesToPlayers, config: strict, deps,
+      });
     }
   }
   // What the players' screen needs of each: its own name (never the stem) and its picture.
@@ -561,7 +583,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   // only as far back as an ally asks. A link that names no note or the wrong type, a Who cell that names
   // no note, and an HP cell that holds no number each warn once, naming the note they are in.
   function readCarried() {
-    if (!sessionIndex) return null;
+    if (!sessionIndex && !given.after) return null;
     // Page-shaped as the scanner makes them (its displayTitleOf: `title:`, else the stem), so a chapter
     // a session names by title owns it here as on the site. The notes ordered are every note the reader
     // indexes (not only those the site pages), and sessions with equal sort keys (two with no
@@ -570,7 +592,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       title: stemOf(p), displayTitle: displayTitleOf(fmOf(p), stemOf(p)), frontmatter: fmOf(p), sourcePath: path.join(vaultPath, p), rel: p,
     }));
     const order = orderedSessions(pages);
-    const at = order.findIndex((pg) => pg.rel === sessionIndex);
+    // A session in the order: every session before it. One not filed yet (no index, or one the order lacks): every
+    // session up to and including `after`, the latest with a Wrap-Up.
+    const here = sessionIndex ? order.findIndex((pg) => pg.rel === sessionIndex) : -1;
+    const at = here >= 0 ? here : (plan ? -1 : order.findIndex((pg) => pg.rel === given.after) + 1);
     if (at < 1) return null;
     const earlier = order.slice(0, at).map((pg) => pg.rel).reverse();
     const logOf = (s) => {
@@ -715,11 +740,12 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     let dir = chapter ? path.posix.dirname(chapter) : null;
     if (!dir || dir === '.') {
       dir = null;
-      for (let d = path.posix.dirname(plan); d && d !== '.' && !d.startsWith('..'); d = path.posix.dirname(d)) {
+      for (let d = plan ? path.posix.dirname(plan) : null; d && d !== '.' && !d.startsWith('..'); d = path.posix.dirname(d)) {
         if (index.notes().some((n) => n.startsWith(`${d}/Sessions/`))) { dir = d; break; }
       }
     }
     if (!dir) {
+      if (!plan) return empty;
       warnings.push({ kind: 'no-chapter', note: plan, text: 'the Plan names no chapter and sits in no chapter folder: if you run long, the page has nothing to fall back on' });
       return empty;
     }
@@ -749,4 +775,4 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 }
 
-module.exports = { readRunSheet, completeness };
+module.exports = { readRunSheet, readSheet, completeness };

@@ -92,13 +92,32 @@ function present(model, { index }) {
   }
   for (const p of m.prep || []) addHtml(p, ['md'], index, false);
   if (typeof m.threads === 'string') m.threadsHtml = toHtml(m.threads, index);
-  for (const h of m.handouts || []) addHtml(h, ['name', 'text'], index, true);
+  // the Scene cell too: a link there reads as the place's name (audit S5), never `[[The Loop]]`
+  for (const h of m.handouts || []) addHtml(h, ['name', 'scene', 'text'], index, true);
   for (const c of m.cast || []) if (c.foe) addFoeHtml(c.foe, index);
   // a caster PC's spells, rendered as a foe's stat block is, for the fight panel's fold
   for (const p of m.pcs || []) addHtml(p, ['spells'], index, false);
   // the PCs table's words (Task 34): a Thread or a Moment's `**bold**` and `[[link]]` shown as such, not as markup
   for (const p of m.pcs || []) addHtml(p, ['moment', 'touch', 'arc', 'thread'], index, true);
   for (const p of m.people || []) addHtml(p, ['playAs', 'wants', 'now', 'where'], index, true);
+  // the no-Plan sheet's record (Task 8): each markdown field gains its `…Html`, so a `[[link]]` opens the drawer
+  const r = m.record;
+  if (r) {
+    addHtml(r.lastTime, ['recap'], index, false);
+    addHtml(r.world, ['md'], index, false);
+    // the In-game date and the Clocks, as the record wrote them, links as links (Task 11b, F5 and F9)
+    if (r.world && typeof r.world.date === 'string' && r.world.date) r.world.dateHtml = r.world.date.split('\n').map((t) => toHtml(t, index, { inline: true })).join('<br>');
+    if (r.world && Array.isArray(r.world.clocks)) r.world.clocksHtml = r.world.clocks.map((t) => toHtml(t, index, { inline: true }));
+    const cu = r.comingUp || {};
+    addHtml(cu, ['handoff'], index, false);
+    if (Array.isArray(cu.intentions)) cu.intentionsHtml = cu.intentions.map((t) => toHtml(t, index, { inline: true }));
+    if (cu.lead) {
+      addHtml(cu.lead, ['md'], index, false);
+      if (Array.isArray(cu.lead.schedule)) cu.lead.scheduleHtml = cu.lead.schedule.map((t) => toHtml(t, index, { inline: true }));
+    }
+    for (const c of r.cards || []) for (const it of c.items || []) addHtml(it, ['md'], index, true);
+    for (const b of r.background || []) addHtml(b, ['md'], index, true);
+  }
   return m;
 }
 

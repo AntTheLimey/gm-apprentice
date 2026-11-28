@@ -20,15 +20,23 @@
 // built here after each accepted write and each model load and sent only when it changed. The players'
 // stream is its own client set: it carries `hello` ({}) and `view`, never a GM event. Every players' error
 // answer is a fixed body; the detail goes to the terminal only (plan 5b decisions 10 and 23, Review M4).
+//
+// A session with no Plan (opened from the record, `session.plan` null) reads its model with read-record.js and may
+// not be in the vault yet: `fileLog` is then `{ cmd, takesTitle: true }` (`gma table-file`), and the first thing that
+// happens at the table files the session and its Table Log, under the title the GM typed or the date the sheet opened.
+// Filing runs as a child in the background, one at a time: writes that land meanwhile are kept in the state and
+// written to the log when it ends. "Filed" is read from the vault (the index links a Table Log), never from the state
+// alone; the state's `filed` is for the page and for a Plan session that adopts this state later (Task 7, D2, D3, D9).
 
-const { spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const nodeFs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const serve = require('../serve');
 const { readRunSheet } = require('./read');
-const { buildIndex, stemName } = require('./notes');
+const { readRecord } = require('./read-record');
+const { buildIndex, stemName, stemOf } = require('./notes');
 const { tableLogOf, stateIdOf } = require('./sessions');
 const { createStore, stampOf } = require('./store');
 const { present, toHtml } = require('./present');
@@ -43,7 +51,7 @@ const { SIDES, HEX, PRESETS, SITE_TOOL_FROM, readSideColours } = require('./side
 const { readSettings } = require('../settings/read');
 const { systemFor } = require('./systems');
 const { pcTohit, typedTohit, servedCss } = require('./tohit');
-const { slugify, pcLiveKey } = require('../scanner');
+const { slugify, pcLiveKey, displayTitleOf } = require('../scanner');
 
 const WEB_DIR = path.join(__dirname, 'web');
 // the player site's to-hit calculator, served to the GM page as the site ships it (Task 24)
@@ -55,6 +63,26 @@ const PICTURE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'ima
 const UNAVAILABLE = { error: 'unavailable' };
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const RECORD_RETRY_MS = [2000, 5000, 10000, 30000];
+const FILE_LOG_TIMEOUT_MS = 60000;
+// After the timeout's SIGINT (POSIX), the child's time to roll its batch back before SIGTERM; then as long again before SIGKILL.
+const FILE_LOG_GRACE_MS = 1000;
+// A change sent once the sheet is stopping is refused, never answered and then left out of the last save: the page keeps
+// it queued and sends it to the next start (CodeRabbit #895).
+const STOPPING = 'the sheet is stopping: this change was not saved here; the page keeps it for the next start';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad2 = (n) => String(n).padStart(2, '0');
+// The sheet's open date in local time, as the frontmatter takes it and as a blank title reads (D3). Never the locale.
+const openDateOf = (d) => ({ iso: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, title: `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}` });
+// The command's first CREATED or ADDED row names the index it filed (`gma table-file` prints the index's row first).
+const filedIndexOf = (out) => {
+  const row = String(out || '').split(/\r?\n/).find((l) => /^(CREATED|ADDED)\t/.test(l));
+  return row ? row.split('\t')[1] || null : null;
+};
+// A refusal that says the index already has its Table Log (a filing that wrote, then timed out): that index and log.
+const alreadyFiledOf = (why) => {
+  const m = /^(.+?\.md): already has a Table Log: (.+?\.md)\s*$/.exec(String(why || ''));
+  return m ? { index: m[1], log: m[2] } : null;
+};
 const MAX_BODY = 2 * 1024 * 1024;
 const MAX_ROLLS = 64;
 const MAX_ACTIONS = 200;
@@ -64,15 +92,21 @@ const NO_PAGE = '.run-sheet-no-404-page';
 
 const within = (child, parent) => child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
 
-function createTableServer({ vaultPath, session, party = [], stateFile, fileLog = null, deps = {} } = {}) {
+function createTableServer({ vaultPath, session, party = [], stateFile, stateId: givenId, fileLog = null, deps = {} } = {}) {
   const fs = deps.fs || nodeFs;
   const now = deps.now || (() => new Date());
   const log = deps.log || ((line) => console.error(line));
   const read = deps.readRunSheet || readRunSheet;
+  const readFromRecord = deps.readRecord || readRecord;
+  session = { ...session }; // its index is set here once the session is filed
+  const opened = openDateOf(now()); // taken once: a night that runs past midnight keeps its date (D3)
+  // `fileLog`: the command array (`table-log-new`, the index exists), or `{ cmd, takesTitle }` (`table-file`).
+  const fileCmd = Array.isArray(fileLog) ? { cmd: fileLog, takesTitle: false }
+    : fileLog && Array.isArray(fileLog.cmd) ? { cmd: fileLog.cmd, takesTitle: fileLog.takesTitle === true } : null;
   const index = deps.buildIndex || buildIndex;
   const vaultDeps = deps.vaultDeps;
   const serverId = deps.serverId || crypto.randomUUID();
-  const stateId = stateIdOf(session);
+  const stateId = givenId || stateIdOf(session);
   const label = session.label;
   const file = stateFile || path.join(vaultPath, '_meta', 'table', `${stateId}.json`);
   const tableDir = path.dirname(file);
@@ -100,7 +134,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
   let savedRev = null;
   const recordRetryMs = deps.recordRetryMs || RECORD_RETRY_MS;
   // What a page that connects now needs to know: is the state being saved, is the record being written.
-  const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null };
+  // `filing`: a filing of this session runs now (Task 11b, F3): the page says so and holds the title box until it ends.
+  const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null, filing: false };
   const playersText = (error) => `The players' screen could not be updated: ${error}`;
   const statusNotices = () => [
     ...(status.saving === 'failing' ? [{ kind: 'save-failing', error: status.saveError }] : []),
@@ -156,53 +191,174 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
     if (!lastIndex) lastIndex = index(vaultPath, { deps: vaultDeps });
     return lastIndex;
   };
-  const logOf = (idx) => tableLogOf(idx, session.index).log;
-  const loadModel = () => {
-    const idx = index(vaultPath, { deps: vaultDeps });
-    const model = read(vaultPath, session.plan, { party, deps: vaultDeps });
+  // A session not filed yet has no index and so no Table Log to read.
+  const logOf = (idx) => (session.index ? tableLogOf(idx, session.index).log : null);
+  // Filed, by the vault: the index is there and links its Table Log.
+  const isFiled = (idx) => Boolean(session.index && idx.has(session.index) && logOf(idx));
+  // `given`: an index built a moment ago (the filing's own), so the vault is not read twice (Task 11b, F3). The record
+  // reader takes the same index, never building its own.
+  const loadModel = (given = null) => {
+    const idx = given || index(vaultPath, { deps: vaultDeps });
+    const model = session.plan ? read(vaultPath, session.plan, { party, deps: vaultDeps }) : readFromRecord(vaultPath, session, { party, deps: vaultDeps, index: idx });
     // tonight's Table Log link, when it is refused (another session's log), is a prep note
-    const tl = tableLogOf(idx, session.index);
+    const tl = session.index ? tableLogOf(idx, session.index) : { log: null, warning: null };
     if (tl.warning && Array.isArray(model.warnings) && !model.warnings.some((w) => w.text === tl.warning.text)) model.warnings.push(tl.warning);
     lastIndex = idx;
     lastModel = model;
+    // a read of its own is newer than the filing's: the page's next model is this one (CodeRabbit #895)
+    if (!given) justRead = null;
     return { model, idx };
   };
 
   // The Table Log is filed on the first thing that happens at the table (#855): the first write with something in it.
   // A look (reading the Plan, opening beats) leaves no note, so it never puts the session in play. `fileLog` is the
-  // `gma vault-write ... table-log-new` command `gma table` hands over, so the note's shape stays the vault scripts'.
-  // Without it (the sheet started some other way) there is no Table Log: the state is kept, nothing else written.
-  const runFileLog = deps.runFileLog || ((cmd) => {
-    const r = spawnSync(cmd[0], cmd.slice(1), { encoding: 'utf8', windowsHide: true, timeout: 60000 });
-    if (r.error) return { ok: false, why: r.error.message };
-    const said = `${r.stderr || ''}\n${r.stdout || ''}`.split('\n').map((l) => l.trim()).find(Boolean);
-    return r.status === 0 ? { ok: true } : { ok: false, why: said || `exit ${r.status}` };
-  });
-  function fileTableLog(model, state, idx) {
-    if (!fileLog || isEmptySkeleton(tableLogBody(model, state, { linkFor: linkFor(idx) }))) return null;
-    const done = runFileLog(fileLog);
+  // command `gma table` hands over, so the note's shape stays the vault scripts'. Without it (the sheet started some
+  // other way) there is no Table Log: the state is kept, nothing else written.
+  // The command runs as a child (D9), so the server answers while it runs. `refused` is an exit 1 with an ERROR row:
+  // the vault said no, so it is tried again on the GM's next action, never on the timer.
+  // A filing over its time is stopped. On POSIX it gets SIGINT first, which Python raises as KeyboardInterrupt, so the
+  // batch rolls back (vault_write.apply); SIGTERM ends Python with no rollback, so it is sent only if the child is still
+  // alive a second later (Task 12, F4), and SIGKILL a second after that. The filing ends when the child does. Windows
+  // has no SIGINT to send: kill() as before.
+  const timeoutMs = deps.fileLogTimeoutMs || FILE_LOG_TIMEOUT_MS;
+  const graceMs = deps.fileLogGraceMs || FILE_LOG_GRACE_MS;
+  const runFileLog = deps.runFileLog || ((cmd) => new Promise((resolve) => {
+    let child;
+    try { child = spawn(cmd[0], cmd.slice(1), { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
+      resolve({ ok: false, why: err.message });
+      return;
+    }
+    let out = '';
+    let errText = '';
+    let ended = false;
+    let late = null;
+    const overTime = () => ({ ok: false, why: `it took over ${timeoutMs / 1000} s and was stopped`, out });
+    const finish = (r) => { if (ended) return; ended = true; clearTimeout(timer); clearTimeout(late); resolve(r); };
+    const timer = setTimeout(() => {
+      if (process.platform === 'win32') {
+        try { child.kill(); } catch { /* already gone */ }
+        finish(overTime());
+        return;
+      }
+      try { child.kill('SIGINT'); } catch { /* already gone */ }
+      late = setTimeout(() => {
+        try { child.kill('SIGTERM'); } catch { /* already gone */ }
+        // a child that stays after SIGTERM too is killed a grace later; the filing still ends only on its exit, so no
+        // retry starts and the lock is never let go while it can write the vault (CodeRabbit #895)
+        late = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* already gone */ } }, graceMs);
+      }, graceMs);
+    }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (c) => { out += c; });
+    child.stderr.on('data', (c) => { errText += c; });
+    child.on('error', (err) => finish({ ok: false, why: err.message, out }));
+    // stopped on the timeout: its exit ends the filing, even when something it started still holds its output open
+    child.on('exit', () => { if (late !== null) finish(overTime()); });
+    child.on('close', (code, signal) => {
+      if (code === 0) { finish({ ok: true, out }); return; }
+      // stopped on the timeout: said as that, whatever the child said as it rolled back
+      if (late !== null) { finish(overTime()); return; }
+      const errorRow = out.split(/\r?\n/).find((l) => l.startsWith('ERROR\t'));
+      const said = errorRow ? errorRow.split('\t').slice(3).join('\t').trim() : `${errText}\n${out}`.split(/\r?\n/).map((l) => l.trim()).find(Boolean);
+      finish({ ok: false, refused: code === 1 && Boolean(errorRow), why: said || (code === null ? `stopped by ${signal}` : `exit ${code}`), out });
+    });
+  }));
+
+  let filing = null; // the filing running now: one at a time
+  // The command for this filing: a session not filed yet takes the title the GM typed, else the open date (D2, D3).
+  function fileCommand() {
+    if (!fileCmd.takesTitle) return fileCmd.cmd;
+    const title = String(store.get().state.title || '').trim() || opened.title;
+    return [...fileCmd.cmd, `--title=${title}`, '--play-date', opened.iso];
+  }
+  // Starts the filing in the background. Writes that land while it runs find `filing` set and are kept in the state;
+  // the write after it ends renders them all.
+  function startFiling() {
+    if (filing || closed) return;
+    const cmd = fileCommand();
+    const p = (async () => {
+      // `filing` is set before any of this runs: a runFileLog that throws at once must still clear it
+      await null;
+      let done;
+      try { done = await runFileLog(cmd); } catch (err) { done = { ok: false, why: String((err && err.message) || err) }; }
+      if (!done || typeof done !== 'object') done = { ok: false, why: 'the filing gave no answer' };
+      if (filing === p) filing = null;
+      refusedLast = false;
+      try { filed(done); } catch (err) { refusedLast = Boolean(err && err.refused); recordFailed(err); }
+      filingIs(false);
+    })();
+    filing = p;
+    filingIs(true);
+  }
+  function filingIs(on) {
+    if (status.filing === on) return;
+    status.filing = on;
+    broadcast('filing', { on });
+  }
+  // The model the filing's own read gave, for the page's next model, once and briefly: the page asks for it the moment
+  // the filing is told, and a second read of the vault then is a second of waiting (Task 11b, F3).
+  // The trade-off: a vault edit in the 5 s between the filing and the page's fetch is not seen until the next model;
+  // the page asks within milliseconds, so the window is the fetch, and it saves a second read of the whole vault.
+  let justRead = null;
+  const FRESH_MS = 5000;
+  // The last filing was refused (D5): the next tries wait for the save delay, so quick actions make one try, not one
+  // each (D9: a refusal is retried on the GM's next action, through the usual write).
+  let refusedLast = false;
+  // The first thing at the table files the session at once: the state is saved now, not after the save delay, and the
+  // filing starts from that save (the log is never ahead of the saved state). Later writes keep the delay.
+  function fileSoon() {
+    if (closed || filing || refusedLast || !fileCmd || logOf(indexNow())) return;
+    store.flushNow();
+  }
+  // The filing ended: take the index from its first CREATED or ADDED row (never a re-list), check the vault links its
+  // Table Log, and write the log from the newest saved state.
+  function filed(done) {
     lastIndex = index(vaultPath, { deps: vaultDeps });
+    justRead = null;
+    if (fileCmd.takesTitle && !session.index) {
+      let at = filedIndexOf(done.out);
+      // a refusal "already has a Table Log" names a filing of this session that wrote: one that then failed here (a
+      // timeout), or one an earlier server's child finished after a restart (Task 12, F5). That index is taken when it
+      // is this session's number and links the log named, or every retry would be refused.
+      const already = !done.ok && done.refused ? alreadyFiledOf(done.why) : null;
+      const ours = already && lastIndex.has(already.index) && String((lastIndex.read(already.index).fm || {}).session_number) === String(session.number);
+      if (!at && ours && tableLogOf(lastIndex, already.index).log === already.log) at = already.index;
+      if (at && lastIndex.has(at)) {
+        session.index = at;
+        session.title = displayTitleOf(lastIndex.read(at).fm || {}, stemOf(at));
+      }
+    }
     const rel = logOf(lastIndex);
     // A command that wrote the note and then failed (a timeout, an exit after the write) has still filed it: the log
     // found is the log, or every retry would be refused with "already has a Table Log".
-    if (!done.ok && !rel) throw new Error(`filing it failed: ${done.why}`);
-    if (!rel) throw new Error('it was filed, but the session does not link it');
+    if (!rel) {
+      const err = new Error(done.ok ? 'it was filed, but the session does not link it' : `filing it failed: ${done.why}`);
+      if (!done.ok && done.refused) err.refused = true;
+      throw err;
+    }
     log(`run sheet: filed the Table Log, ${rel}: the session is in play.`);
-    broadcast('record-filed', { path: rel });
-    return rel;
+    try { const r = loadModel(lastIndex); justRead = { ...r, at: Date.now() }; } catch { /* the model re-reads on the next load */ }
+    // only a session from the record: a Plan session is named by its Plan, and only a no-Plan state is adopted by it
+    if (session.fromRecord) store.setServer({ filed: { index: session.index, at: now().toISOString() } });
+    // the title the vault filed it under (a title it could not hold files under the date, D8)
+    const filedTitle = fileCmd.takesTitle ? stemOf(session.index).replace(/^Session\s+\d+\s+-\s+/i, '') : session.title;
+    broadcast('record-filed', { path: rel, index: session.index, title: filedTitle });
+    writeRecord(lastWritten || store.get().state);
   }
 
   // The Table Log, brought up to date from the state just written.
   function writeRecord(state) {
     if (closed) return;
     try {
-      let idx = indexNow();
-      let rel = logOf(idx);
+      const idx = indexNow();
+      const rel = logOf(idx);
       const model = lastModel || loadModel().model;
       if (!rel) {
-        rel = fileTableLog(model, state, idx);
-        if (!rel) return; // nothing to write yet, or no way to file one: the state is kept
-        idx = indexNow();
+        // nothing to write yet, or no way to file one: the state is kept. A filing running now writes it when it ends.
+        if (!fileCmd || isEmptySkeleton(tableLogBody(model, state, { linkFor: linkFor(idx) }))) return;
+        startFiling();
+        return;
       }
       const logFile = path.join(vaultRoot, ...rel.split('/'));
       const text = fs.readFileSync(logFile, 'utf8');
@@ -232,21 +388,28 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
       fs.renameSync(tmp, logFile);
       store.setServer({ recordHash: hash });
       recordOk();
-    } catch (err) {
-      const error = String((err && err.message) || err).split('\n')[0];
-      if (status.record !== 'failing' || status.recordError !== error) {
-        status.record = 'failing';
-        status.recordError = error;
-        log(`run sheet: the Table Log could not be written (${error}); the state is kept${err && err.code === 'NOT_A_TABLE_LOG' ? '' : ' and the write is tried again'}.`);
-        broadcast('record-failed', { error });
-      }
-      if (err && err.code === 'NOT_A_TABLE_LOG') return; // a note that is not a Table Log is never written
-      if (!recordRetry && !closed) {
-        const wait = recordRetryMs[Math.min(recordAttempt, recordRetryMs.length - 1)];
-        recordAttempt++;
-        recordRetry = setTimeout(() => { recordRetry = null; writeRecord(lastWritten || store.get().state); }, wait);
-        if (recordRetry.unref) recordRetry.unref();
-      }
+    } catch (err) { recordFailed(err); }
+  }
+
+  // Said once per distinct error. Retried on the timer, except a note that is not a Table Log (never written) and a
+  // filing the vault refused (tried again on the GM's next action, D9).
+  function recordFailed(err) {
+    const error = String((err && err.message) || err).split('\n')[0];
+    const notAgain = err && err.code === 'NOT_A_TABLE_LOG';
+    const waits = err && err.refused;
+    if (status.record !== 'failing' || status.recordError !== error) {
+      status.record = 'failing';
+      status.recordError = error;
+      log(`run sheet: the Table Log could not be written (${error}); the state is kept${notAgain ? '' : waits ? ' and it is tried again on the next change' : ' and the write is tried again'}.`);
+      broadcast('record-failed', { error });
+    }
+    if (waits && recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
+    if (notAgain || waits) return; // a note that is not a Table Log is never written; a refusal waits for the GM
+    if (!recordRetry && !closed) {
+      const wait = recordRetryMs[Math.min(recordAttempt, recordRetryMs.length - 1)];
+      recordAttempt++;
+      recordRetry = setTimeout(() => { recordRetry = null; writeRecord(lastWritten || store.get().state); }, wait);
+      if (recordRetry.unref) recordRetry.unref();
     }
   }
 
@@ -268,7 +431,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
     const idx = indexNow();
     const rel = logOf(idx);
     // No log yet: a start after a filing that failed, with play already in the state, files it now (#855).
-    if (!rel) { if (fileLog) writeRecord(store.get().state); return; }
+    if (!rel) { if (fileCmd) writeRecord(store.get().state); return; }
     const { model } = loadModel();
     const state = store.get().state;
     const text = fs.readFileSync(path.join(vaultRoot, ...rel.split('/')), 'utf8');
@@ -318,6 +481,25 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
     const rel = path.relative(vaultRoot, store.broken).split(path.sep).join('/');
     notices.push({ kind: 'state-broken', path: rel, text: `The saved state did not read; it is kept at ${rel} and the sheet starts fresh.` });
     log(`run sheet: the saved state did not read; it is kept at ${rel}.`);
+  }
+
+  // A session from the record, filed before a restart: the vault says so (Q1). The state's `filed` names the index when
+  // the pick did not (it is used only when the vault has that index and it links its log), and is set again when the
+  // state write after the filing was lost, so the page's title box knows.
+  try {
+    const saved = store.get().state.filed;
+    if (session.fromRecord && !session.index && saved && typeof saved.index === 'string') {
+      const idx = indexNow();
+      if (idx.has(saved.index) && tableLogOf(idx, saved.index).log) {
+        session.index = saved.index;
+        session.title = displayTitleOf(idx.read(saved.index).fm || {}, stemOf(saved.index));
+      }
+    }
+    if (session.fromRecord && isFiled(indexNow()) && !(saved && saved.index === session.index)) {
+      store.setServer({ filed: { index: session.index, at: (saved && saved.at) || now().toISOString() } });
+    }
+  } catch (err) {
+    log(`run sheet: could not check whether the session is filed (${String((err && err.message) || err).split('\n')[0]}).`);
   }
 
   // Temp files a crash left beside the Table Log are removed at start.
@@ -380,7 +562,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
     res.end(data);
   }
   const vaultFiles = serve.handler(vaultRoot, { notFound: NO_PAGE });
-  const sessionInfo = () => ({ label, index: session.index, plan: session.plan, title: session.title, number: session.number });
+  const sessionInfo = (idx) => ({ label, index: session.index, plan: session.plan, title: session.title, number: session.number, fromRecord: Boolean(session.fromRecord), filed: isFiled(idx), openTitle: opened.title });
 
   function readBody(req, done) {
     const chunks = [];
@@ -454,12 +636,16 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
       handle: (req, res) => {
         let model;
         let idx;
-        try { ({ model, idx } = loadModel()); } catch (err) {
-          json(res, 500, { error: String(err.message).split('\n')[0] });
-          return;
+        if (justRead && Date.now() - justRead.at < FRESH_MS) ({ model, idx } = justRead);
+        else {
+          try { ({ model, idx } = loadModel()); } catch (err) {
+            json(res, 500, { error: String(err.message).split('\n')[0] });
+            return;
+          }
         }
+        justRead = null;
         refreshPlayers();
-        json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(), stateId, tableLog: logOf(idx), tableLogOnFirst: !!fileLog, serverId, notices: [...notices, ...statusNotices()] });
+        json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(idx), stateId, tableLog: logOf(idx), tableLogOnFirst: !!fileCmd, serverId, notices: [...notices, ...statusNotices()] });
       },
     },
     {
@@ -526,6 +712,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
             json(res, 409, { reason: 'stale', stateId, rev: store.get().rev, label });
             return;
           }
+          if (closing) { json(res, 503, { error: STOPPING }); return; }
           let r;
           try { r = store.put({ stateId: msg.stateId, base: msg.base, state: msg.state }); } catch (err) {
             json(res, 400, { error: String((err && err.message) || err).split('\n')[0] });
@@ -535,6 +722,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
           json(res, 200, { rev: r.rev });
           broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
           refreshPlayers();
+          fileSoon();
         });
       },
     },
@@ -555,6 +743,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
       path: '/api/actions',
       handle: (req, res) => {
         withJson(req, res, (msg) => {
+          if (closing) { json(res, 503, { error: STOPPING }); return; }
           if (!msg || !Array.isArray(msg.actions) || msg.actions.length > MAX_ACTIONS) { json(res, 400, { error: `the body needs { stateId, base, actions }, at most ${MAX_ACTIONS} actions` }); return; }
           const before = store.get().rev;
           let r;
@@ -571,6 +760,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
           if (r.rev !== before) {
             broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
             refreshPlayers();
+            fileSoon();
           }
         });
       },
@@ -735,10 +925,29 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
     closing = (async () => {
       clearInterval(ping);
       let saveError = null;
-      try { await store.close(); } catch (err) { saveError = err; } // the last write, and its record, land before the end
+      // A filing running now ends first, so the log it files gets the play it was filed for, and no child is left
+      // writing the vault after the sheet has stopped.
+      let said = false;
+      const settle = async () => {
+        while (filing) {
+          if (!said) { said = true; log("Finishing the session's filing before stopping…"); }
+          await filing;
+        }
+      };
+      await settle();
       // A record write still waiting on its retry gets one last try; if it fails, the next start's
       // reconcile brings the log up to date (it was the server's own last write, or the skeleton).
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; if (lastWritten) writeRecord(lastWritten); }
+      // The state still due is written now; that write, or the last try, may start a filing. Each such filing ends
+      // before the store closes, so the `filed` and `recordHash` it saves land in the state file (Task 12).
+      for (let i = 0; i < 5; i++) {
+        await settle();
+        store.flushNow();
+        if (!filing) break;
+      }
+      await settle();
+      try { await store.close(); } catch (err) { saveError = err; } // the last write, and its record, land before the end
+      await settle(); // a refused filing's next try may start from that last write
       closed = true;
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
       for (const res of [...clients, ...playersClients]) res.end();

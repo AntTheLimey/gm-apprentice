@@ -17,13 +17,17 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import importlib
 import io
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
@@ -114,7 +118,10 @@ def _publish_parser() -> argparse.ArgumentParser:
 
 def _table_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="gma table", description=COMMANDS["table"].summary,
+        prog="gma table",
+        description=COMMANDS["table"].summary + " With no Plan open, it "
+        "opens the next session from the last Wrap-Up and files it on the "
+        "first thing that happens at the table.",
         epilog="Example: gma table <vault>")
     ap.add_argument("vault", help="the campaign vault")
     ap.add_argument("--session", help="the session to run: an index stem or "
@@ -483,10 +490,22 @@ def _table_log_command(vault: str, index: str) -> list[str]:
             "--created-by", "run-sheet", "--write"]
 
 
+def _table_file_command(vault: str, number: object, chapter: object) -> dict[str, object]:
+    """The command that files a session not in the vault yet, with its Table
+    Log, as one batch. The run sheet adds `--title` and `--play-date` when
+    it runs it (`takesTitle`): the GM may still be naming the session."""
+    cmd = [sys.executable, str(Path(__file__).resolve()), "table-file",
+           os.path.abspath(vault), "--number", str(number)]
+    if isinstance(chapter, str) and chapter:
+        cmd += ["--chapter", Path(chapter).stem]
+    return {"cmd": cmd, "takesTitle": True}
+
+
 def _table(args: list[str]) -> int:
     """The run sheet: the tool picks the session and checks the port, then
     serves with the party, and with the command that files a missing Table
-    Log on the first thing that happens at the table."""
+    Log (and, for a session not in the vault yet, the session) on the first
+    thing that happens at the table."""
     opts = _table_parser().parse_args(args)
     tool = vaultlib.PUBLISH_TOOL
     if tool is None:
@@ -497,18 +516,106 @@ def _table(args: list[str]) -> int:
     picked = _table_pick(tool, opts.vault, [*asked, *port])
     if picked is None:
         return 1
-    index = str(picked["index"])
-    file_log = _table_log_command(opts.vault, index)
+    index = picked.get("index")
+    file_log: object
+    if isinstance(index, str) and index:
+        file_log = _table_log_command(opts.vault, index)
+    else:   # not filed yet: no --session, the tool picks the same one again
+        file_log = _table_file_command(opts.vault, picked.get("number"),
+                                       picked.get("chapter"))
     import vault_check
     party = [row.split("\t")[1] for row in
              vault_check.list_active_pcs(Path(opts.vault))]
     sys.stdout.flush()   # posix replaces this process next: nothing may be left buffered
     # one JSON array: a PC note named like "[Guest] Mira.md" is then a path, never read as JSON
     return _run_tool(tool, [
-        "table", opts.vault, "--session", index,
+        "table", opts.vault,
+        *(["--session", index] if isinstance(index, str) and index else []),
         *(["--party", json.dumps(party)] if party else []), *port,
         *(["--file-log", json.dumps(file_log)] if not picked.get("tableLog") else []),
         *(["--no-open"] if opts.no_open else [])])
+
+
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _date_title(play_date: str) -> str:
+    """'29 Nov 2026': the title of a session whose own title the vault can't
+    hold. Not strftime: %b follows the locale."""
+    try:
+        d = datetime.date.fromisoformat(play_date)
+    except ValueError:
+        return play_date
+    return f"{d.day} {MONTHS[d.month - 1]} {d.year}"
+
+
+def _table_file(args: list[str]) -> int:
+    """Hidden: file a session not in the vault yet, with its Table Log, as
+    one `vault-write batch`. The run sheet runs it on the first thing that
+    happens at the table (#855); `gma table` hands over the command. Prints
+    the batch's rows, the index's first; exit 1 with the refusal's first
+    line and nothing written."""
+    ap = argparse.ArgumentParser(
+        prog="gma table-file", description=_table_file.__doc__)
+    ap.add_argument("vault")
+    ap.add_argument("--number", type=int, required=True)
+    ap.add_argument("--chapter")
+    ap.add_argument("--title", required=True)
+    ap.add_argument("--play-date", required=True, dest="play_date")
+    opts = ap.parse_args(args)
+    import vault_write
+    import vw_batch
+
+    def refuse(why: str) -> int:
+        print(f"ERROR\t\t\t{why}")
+        return 1
+
+    def batch(blocks: list[str]) -> tuple[int, list[str]]:
+        """Run the blocks as one batch with --write; the rows it printed."""
+        with tempfile.TemporaryDirectory(prefix="gma-table-file-") as tmp:
+            file = Path(tmp) / "batch.txt"
+            file.write_text("".join(blocks), encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = vw_batch.run(argparse.Namespace(
+                    vault=Path(opts.vault), file=[str(file)], write=True,
+                    skip=None, only=None))
+        return code, out.getvalue().splitlines()
+
+    title = " ".join(opts.title.split())
+    if not title or vault_write.BAD_NAME_RE.search(title):
+        title = _date_title(opts.play_date)   # a refusal files under the date (D8)
+    stem = f"Session {opts.number:02d} - {title}"
+    log = (f"=== table-log-new --session {{session}} --play-date "
+           f"{shlex.quote(opts.play_date)} --created-by run-sheet\n")
+    new = ("=== session-new --number " + str(opts.number)
+           + f" --title={shlex.quote(title)} --play-date {shlex.quote(opts.play_date)}"
+           + (f" --chapter {shlex.quote(opts.chapter)}" if opts.chapter else "")
+           + " --upcoming --created-by manual\n")
+    beside = None
+    code, lines = batch([new, log.format(session=shlex.quote(stem))])
+    for line in lines:
+        m = re.match(r"ERROR\t\t\t.*already has an index: (.+?\.md);", line)
+        if m:   # prep filed it between the look and the batch: file beside it
+            beside = m.group(1)
+    if code != 0 and beside:
+        code, lines = batch([log.format(session=shlex.quote(beside))])
+    rows = [ln for ln in lines if ln and not ln.startswith("## ")]
+    if code != 0:
+        error = next((ln for ln in rows if ln.startswith("ERROR")), None)
+        return refuse(error.split("\t", 3)[-1].splitlines()[0] if error
+                      else "the batch was refused")
+    # the index first, on both paths: the row the server reads its path from
+    def is_index(ln: str) -> bool:
+        verb, _, rest = ln.partition("\t")
+        path = rest.split("\t")[0]
+        if beside:
+            return path == beside
+        return verb == "CREATED" and (path == f"{stem}.md" or path.endswith(f"/{stem}.md"))
+    rows.sort(key=lambda ln: not is_index(ln))
+    print("\n".join(rows))
+    return 0
 
 
 def _publish(args: list[str]) -> int:
@@ -563,6 +670,8 @@ def main(argv: list[str] | None = None) -> int:
         print(found[0])
         return 0
     name, rest = args[0], args[1:]
+    if name == "table-file":   # hidden: the run sheet runs it, no one types it
+        return _table_file(rest)
     if name not in COMMANDS:
         print(f"gma: unknown command '{name}'; run 'gma llms'", file=sys.stderr)
         return 2

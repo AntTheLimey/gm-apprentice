@@ -151,6 +151,8 @@
   function takeStatus(st) {
     if (!st) return;
     G.saveFailed = st.saving === 'failing';
+    // a filing running now (Task 11b, F3): the title box says so and is read-only until it ends
+    if (G.filing !== Boolean(st.filing) && !G.filedWait) { G.filing = Boolean(st.filing); if (G.model) update(); }
     if (st.record === 'failing') note(recordFailedText(st.recordError), { kind: 'bad', id: `rf:${st.recordError}` });
     else recordOk();
     indicator();
@@ -194,6 +196,8 @@
   // Every change: reduce, redraw, send.
   function act(a) {
     if (G.switching) return; // the sheet is changing session: nothing is done to the old one
+    // a title still being typed goes first: the filing the next action may start takes it (D2)
+    if (a.type !== 'setTitle' && G.ui.titleDraft != null) commitTitle();
     a.id = `${G.clientId}-${++G.seq}`;
     const at = new Date().toISOString();
     a.at = at; // the server keeps the action's own time (Review L2), so a queued action logs when it was done
@@ -379,7 +383,29 @@
       refresh();
     });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
-    es.addEventListener('record-filed', (ev) => { const d = data(ev); if (d.path && !G.tableLog) { G.tableLog = d.path; update(); } });
+    // the filing's start and end (Task 11b, F3); its end waits for the model that says what it was filed as
+    es.addEventListener('filing', (ev) => {
+      const on = Boolean(data(ev).on);
+      if (!on && G.filedWait) return;
+      if (G.filing !== on) { G.filing = on; update(); }
+    });
+    es.addEventListener('record-filed', (ev) => {
+      const d = data(ev);
+      if (d.path && !G.tableLog) { G.tableLog = d.path; update(); }
+      // a session from the record is named now: the model says under what (the title box's "Filed as")
+      if (G.session && G.session.fromRecord) {
+        G.filedWait = true;
+        const done = () => { G.filedWait = false; G.filing = false; update(); };
+        // a read that fails is tried again each second, for half a minute (the filing never is): the session is filed,
+        // and the title box stays read-only until the model says under what (CodeRabbit #895)
+        let tries = 0;
+        const read = () => getJson('/api/model').then((m) => { takeModel(m); done(); }).catch(() => {
+          if (!G.filedWait) return;
+          if (++tries < 30) setTimeout(read, 1000); else done();
+        });
+        read();
+      }
+    });
     es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
     es.addEventListener('record-ok', () => recordOk());
     es.onerror = () => { if (!G.down) lost(); };
@@ -404,7 +430,9 @@
   const castOf = (p) => (G.model.cast || []).find((c) => c.note === p) || null;
   const pcOf = (p) => (G.model.pcs || []).find((x) => x.note === p) || null;
   // a place goes by its title, the reader's one rule (place-name.js): never a folder note's "index"
-  const nameOf = (p) => { const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? (n.title || n.name) : stem(p); };
+  // the no-Plan page names every note by the record's display name first (Task 11b, F11: never a raw file stem)
+  const recName = (p) => { const r = G.model && G.model.record; return (r && r.names && r.names[p]) || null; };
+  const nameOf = (p) => { const rn = recName(p); if (rn) return rn; const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? (n.title || n.name) : stem(p); };
   const portraitOf = (p) => { const pc = pcOf(p); if (pc && pc.portrait) return pc.portrait; const n = noteInfo(p); if (n && n.portrait) return n.portrait; const c = castOf(p); return c ? c.portrait : null; };
   const unmaskOf = (p) => { const n = noteInfo(p); return n && n.unmask ? n.unmask : null; };
   const isUnmasked = (d, p) => d.unmaskedNow.some((u) => u.note === p);
@@ -478,7 +506,8 @@
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }
   const NEW_PLACE = (t) => `+ New place: ${t}`;
-  const NO_PLACE = 'No known place by that name: choose "+ New place" to make one';
+  // Enter in an empty Move box (audit S6): said beside the box, never in a browser bubble
+  const MOVE_EMPTY = 'Type a place, or pick one from the list';
   const placeChoices = (text) => (FM ? FM.addChoices(knownPlaces(), text, RS.castSearch, 8, NEW_PLACE) : []);
   // A group's place, for the GM: its beat's place (or spot's), else the place beat's, else its beat's title.
   function groupPlace(g, d = D()) {
@@ -488,20 +517,30 @@
     return place ? link(place) : esc(groupLabel(g.key, d));
   }
   // The box: type a place (the page's own list under it offers the near ones; no browser datalist as well, final
-  // review P-A2), Enter takes the top known hit, and a new one is only ever the explicit "+ New place: <typed>"
-  // choice under it (P-S10).
+  // review P-A2). Enter takes a known place its words truly name (FM.enterChoice), and with none, makes the typed place, as "+ New place: <typed>" under
+  // it does (audit S6, which overturned P-S10's explicit choice only). Enter with nothing typed says so beside the box.
   // `where` tells a group's boxes apart (Hand over, a Here strip): each keeps its own focus and choices.
   function moveBoxHTML(group, where) {
     const id = `${where}|${group}`;
     const hits = (G.ui.moveHits && G.ui.moveHits[id]) || [];
-    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span></span>`;
+    const say = (G.ui.moveSay || {})[id] || '';
+    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span><span class="warn movesay" data-movesay="${esc(id)}" role="status">${esc(say)}</span></span>`;
+  }
+  function moveSay(id, text) {
+    G.ui.moveSay = G.ui.moveSay || {};
+    if (text) G.ui.moveSay[id] = text; else delete G.ui.moveSay[id];
+    const el = document.querySelector(`[data-movesay="${CSS.escape(id)}"]`);
+    if (!el) return;
+    el.textContent = text || '';
+    // a box at the window's bottom edge: the words come into view under it
+    if (text) el.scrollIntoView({ block: 'nearest' });
   }
   function moveHitsHTML(group, hits) {
     return hits.map((c) => (c.isNew
       ? `<button type="button" class="new" data-movenew="${esc(c.name)}" data-moveg="${esc(group)}">${esc(c.label)}</button>`
       : `<button type="button" data-movepick="${esc(c.note)}" data-moveg="${esc(group)}">${esc(c.name)}</button>`)).join('');
   }
-  const groupWho = (key) => ((groups().find((g) => g.key === key) || {}).pcs || []).map((p) => first(nameOf(p))).join(', ');
+  const groupWho = (key) => ((groupByKey(key) || {}).pcs || []).map((p) => first(nameOf(p))).join(', ');
   // The Move list closes on Esc and on any press outside its box (final review P-A1), as the Colours menu does: the
   // press goes on to do what it says, and the typed words stay in the box. `keep` is the box pressed in, if any.
   function closeMoveLists(keep = null) {
@@ -546,9 +585,15 @@
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches('input[data-movebox]')) reopenMoveList(ev.target); });
   // Move a group's PCs to a known place (`note`) or a typed one (`name`). The place's beat becomes the focus.
   function moveGroup(group, { note, name }) {
-    const g = groups().find((x) => x.key === group);
-    if (!g) return;
+    const whole = groupByKey(group);
+    if (!whole || !whole.pcs.length) return;
+    // on the no-Plan page the GM may pick PCs in the row (Task 8 fix round 1): Move them moves those as a group of their
+    // own, else the whole row
+    const picked = whole.pcs.filter((p) => (G.ui.picked || {})[p] === whole.key);
+    const g = { ...whole, pcs: picked.length ? picked : whole.pcs };
+    for (const p of g.pcs) if (G.ui.picked) delete G.ui.picked[p];
     if (G.ui.moveHits) for (const k of Object.keys(G.ui.moveHits)) if (k.endsWith(`|${group}`)) delete G.ui.moveHits[k];
+    if (G.ui.moveSay) for (const k of Object.keys(G.ui.moveSay)) if (k.endsWith(`|${group}`)) delete G.ui.moveSay[k];
     document.querySelectorAll(`input[data-moveg="${CSS.escape(group)}"]`).forEach((box) => { box.value = ''; });
     const names = g.pcs.map((p) => first(nameOf(p)));
     let key;
@@ -577,9 +622,75 @@
     G.ui.focus = key;
     touch(key);
     update();
-    // the sheet (the pane, in a fight) goes to where they went (final review P4.5)
-    goTo(`beat:${key}`);
+    // the sheet (the pane, in a fight) goes to where they went (final review P4.5); the no-Plan page stays where the GM
+    // is, with Where they are at its top
+    if (!REC()) goTo(`beat:${key}`);
   }
+  // ------------------------------------------------------------------ the no-Plan page (plan Task 8)
+  // A night with no Plan reads `model.record` (read-record.js): where the crew is, Coming up, the cards ranked around the
+  // focused group's place (record-rank.js), Background, Last time and World. The PCs the sheet has not placed yet stand
+  // where the record has them (`whereNow`): one row, `CREW`, whose Move them moves them all. Nothing is placed on open:
+  // opening files nothing (#855).
+  const REC = () => (G.model && G.model.record) || null;
+  const RR = window.RunSheetRecordRank;
+  const CREW = '__crew';
+  const unplacedCrew = () => pcs().filter((p) => !posOf(p.note)).map((p) => p.note);
+  function groupByKey(key) {
+    if (key === CREW) return REC() ? { key: CREW, beat: null, spot: null, pcs: unplacedCrew() } : null;
+    return groups().find((g) => g.key === key) || null;
+  }
+  // A group's place note: its spot's or beat's place; null for a place typed tonight (no note, so nothing ranks Here).
+  // Where the record has the crew the sheet has not placed: the reader's whereNow (the last session's Table Log, the World
+  // State, the Handoff's first place, the PC notes; never tonight's log, whose positions live in the state).
+  const crewPlace = () => { const r = REC(); return (r && r.whereNow && r.whereNow.place) || null; };
+  function groupPlaceNote(g, d = D()) {
+    if (g.key === CREW) return crewPlace();
+    const b = d.beats.find((x) => x.key === g.beat);
+    const spot = b && g.spot ? (b.spots || []).find((x) => x.key === g.spot) : null;
+    return (spot && spot.note) || (b && b.place) || null;
+  }
+  // The rows of Where they are: every placed group, then the crew the sheet has not placed, if any.
+  function whereGroups() {
+    const out = groups().slice();
+    if (unplacedCrew().length) out.push(groupByKey(CREW));
+    return out;
+  }
+  // The focused group's place, what the cards and places rank by.
+  // The focused row of Where they are: the crew not placed yet when the GM picked it (or when no group is placed),
+  // else the page's focused group.
+  function recFocus(gs = groups()) {
+    if (unplacedCrew().length && (G.ui.focusGroup === CREW || !gs.length)) return CREW;
+    return gs.length ? focusedGroup(gs) : null;
+  }
+  function rankPlace(d) {
+    const f = recFocus();
+    const g = f ? groupByKey(f) : null;
+    return g ? groupPlaceNote(g, d) : null;
+  }
+  function ranked(d) {
+    const r = REC();
+    const where = rankPlace(d);
+    const out = RR ? RR.rankCards(r.cards || [], where, r.loc || {}, r.peopleAt || {}) : { here: [], could: r.cards || [], elsewhere: [] };
+    return { ...out, where, places: RR ? RR.placesFor(where, r.loc || {}, out.here) : [] };
+  }
+  // Fight here on the no-Plan page (gm-fight.js asks first): the crew the sheet has not placed stand where the record has
+  // them, so they are put there quietly (no move is logged: they did not move), and the fight finds them standing there,
+  // or offers them on Add when it is elsewhere.
+  // `list` stands where the record has the crew (its place beat made first, quietly); false when the record names no place
+  // the sheet knows.
+  function placeAtRecord(list) {
+    const at = crewPlace();
+    const key = at ? (G.model.placeKeys || {})[at] : null;
+    if (!key || !list.length) return false;
+    if (!D().beats.some((b) => b.key === key)) act({ type: 'improvise', key, title: nameOf(at), place: at, quiet: true });
+    act({ type: 'moveAll', pcs: list, to: { beat: key, spot: null, title: nameOf(at) } });
+    return key;
+  }
+  function placeCrew() {
+    const key = placeAtRecord(unplacedCrew());
+    if (key) touch(key);
+  }
+
   // "Where the party is" (F13): one row per group at the top of Hand over, with its place and Move them.
   function partyWhereHTML(d) {
     const gs = groups();
@@ -600,7 +711,7 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
+    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-ptfocus', 'data-hand', 'data-stop', 'data-fire', 'data-wpick', 'data-wback'];
     for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
@@ -681,6 +792,7 @@
     if (drawing) { drawAgain = true; return; }
     press.owed = false;
     pruneBadVitals();
+    prunePicks();
     let a = document.activeElement;
     if ((!a || a === document.body) && wantFocus) a = document.querySelector(wantFocus) || a;
     if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
@@ -741,6 +853,7 @@
     for (const part of parts) if (!G.pane && part.pane) G.pane = part.pane(d) || null;
     $('#rail').innerHTML = railHTML(d);
     $('#sheet').innerHTML = sheetHTML(d);
+    placeFind();
     renderSide(d);
     if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
     document.querySelectorAll('[data-keepscroll]').forEach((el) => { if (kept[el.dataset.keepscroll]) el.scrollTop = kept[el.dataset.keepscroll]; });
@@ -780,6 +893,7 @@
   const RAIL_TOP = [['handover', 'Hand over'], ['pcs', 'The PCs'], ['run', 'The run']];
   const RAIL_END = [['people', 'People'], ['places', 'Places and maps'], ['threads', 'Threads'], ['long', 'If you run long'], ['end', 'End of the night'], ['prep', "Prep's working"]];
   function railHTML(d) {
+    if (REC()) return recordRailHTML(d);
     const faces = (list) => (list.length ? `<span class="fc">${list.map((p) => face(p.note)).join('')}</span>` : '');
     const beats = d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency));
     const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; });
@@ -793,7 +907,7 @@
     }).join('');
     h += `<a class="b ${off.length ? 'here' : ''}" title="A PC in no beat (asleep, elsewhere)">Off-screen${faces(off)}</a>`;
     const canGoOff = pcs().filter((p) => !off.includes(p));
-    if (canGoOff.length) h += `<div class="offs">${canGoOff.map((p) => `<button class="mini" type="button" data-off="${esc(p.note)}" title="Move ${esc(p.name)} off-screen">${esc(first(p.name))}</button>`).join('')}</div>`;
+    if (canGoOff.length) h += `<div class="offs">${canGoOff.map((p) => `<button class="mini" type="button" data-off="${esc(p.note)}" title="Move ${esc(nameOf(p.note))} off-screen">${esc(first(nameOf(p.note)))}</button>`).join('')}</div>`;
     if (unplaced.length) h += `<a class="b" title="PCs the sheet has not placed at any beat yet">Not placed yet${faces(unplaced)}</a>`;
     h += RAIL_END.map(([id, t]) => `<a data-go="${id}">${t}</a>`).join('');
     return h;
@@ -823,6 +937,7 @@
     return `${strip}${bar}${body}<p class="wholelink"><a class="lk" id="paneWhole" data-pane="whole">Whole run sheet</a> <span class="note">the brief, every beat, people, places and the end of the night</span></p>`;
   }
   function wholeHTML(d) {
+    if (REC()) return recordHTML(d);
     const m = G.model;
     let h = '';
     for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
@@ -845,6 +960,232 @@
     const prep = m.prep || [];
     const open = mem.get('fold:prep') === '1';
     h += `<section class="s" id="prep"><details class="fold" data-fold="prep" ${open ? 'open' : ''}><summary>Prep's working (not for the table)${prep.length ? `: ${esc(prep.map((p) => p.title).join(' · '))}` : ''}</summary>${prep.map((p) => `<h3>${esc(p.title)}</h3>${p.mdHtml || ''}`).join('') || '<p class="muted">None.</p>'}</details></section>`;
+    return h;
+  }
+
+  // ------------------------------------------------------------------ the no-Plan page, drawn (plan Task 8)
+  // Top to bottom: the header and the title box; Where they are, with Move them and Fight here on each row (audit P1,
+  // P6); Coming up; the cards, Here, Could come to them, then Elsewhere folded; Background, folded; Last time and World;
+  // Places, People and the PCs; the one line on what needs a Plan; End of the night. The rail lists the same, in the
+  // same order (P2, P5). Every word comes from `model.record` and `model.rules.words`.
+  const TITLE_BAD = /[\\/:*?"<>|#^[\]]/;
+  const TITLE_BAD_TEXT = 'A title can\'t hold \\ / : * ? " < > | # ^ [ ]';
+  const RAIL_REC_END = [['places', 'Places'], ['people', 'People'], ['pcs', 'The PCs'], ['end', 'End of the night']];
+  function recordRailHTML(d) {
+    const rk = ranked(d);
+    const card = (c) => `<a class="b" data-go="card:${esc(c.id)}">${esc(c.title)}</a>`;
+    let h = '<button type="button" class="railstrip" id="railOpen" title="Open the run list" aria-label="Open the run list">⟩</button>';
+    h += '<div class="hd rhd">Run sheet<button type="button" id="railFold" title="Fold the run list to a thin strip" aria-label="Fold the run list">⟨</button></div>';
+    h += '<a data-go="where">Where they are</a>';
+    // the same groups as Where they are, each focusable, then the PCs off-screen
+    const rows = whereGroups();
+    const f = recFocus();
+    const faces = (list) => `<span class="fc">${list.map((p) => face(p)).join('')}</span>`;
+    h += rows.map((g) => {
+      const note = groupPlaceNote(g, d);
+      const b = g.key === CREW ? null : d.beats.find((x) => x.key === g.beat);
+      const at = note ? nameOf(note) : (b ? b.title : '');
+      return `<a class="b rg ${rows.length > 1 && g.key === f ? 'here' : ''}" data-pgroup="${esc(g.key)}" tabindex="0" role="link" title="Rank the cards around this group">${esc(at || '—')}${faces(g.pcs)}</a>`;
+    }).join('');
+    const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; }).map((p) => p.note);
+    if (off.length) h += `<div class="b rg">Off-screen${faces(off)}</div>`;
+    h += '<a data-go="coming">Coming up</a>';
+    if (rk.here.length) h += `<div class="hd">Here</div>${rk.here.map(card).join('')}`;
+    if (rk.could.length) h += `<div class="hd">Could come to them</div>${rk.could.map(card).join('')}`;
+    h += RAIL_REC_END.map(([id, t]) => `<a data-go="${id}">${t}</a>`).join('');
+    return h;
+  }
+
+  const filedNow = () => Boolean((G.session && G.session.filed) || (G.state && G.state.filed));
+  // The title box (D2, D8): typed before the filing, the index's name once there is an index, "Filed as:" once there is one (an index is a filed session, Task 12, F7).
+  function titleHTML() {
+    const ses = G.session || {};
+    if (filedNow() && ses.filed) return `<div class="rtitle" id="rfiled"><span class="muted">Filed as:</span> <b>${esc(ses.title || ses.label || '')}</b></div>`;
+    if (ses.index) return `<div class="rtitle" id="rindex"><span class="muted">Filed as:</span> <b>${esc(ses.title || stem(ses.index))}</b></div>`;
+    if (filedNow()) return '<div class="rtitle"><span class="muted">Filing…</span></div>';
+    const v = G.ui.titleDraft != null ? G.ui.titleDraft : (G.state.title || '');
+    // while the filing runs the box holds what it was filed with, read-only, and says so beside it (Task 11b, F3)
+    const busy = Boolean(G.filing || G.filedWait);
+    return `<div class="rtitle"><label for="rtitle">Tonight's title (optional)</label> <input id="rtitle" value="${esc(v)}" placeholder="${esc(ses.openTitle || '')}" maxlength="80" autocomplete="off"${busy ? ' readonly aria-readonly="true"' : ''}>`
+      + ` <span class="warn" id="rtbad" role="status">${TITLE_BAD.test(v) ? esc(TITLE_BAD_TEXT) : ''}</span>`
+      + (busy ? `<span class="note" id="rfiling" role="status">Filing ${esc(ses.label || 'the session')}…</span></div>`
+        : '<span class="note">The session is filed on the first thing that happens at the table.</span></div>');
+  }
+  function commitTitle() {
+    const v = G.ui.titleDraft;
+    G.ui.titleDraft = null;
+    if (v == null || filedNow() || G.filing || G.filedWait || RS.cleanTitle(v) === (G.state.title || '')) return;
+    act({ type: 'setTitle', title: v });
+  }
+
+  // Fight here for a place note: the fight part's own button (data-fplace), or nothing (no fights, a fight running).
+  const fightAt = (note) => (note ? parts.map((x) => (x.placeButtons && x.placeButtons(note)) || '').join('') : '');
+  function whereRowHTML(g, d, many, focus) {
+    const note = groupPlaceNote(g, d);
+    const b = g.key === CREW ? null : d.beats.find((x) => x.key === g.beat);
+    let place;
+    if (note) place = link(note);
+    else if (b) place = esc(b.title);
+    else place = '<span class="muted">a place the record does not name</span>';
+    // a place typed tonight has no note: its beat's own Fight
+    const fight = note ? fightAt(note) : (b ? parts.map((x) => (x.beatButtons && x.beatButtons(b)) || '').join('') : '');
+    // a place only the PC notes give is said to come from them (Task 11b, F8): the record said nothing of where
+    const fromPcs = ((REC() || {}).whereNow || {}).from === 'pc-notes';
+    const from = g.key === CREW && note ? ` <span class="note">${fromPcs ? 'from the PC notes' : 'from the record'}</span>` : '';
+    // each PC a chip: picked, Move them moves the picked ones alone; "off" sends that PC off-screen (the rail's own action)
+    const chip = (p) => {
+      const on = (G.ui.picked || {})[p] === g.key;
+      const nm = nameOf(p);
+      return `<span class="pchip ${on ? 'on' : ''}"><button type="button" class="pick ${on ? 'on' : ''}" data-wpick="${esc(p)}" data-wrowkey="${esc(g.key)}" aria-pressed="${on}" title="${on ? `Picked: Move them moves the picked PCs. Click: unpick ${esc(nm)}` : `Pick ${esc(nm)}: Move them then moves the picked PCs alone`}">${face(p)}${esc(first(nm))}</button><button type="button" class="mini off" data-off="${esc(p)}" title="Move ${esc(nm)} off-screen" aria-label="${esc(nm)} off-screen">off</button></span>`;
+    };
+    const lead = many ? `<a class="lk wfocus" data-pgroup="${esc(g.key)}" tabindex="0" role="link" title="Rank the cards and places around this group">${focus ? 'Focused' : 'Focus'}</a>` : '';
+    return `<li class="wrow ${many && focus ? 'focus' : ''}" data-wrow="${esc(g.key)}"><span class="who">${g.pcs.map(chip).join('')}</span> <span class="at">at ${place}${from}</span>${lead ? ` ${lead}` : ''} <span class="wact">${moveBoxHTML(g.key, 'where')}${fight ? ` <span class="wbtns">${fight}</span>` : ''}</span></li>`;
+  }
+  // Off-screen PCs (asleep, elsewhere): a quiet line, each with "back" to the focused row.
+  function offHTML() {
+    const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; });
+    if (!off.length) return '';
+    // "back" only where there is somewhere to go (fix round 3): else the line says how to make one
+    const can = Boolean(backTarget());
+    const back = (p) => (can ? ` <button type="button" class="mini" data-wback="${esc(p.note)}" title="Bring ${esc(nameOf(p.note))} back to the focused group">back</button>` : '');
+    return `<p class="woff note" id="woff">Off-screen: ${off.map((p) => `<span class="pchip">${face(p.note)}${esc(first(nameOf(p.note)))}${back(p)}</span>`).join(' ')}${can ? '' : ' <span class="muted">back: Move them first</span>'}</p>`;
+  }
+  // A pick holds only while its PC stands in the row it was picked in: a PC moved by any route (Move them, Fight here,
+  // the rail, another window) is unpicked (fix round 3). Run before each redraw (update), never inside it: a redraw
+  // only reads the picks, and a stale one already reads as unpicked there (Task 12).
+  function prunePicks() {
+    if (!G.ui.picked || !G.model || !G.state || !G.model.record) return;
+    const rows = whereGroups();
+    for (const [pc, key] of Object.entries(G.ui.picked)) {
+      const row = rows.find((g) => g.key === key);
+      if (!row || !row.pcs.includes(pc)) delete G.ui.picked[pc];
+    }
+  }
+  function recordWhereHTML(d) {
+    const rows = whereGroups();
+    if (!rows.length) return (pcs().length ? '<p class="muted">Every PC is off-screen.</p>' : '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>') + offHTML();
+    const f = recFocus();
+    return `<ul class="where-rec">${rows.map((g) => whereRowHTML(g, d, rows.length > 1, g.key === f)).join('')}</ul>${offHTML()}`;
+  }
+  // "back" for an off-screen PC: to the focused group's place (the Here strip's own `move`); to the crew not placed yet,
+  // where the record has them; with no group at all, where the record has the crew.
+  // Where "back" goes: the focused placed group, else (the crew not placed yet, or nobody placed) where the record has the
+  // crew, if the sheet knows that place; null when there is nowhere.
+  function backTarget() {
+    const f = recFocus();
+    const g = f && f !== CREW ? groupByKey(f) : null;
+    if (g) return { group: g };
+    const at = crewPlace();
+    return at && (G.model.placeKeys || {})[at] ? { record: at } : null;
+  }
+  function bringBack(pc) {
+    const t = backTarget();
+    if (!t) return;
+    if (t.group) {
+      const b = D().beats.find((x) => x.key === t.group.beat);
+      act({ type: 'move', pc, to: { beat: t.group.beat, spot: t.group.spot || null, title: b ? b.title : '' } });
+      return;
+    }
+    // that PC alone, where the record has the crew: the others stay where the record has them, unplaced
+    placeAtRecord([pc]);
+  }
+
+  const listHTML = (htmls) => `<ul>${htmls.map((x) => `<li>${x}</li>`).join('')}</ul>`;
+  // Tonight's jots, newest first: a night with no Plan has no beat to hold them (audit S4, ruling 2)
+  function tonightHTML() {
+    const js = (G.state.jots || []).slice().reverse();
+    if (!js.length) return '';
+    return `<h4 class="lab">Tonight so far</h4><ul class="jots" id="tonight">${js.map((j) => `<li><span class="tm">${esc(hhmm(j.at))}</span><span>${esc(j.text)}</span>${armBtn(`unjot:${j.id}`, '✕', `data-unjot="${esc(j.id)}" class="mini"`, 'Delete this jot')}</li>`).join('')}</ul>`;
+  }
+  function comingHTML() {
+    return tonightHTML() + comingRecordHTML();
+  }
+  function comingRecordHTML() {
+    const cu = REC().comingUp || {};
+    const w = REC().world || {};
+    let h = '';
+    const lead = cu.lead;
+    if (lead) {
+      const people = (lead.people || []).map((p) => link(p)).join(' · ');
+      const hits = (lead.hits || []).map((p) => link(p)).join(' · ');
+      const sched = lead.scheduleHtml || (lead.schedule || []).map(esc);
+      h += `<div class="card lead"><div class="bh"><span class="lbl">The clock</span><h3>${esc(lead.title)}</h3>${lead.place ? `<span class="at">at ${link(lead.place)}</span>` : ''}${fightAt(lead.place)}</div>`
+        + (sched.length ? `<h4 class="lab">Schedule</h4>${listHTML(sched)}` : '')
+        + (people ? `<h4 class="lab">People</h4><p>${people}</p>` : '')
+        + `<h4 class="lab">What could hit this</h4><p>${hits || '<span class="muted">Nothing on the record.</span>'}</p></div>`;
+    }
+    if (cu.handoff) h += `<h4 class="lab">Handoff</h4>${cu.handoffHtml || `<p>${esc(cu.handoff)}</p>`}`;
+    if (cu.empty) h += `<p class="muted">${esc(cu.empty)}</p>`;
+    const kv = [];
+    if (w.date) kv.push(`<b>In-game date</b><span>${w.dateHtml || esc(w.date)}</span>`);
+    if ((w.clocks || []).length) kv.push(`<b>Clocks</b><span>${(w.clocksHtml || w.clocks.map(esc)).join('<br>')}</span>`);
+    if (kv.length) h += `<div class="kv">${kv.join('')}</div>`;
+    const inSched = new Set((lead && lead.schedule) || []);
+    const ints = (cu.intentions || []).map((t, i) => [t, (cu.intentionsHtml || [])[i] || esc(t)]).filter(([t]) => !inSched.has(t));
+    if (ints.length) h += `<h4 class="lab">What the players said they'd do</h4>${listHTML(ints.map((x) => x[1]))}`;
+    return h || '<p class="muted">Nothing on the record.</p>';
+  }
+
+  function cardHTML(c) {
+    return `<div class="card" id="card:${esc(c.id)}"><h3>${esc(c.title)}</h3><ul>${(c.items || []).map((it) => `<li>${it.mdHtml || esc(it.md)} <span class="src">${esc(it.source)}</span></li>`).join('')}</ul></div>`;
+  }
+  function scenesHTML(rk) {
+    const here = rk.here.length ? rk.here.map(cardHTML).join('')
+      : `<p class="muted">${rk.where ? 'Nothing on the record is here.' : 'The crew stands nowhere the record knows: every card could come to them.'}</p>`;
+    let h = `<div data-cards="here"><h4 class="lab">Here</h4>${here}</div>`;
+    h += `<div data-cards="could"><h4 class="lab">Could come to them</h4>${rk.could.length ? rk.could.map(cardHTML).join('') : '<p class="muted">None.</p>'}</div>`;
+    if (rk.elsewhere.length) {
+      const open = mem.get('fold:rec-else') === '1';
+      h += `<details class="fold" data-cards="elsewhere" data-fold="rec-else" ${open ? 'open' : ''}><summary>Elsewhere (${rk.elsewhere.length})</summary>${rk.elsewhere.map(cardHTML).join('')}</details>`;
+    }
+    return h;
+  }
+  function recordPeopleHTML(rk) {
+    const r = REC();
+    const order = [];
+    const on = new Map();
+    const lead = (r.comingUp && r.comingUp.lead) || null;
+    for (const p of (lead && lead.people) || []) { if (!on.has(p)) { on.set(p, []); order.push(p); } on.get(p).push('Coming up'); }
+    for (const c of [...rk.here, ...rk.could, ...rk.elsewhere]) {
+      for (const p of c.people || []) { if (!on.has(p)) { on.set(p, []); order.push(p); } on.get(p).push(c.title); }
+    }
+    if (!order.length) return '<p class="muted">Nobody on the record\'s cards.</p>';
+    order.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    const at = r.peopleAt || {};
+    return `<div class="tw"><table><thead><tr><th>Name</th><th>Where</th><th>On</th></tr></thead><tbody>${order.map((p) => `<tr><td>${face(p)} ${link(p)}</td><td>${at[p] ? link(at[p]) : '<span class="muted">—</span>'}</td><td>${esc([...new Set(on.get(p))].join(' · '))}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function recordPlacesHTML(rk) {
+    if (!rk.places.length) return `<p class="muted">${rk.where ? 'None on the record.' : 'No place for the crew yet.'}</p>`;
+    const tile = (p) => {
+      const pic = portraitOf(p);
+      const btns = fightAt(p);
+      return `<div class="place"><div class="im">${pic ? `<img src="${esc(picUrl(pic))}" alt="">` : 'no picture yet'}</div><div class="cap">${link(p)}${btns ? ` ${btns}` : ''}</div></div>`;
+    };
+    return `<div class="places">${rk.places.map(tile).join('')}</div>`;
+  }
+  function recordHTML(d) {
+    const r = REC();
+    const rk = ranked(d);
+    let h = '';
+    for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
+    if (d.orphans.length) h += changedHTML(d);
+    h += `<div class="rtop"><div class="rhead" id="rhead">${esc(r.header || '')}</div>${r.noPlanLine ? `<div class="note">${esc(r.noPlanLine)}</div>` : ''}${titleHTML()}</div>`;
+    h += sec('where', 'Where they are', recordWhereHTML(d));
+    h += sec('coming', 'Coming up', comingHTML());
+    h += sec('scenes', 'Possible scenes', scenesHTML(rk));
+    const bg = r.background || [];
+    const bgOpen = mem.get('fold:rec-bg') === '1';
+    h += `<section class="s" id="background"><details class="fold" data-fold="rec-bg" ${bgOpen ? 'open' : ''}><summary>Background${bg.length ? ` (${bg.length})` : ''}</summary>${bg.length ? `<ul>${bg.map((b) => `<li>${b.mdHtml || esc(b.md)} <span class="src">${esc(b.from || b.source || '')}</span></li>`).join('')}</ul>` : '<p class="muted">None.</p>'}</details></section>`;
+    const lt = r.lastTime || {};
+    const w = r.world || {};
+    const last = (lt.recap ? `<h4 class="lab">Last time${lt.playDate ? `, played ${esc(lt.playDate)}` : ''}</h4>${lt.recapHtml || `<p>${esc(lt.recap)}</p>`}` : '')
+      + (w.md ? `<h4 class="lab">World</h4>${w.mdHtml || `<p>${esc(w.md)}</p>`}` : '');
+    h += sec('last', 'Last time · World', last || '<p class="muted">No record yet.</p>');
+    h += sec('places', 'Places', recordPlacesHTML(rk));
+    h += sec('people', 'People', recordPeopleHTML(rk));
+    h += sec('pcs', 'The PCs', pcsHTML());
+    if (r.leftOut) h += `<p class="note" id="rleft">${esc(r.leftOut)}</p>`;
+    h += sec('end', 'End of the night', endHTML(d));
     return h;
   }
 
@@ -894,7 +1235,7 @@
   function handoutsHTML(list) {
     return `<ul class="pts">${list.map((x) => {
       const on = !!G.state.handouts[x.key];
-      return `<li class="${on ? 'landed' : ''}"><button class="ptb ${on ? 'landed' : ''}" data-hand="${esc(x.key)}" type="button" aria-pressed="${on}" title="${on ? 'Handed over. Click: not handed over' : 'Click: handed over'}">${on ? '✓' : ''}</button><span>${x.nameHtml || esc(x.name)}${x.scene ? ` <span class="muted">(${esc(x.scene)})</span>` : ''} ${x.textHtml || ''}${on ? ' <span class="note">handed over</span>' : ''}</span></li>`;
+      return `<li class="${on ? 'landed' : ''}"><button class="ptb ${on ? 'landed' : ''}" data-hand="${esc(x.key)}" type="button" aria-pressed="${on}" title="${on ? 'Handed over. Click: not handed over' : 'Click: handed over'}">${on ? '✓' : ''}</button><span>${x.nameHtml || esc(x.name)}${x.scene ? ` <span class="muted">(${x.sceneHtml || esc(x.scene)})</span>` : ''} ${x.textHtml || ''}${on ? ' <span class="note">handed over</span>' : ''}</span></li>`;
     }).join('')}</ul>`;
   }
 
@@ -914,13 +1255,17 @@
   const md = (o, f) => (typeof o[`${f}Html`] === 'string' ? o[`${f}Html`] : esc(o[f]));
   function pcsHTML() {
     if (!pcs().length) return '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
-    const src = { index: "the session's list", wrapup: "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
-    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
+    const src = { index: "the session's list", wrapup: REC() ? 'the last Wrap-Up' : "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
+    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, nameOf(p.note))}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
       <td>${p.moment ? `<b>Moment:</b> ${md(p, 'moment')}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${md(p, 'touch')}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${md(p, 'arc')}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${md(p, 'thread')}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
+  // A point's box (and its words) marks it landed, and any mark goes back with one click (audit S7); missed and
+  // overtaken have a small button each, and a second click on the same one clears it.
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
-  const PT_TITLE = { '': 'Not marked. Click: landed ✓', landed: 'Landed ✓. Click: tried and missed ✗', missed: 'Tried and missed ✗. Click: overtaken ⊘', overtaken: 'Overtaken ⊘. Click: clear' };
+  const PT_TITLE = { '': 'Not marked. Click: landed ✓', landed: 'Landed ✓. Click: clear', missed: 'Tried and missed ✗. Click: clear', overtaken: 'Overtaken ⊘. Click: clear' };
+  const PT_ALT = [['missed', '✗', 'Tried and missed'], ['overtaken', '⊘', 'Overtaken']];
+  const ptAltHTML = (p, b, st) => `<span class="ptalt">${PT_ALT.map(([m, sym, words]) => `<button type="button" class="mini ${st === m ? 'on' : ''}" data-ptalt="${m}" data-ptkey="${esc(p.key)}" data-ptfocus="${esc(`${p.key}:${m}`)}" data-beat="${esc(b.key)}" aria-pressed="${st === m}" title="${st === m ? `${words} ${sym}. Click: clear` : `${words} ${sym}`}" aria-label="${words}">${sym}</button>`).join('')}</span>`;
 
   function beatHTML(b, d) {
     const lbl = b.contingency ? 'If triggered' : b.newPlace ? 'New place (typed tonight)' : b.placeBeat ? 'Place' : b.impro ? 'Improvised' : (b.place ? esc(nameOf(b.place)) : esc(b.placeText || ''));
@@ -959,7 +1304,7 @@
     if ((b.points || []).length) {
       h += `<h4 class="lab">Points to land</h4><ul class="pts">${b.points.map((p) => {
         const st = (G.state.points[p.key] && G.state.points[p.key].mark) || '';
-        return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${PT_TITLE[st]}" aria-label="${esc(PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${p.textHtml || esc(p.text)}</span></li>`;
+        return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${esc(PT_TITLE[st])}" aria-label="${esc(PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${p.textHtml || esc(p.text)}</span>${ptAltHTML(p, b, st)}</li>`;
       }).join('')}</ul>`;
     }
     // 3 Who's here
@@ -984,7 +1329,7 @@
     // 7 The jot box and this beat's jots
     const js = G.state.jots.filter((j) => j.beat === b.key);
     h += `<ul class="jots">${js.map((j) => `<li><span class="tm">${esc(hhmm(j.at))}</span><span>${esc(j.text)}</span>${armBtn(`unjot:${j.id}`, '✕', `data-unjot="${esc(j.id)}" class="mini"`, 'Delete this jot')}</li>`).join('')}</ul>`;
-    h += `<div class="jot"><input data-jot="${esc(b.key)}" placeholder="Jot what happened (Enter)" aria-label="Jot a line for ${esc(b.title)}" autocomplete="off"></div></div>`;
+    h += `<div class="jot"><input data-jot="${esc(b.key)}" placeholder="Jot what happened (Enter)" aria-label="Jot a line for ${esc(b.title)}" autocomplete="off"><span class="noted" data-noted="${esc(b.key)}" role="status">${esc(notedText(b.key))}</span></div></div>`;
     return h;
   }
 
@@ -1072,8 +1417,9 @@
     }).join('')}</ul>`;
   }
 
+  // People, A to Z (audit S3): a person is looked up by name, not by where the Plan first named them
   function peopleHTML(d) {
-    const list = G.model.people || [];
+    const list = (G.model.people || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     if (!list.length) return '<p class="muted">None listed.</p>';
     return `<div class="tw"><table><thead><tr><th>Name</th><th>Play as</th><th>Wants</th><th>Right now</th></tr></thead><tbody>${list.map((p) => {
       const um = p.note ? unmaskOf(p.note) : null;
@@ -1199,7 +1545,7 @@
     }
     if (side.classList.contains('part') || !$('#pvctl')) {
       side.classList.remove('part');
-      side.innerHTML = '<div id="pvctl" class="pvctl"></div>';
+      side.innerHTML = '<button type="button" class="sidestrip" id="sideOpen" title="Open the players\' column" aria-label="Open the players\' column"><span aria-hidden="true">⟨</span><span class="vtitle">Players\' screen</span></button><div id="pvctl" class="pvctl"></div>';
     }
     $('#pvctl').innerHTML = previewControls(d);
   }
@@ -1208,12 +1554,12 @@
   const pvbox = document.createElement('div');
   pvbox.id = 'pvbox';
   pvbox.className = 'pvw';
-  pvbox.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button><button type="button" id="pvToggle" class="mini" aria-controls="pv"></button></div><div id="pv" class="pv"></div>';
+  pvbox.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button><button type="button" id="pvToggle" class="mini" aria-controls="pv"></button><button type="button" id="sideFold" class="mini" title="Fold the players\' column to a thin strip: the sheet takes the room">Fold ⟩</button></div><div id="pv" class="pv"></div>';
   const pvHost = pvbox.querySelector('#pv');
   // Under the preview: each panel's Shown backdrop, with a way back to the group's own place.
   function previewControls(d) {
     const gs = groups();
-    if (!gs.length) return '<p class="note">No PC is at a beat yet: the players see the campaign\'s name.</p>';
+    if (!gs.length) return `<p class="note">${REC() ? 'Nobody is placed yet' : 'No PC is at a beat yet'}: the players see the campaign's name.</p>`;
     const f = focusedGroup(gs);
     return `<ul class="pvlist">${gs.map((g) => {
       const pn = panelOf(g.key);
@@ -1292,6 +1638,104 @@
     probe();
   }
 
+  // ------------------------------------------------------------------ the find box (audit S3, P3, P4)
+  // One box over the vault's people and places, at the top of the rail on both sheets: near matches (case and accents
+  // never matter, a word's start finds it: "salt" is The Salt Inn), each hit labelled by kind. The arrows move through the
+  // hits, Enter opens the one picked (the first, unless the arrows moved) in the drawer, a click on a hit does too, Esc
+  // closes the list. Made once, like the preview's box, so a redraw never takes the words being typed.
+  const KIND = { npc: 'person', creature: 'creature', pc: 'PC', location: 'place' };
+  const findbox = document.createElement('div');
+  findbox.className = 'findw';
+  findbox.innerHTML = '<input id="find" type="search" placeholder="Find a person or place (/)" aria-label="Find a person or place" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="findHits"><div class="findhits" id="findHits" role="listbox"></div><span class="warn findsay" id="findSay" role="status"></span>';
+  const findInput = findbox.querySelector('#find');
+  const findList = findbox.querySelector('#findHits');
+  const findSay = findbox.querySelector('#findSay');
+  const find = { hits: [], sel: 0 };
+  function findables() {
+    const out = [];
+    const seen = new Set();
+    for (const c of G.model.cast || []) {
+      if (!c.note || seen.has(c.note)) continue;
+      seen.add(c.note);
+      out.push({ note: c.note, name: nameOf(c.note), aliases: c.aliases || [], gmAliases: c.gmAliases || [], kind: KIND[c.type] || 'person' });
+    }
+    for (const p of knownPlaces()) if (!seen.has(p.note)) { seen.add(p.note); out.push({ note: p.note, name: p.name, aliases: p.aliases, kind: 'place' }); }
+    return out;
+  }
+  function drawFind() {
+    findList.innerHTML = find.hits.map((h, i) => `<button type="button" role="option" id="findHit${i}" class="${i === find.sel ? 'sel' : ''}" aria-selected="${i === find.sel}" data-findhit="${i}"><span class="n">${esc(h.name)}</span> <span class="k">${esc(h.kind)}</span></button>`).join('');
+    findInput.setAttribute('aria-expanded', String(find.hits.length > 0));
+    if (find.hits.length) findInput.setAttribute('aria-activedescendant', `findHit${find.sel}`); else findInput.removeAttribute('aria-activedescendant');
+  }
+  function findType() {
+    find.hits = G.model ? RS.castSearch(findables(), findInput.value, 8) : [];
+    find.sel = 0;
+    drawFind();
+  }
+  function findClose() { find.hits = []; find.sel = 0; drawFind(); }
+  function findOpen(i) {
+    const h = find.hits[i];
+    if (!h) return;
+    findInput.value = '';
+    findClose();
+    openNote(h.note);
+  }
+  findInput.addEventListener('input', () => { findSay.textContent = ''; findType(); });
+  findInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      if (!find.hits.length) { if (findInput.value.trim()) findType(); ev.preventDefault(); return; }
+      const n = find.hits.length;
+      find.sel = (find.sel + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+      drawFind();
+      ev.preventDefault();
+      return;
+    }
+    if (ev.key === 'Enter' && !ev.isComposing) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!find.hits.length && findInput.value.trim()) findType();
+      // nothing to open: said beside the box, as Move them says an empty Enter (fix round 1)
+      if (!find.hits.length) { findSay.textContent = findInput.value.trim() ? 'Nothing matches' : ''; return; }
+      findOpen(find.sel);
+      return;
+    }
+    if (ev.key === 'Escape' && find.hits.length) { findClose(); ev.preventDefault(); ev.stopPropagation(); }
+  });
+  findInput.addEventListener('focus', () => { if (findInput.value.trim() && !find.hits.length) findType(); });
+  findList.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('[data-findhit]');
+    if (b) findOpen(Number(b.dataset.findhit));
+  });
+  // a press outside the box closes its list (the press goes on to do what it says)
+  document.addEventListener('pointerdown', (ev) => { if (find.hits.length && !findbox.contains(ev.target)) findClose(); }, true);
+  // Under the rail's heading; in one column (1000 wide and under, no rail) at the top of the sheet (fix round 2)
+  // In a fight whose rail is folded and has no room to open beside the open pane, "/" puts the box atop the pane instead
+  // (Task 12): opening the rail would fold the pane. It goes back under the rail's heading once the GM leaves it.
+  let findInPane = false;
+  function placeFind() {
+    if (window.innerWidth <= NARROW) {
+      const sheet = $('#sheet');
+      if (sheet && sheet.firstChild !== findbox) sheet.insertBefore(findbox, sheet.firstChild);
+      return;
+    }
+    if (findInPane && fightLayout() && !G.lay.pane) {
+      const bar = $('#sheet > .rbar');
+      if (bar && bar.nextSibling !== findbox) bar.after(findbox);
+      if (bar) return;
+    }
+    findInPane = false;
+    const head = $('#rail .rhd');
+    if (head && head.nextSibling !== findbox) head.after(findbox);
+  }
+  window.addEventListener('resize', () => { if (G.model && G.state) placeFind(); });
+  // checked once the redraw that may have moved the box has put the focus back
+  findbox.addEventListener('focusout', () => {
+    if (!findInPane) return;
+    setTimeout(() => { if (findInPane && !findbox.contains(document.activeElement)) { findInPane = false; placeFind(); } }, 0);
+  });
+  // whether the rail opens in this fight without folding the open pane: the room applyLayout asks for
+  const railFitsBesidePane = () => RAIL_W + G.om + GRIP_W + (opened.pane ? PANE_LEAST : RIGHT_MIN) <= appW();
+
   // ------------------------------------------------------------------ the drawer
   async function openNote(p) {
     let n;
@@ -1337,17 +1781,54 @@
     dr.focus({ preventScroll: true });
   }
   const closeDrawer = () => { $('#drawer').classList.remove('open'); G.drawerNote = null; };
+  // A press anywhere outside the drawer closes it (audit S8), and the press goes on to do what it says. A note's link
+  // opens that note instead, and the prep notes' button its own list.
+  document.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || !$('#drawer').classList.contains('open')) return;
+    const t = ev.target;
+    if (t && t.closest && t.closest('#drawer, a[data-note], #warnBtn, dialog')) return;
+    closeDrawer();
+  }, true);
 
   // ------------------------------------------------------------------ actions from the page
   const beatOfKey = (key) => D().beats.find((b) => b.key === key) || null;
   const titleOfKey = (key) => { const b = beatOfKey(key); return b ? b.title : ''; };
 
-  function jot(beat, text) {
+  // A jot says "Noted under <beat or place>" beside the box it came from for 3 s (`box`: 'hjot', the header's, or a
+  // beat's key), and never scrolls the page (audit S4, fix round 1 ruling). With no beat in play it is the night's.
+  function jot(beat, text, box) {
     const t = String(text || '').trim();
     if (!t) return;
     if (beat) G.ui.focus = beat;
+    G.ui.noted = { box: box || 'hjot', at: Date.now(), under: beat ? titleOfKey(beat) || 'the night' : 'the night' };
+    clearTimeout(jot.timer);
+    jot.timer = setTimeout(clearNoted, 3000);
     act({ type: 'jot', beat: beat || null, text: t, title: beat ? titleOfKey(beat) : undefined });
+    showNoted();
   }
+  const notedNow = (box) => Boolean(G.ui.noted) && G.ui.noted.box === box && Date.now() - G.ui.noted.at < 3000;
+  const notedText = (box) => (notedNow(box) ? `Noted under ${G.ui.noted.under}` : '');
+  function showNoted() {
+    const h = $('#hnoted');
+    if (h) h.textContent = notedText('hjot');
+    document.querySelectorAll('[data-noted]').forEach((e) => { e.textContent = notedText(e.dataset.noted); });
+  }
+  function clearNoted() { G.ui.noted = null; showNoted(); }
+  // Typing in the header's Jot box scrolled the page about 44 px: `html`'s scroll-padding-top (gm.css, so Tab lands
+  // below the sticky header) covers the header itself, and the browser scrolls to bring the caret out of that band. A
+  // scroll-margin on the box does not cancel it (tried, Task 9 fix round 2), so the page is put back after each input,
+  // unless the GM scrolled meanwhile (the wheel, a touch, a scroll key).
+  (() => {
+    const box = $('#hjot');
+    if (!box) return;
+    let y = null;
+    box.addEventListener('beforeinput', () => { y = window.scrollY; });
+    box.addEventListener('input', () => { if (y !== null && window.scrollY !== y) window.scrollTo(window.scrollX, y); y = null; });
+    const drop = () => { y = null; };
+    window.addEventListener('wheel', drop, { passive: true, capture: true });
+    window.addEventListener('touchmove', drop, { passive: true, capture: true });
+    box.addEventListener('keydown', (ev) => { if (/^(PageUp|PageDown|Home|End|ArrowUp|ArrowDown)$/.test(ev.key)) drop(); });
+  })();
 
   function bring(beat, p) {
     const b = beatOfKey(beat);
@@ -1419,16 +1900,21 @@
   const PV_BESIDE_MIN = 300;
   const GRIP_TRAVEL = 120; // the grip hides with less travel than this
   const NARROW = 1000; // at this width and under, one column (gm.css)
+  // Out of a fight the players' column folds and drags the same way (audit S2): `sideFolded` is the GM's fold, null
+  // until the GM sets one (then the page folds it itself where the sheet would be short), and `sw` its width.
+  const SIDE_MIN = 300;
+  const SHEET_FLOOR = 560; // the sheet's least beside the players' column, out of a fight
+  const sideDefault = () => (window.innerWidth >= 1800 ? 560 : 400);
   const L = (() => {
-    const out = { railFolded: false, railFoldedFight: false, folded: false, rw: null, pv: false };
+    const out = { railFolded: false, railFoldedFight: false, folded: false, rw: null, pv: false, sideFolded: null, sw: null };
     try {
       const v = JSON.parse(window.localStorage.getItem(LKEY));
       if (v && typeof v === 'object') {
-        for (const k of ['railFolded', 'railFoldedFight', 'folded', 'pv']) if (typeof v[k] === 'boolean') out[k] = v[k];
-        if (typeof v.rw === 'number' && Number.isFinite(v.rw)) out.rw = v.rw;
+        for (const k of ['railFolded', 'railFoldedFight', 'folded', 'pv', 'sideFolded']) if (typeof v[k] === 'boolean') out[k] = v[k];
+        for (const k of ['rw', 'sw']) if (typeof v[k] === 'number' && Number.isFinite(v[k])) out[k] = v[k];
       }
     } catch (e) { /* nothing kept, or no storage */ }
-    out.auto = { rail: false, pane: false };
+    out.auto = { rail: false, pane: false, side: false };
     return out;
   })();
   // `opened`: a GM click opened an auto-folded column (and `paneW`, the width that pane got where 320 px did not
@@ -1438,7 +1924,7 @@
   const held = { rail: false, pane: false };
   const forget = () => { opened.rail = false; opened.pane = false; opened.paneW = null; held.rail = false; held.pane = false; };
   function saveLayout() {
-    try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv })); } catch (e) { /* not kept */ }
+    try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv, sideFolded: L.sideFolded, sw: L.sw })); } catch (e) { /* not kept */ }
   }
   G.lay = { rail: false, pane: false };
   G.om = ORDER_FLOOR;
@@ -1492,6 +1978,17 @@
     const w = want != null ? want : L.rw != null ? L.rw : def;
     return Math.round(Math.max(room.min, Math.min(room.max, w)));
   }
+  // Out of a fight: the players' column's room (from 300 px to what leaves the sheet 560) and its width.
+  function sideRoom() {
+    const max = Math.max(SIDE_MIN, appW() - railW() - GRIP_W - SHEET_FLOOR);
+    return { min: SIDE_MIN, max };
+  }
+  function sideWidth(want) {
+    const room = sideRoom();
+    const w = want != null ? want : L.sw != null ? L.sw : sideDefault();
+    return Math.round(Math.max(room.min, Math.min(room.max, w)));
+  }
+  const sideLayout = () => !G.pane && window.innerWidth > NARROW;
   // The folds, the widths and where the preview sits, from the GM's choices and the room there is.
   function applyLayout() {
     const app = $('#app');
@@ -1500,7 +1997,7 @@
     const narrow = window.innerWidth <= NARROW;
     let rail = !narrow && (G.pane ? L.railFoldedFight : L.railFolded);
     let pane = fight && L.folded;
-    L.auto = { rail: false, pane: false };
+    L.auto = { rail: false, pane: false, side: false };
     if (!fight) { held.rail = false; held.pane = false; }
     if (fight) {
       const w = appW();
@@ -1568,6 +2065,23 @@
       // one column in a fight: the preview tops the pane, as on a wide window
       pvAt = G.pane ? (L.pv ? $('#sheet') : null) : $('#side');
     }
+    // Out of a fight the players' column, as the fight's pane: folded by the GM, else by the page where its usual width
+    // would leave the sheet under its least (1100 wide with the rail open); a grip to drag it while there is room to.
+    let sideF = false;
+    if (sideLayout()) {
+      if (L.sideFolded === true) sideF = true;
+      else if (L.sideFolded == null && appW() - railW() - GRIP_W - sideDefault() < SHEET_FLOOR) { sideF = true; L.auto.side = true; }
+      const room = sideRoom();
+      const showGrip = !sideF && room.max - room.min >= GRIP_TRAVEL;
+      app.classList.toggle('nogrip', !showGrip);
+      app.style.setProperty('--gripw', `${showGrip ? GRIP_W : 0}px`);
+      app.style.setProperty('--sidew', `${sideF ? PANE_FOLDED : sideWidth()}px`);
+      if (grip) {
+        grip.title = `Drag to resize: the players' column ${room.min}-${room.max} px at this width · double-click to reset`;
+        grip.setAttribute('aria-label', 'Drag to resize the players\' column; double-click to reset');
+      }
+    } else if (grip && fight) grip.setAttribute('aria-label', 'Drag to resize the fight and its beat; double-click to reset');
+    app.classList.toggle('sidef', sideF);
     if (pvAt) {
       const bar = pvAt.id === 'sheet' ? pvAt.querySelector('.rbar') : null;
       // the open preview stays under the pane's bar while the pane scrolls, Hide with it (fix round 1, M4)
@@ -1607,6 +2121,9 @@
       // the last column opened wins: the other one folds again if the room is short
       if (L.auto.rail) { opened.rail = true; opened.pane = false; held.rail = false; }
     } else if (id === 'paneFold') { L.folded = true; opened.pane = false; } else if (id === 'paneOpen') openPane();
+    // the players' column out of a fight: the GM's fold either way is kept, and wins over the page's own (audit S2)
+    else if (id === 'sideFold') L.sideFolded = true;
+    else if (id === 'sideOpen') L.sideFolded = false;
     saveLayout();
     update();
   }
@@ -1620,7 +2137,8 @@
     return {
       grip: { left: r(g && g.left), width: r(g && g.width), shown: gripShown },
       railW: r(box($('#rail')).width), sheetW: r(box($('#sheet')).width), sideW: r(box($('#side')).width),
-      folded: G.lay.pane, railFolded: G.lay.rail, auto: { ...L.auto }, saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv },
+      folded: G.lay.pane, railFolded: G.lay.rail, sideFolded: $('#app').classList.contains('sidef'), auto: { ...L.auto },
+      saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv, sideFolded: L.sideFolded, sw: L.sw },
       pvOpen: Boolean(pv), pvTop: r(pv && pv.top), pvBottom: r(pv && pv.bottom), pvIn: pv ? (pvbox.parentElement.id || pvbox.parentElement.className) : null,
       paneTop: r($('#sheet').scrollTop), paneBox: (() => { const b = box($('#sheet')); return { top: r(b.top), bottom: r(b.bottom), left: r(b.left), right: r(b.right) }; })(),
       orderMin: G.om, gripMoves: G.gripMoves || 0, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
@@ -1635,14 +2153,17 @@
     let startX = 0;
     let startW = 0;
     let via = null; // 'pointer' or 'mouse': a pointer drag ignores the mouse events the browser also sends
-    const begin = (x) => { on = true; startX = x; startW = rightWidth(); grip.classList.add('drag'); document.body.classList.add('dragging'); };
+    // the fight's right pane, or out of a fight the players' column (audit S2): both sit right of the grip
+    let side = false;
+    const begin = (x) => { on = true; side = sideLayout(); startX = x; startW = side ? sideWidth() : rightWidth(); grip.classList.add('drag'); document.body.classList.add('dragging'); };
     const move = (x) => {
       if (!on) return;
       G.gripMoves = (G.gripMoves || 0) + 1;
-      L.rw = rightWidth(startW + (startX - x));
+      let w;
+      let room;
+      if (side) { L.sw = w = sideWidth(startW + (startX - x)); room = sideRoom(); } else { L.rw = w = rightWidth(startW + (startX - x)); room = rightRoom(); }
       applyLayout();
-      const room = rightRoom();
-      grip.classList.toggle('limit', L.rw <= room.min || L.rw >= room.max);
+      grip.classList.toggle('limit', w <= room.min || w >= room.max);
     };
     const stop = () => { if (!on) return; on = false; via = null; grip.classList.remove('drag', 'limit'); document.body.classList.remove('dragging'); saveLayout(); probe(); };
     grip.addEventListener('pointerdown', (ev) => { if (ev.button !== 0) return; ev.preventDefault(); via = 'pointer'; begin(ev.clientX); });
@@ -1653,7 +2174,7 @@
     document.addEventListener('mouseup', () => { if (via === 'mouse') stop(); });
     document.addEventListener('pointercancel', stop);
     window.addEventListener('blur', stop);
-    grip.addEventListener('dblclick', () => { L.rw = null; saveLayout(); applyLayout(); });
+    grip.addEventListener('dblclick', () => { if (sideLayout()) L.sw = null; else L.rw = null; saveLayout(); applyLayout(); });
   })();
   window.addEventListener('resize', () => {
     forget();
@@ -1804,11 +2325,13 @@
 
   document.addEventListener('click', (ev) => {
     for (const part of parts) if (part.click && part.click(ev)) return;
-    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup],a[data-pane]');
+    let t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup],a[data-pane]');
+    // a point's words take the click as its box does (audit S7); a link in them still opens its note
+    if (!t) { const w = ev.target.closest('.pt-t'); if (w && w.parentElement) t = w.parentElement.querySelector('button[data-pt]'); }
     if (!t || t.disabled) return;
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
-    if (t.id === 'railFold' || t.id === 'railOpen' || t.id === 'paneFold' || t.id === 'paneOpen') { foldClick(t.id); return; }
+    if (t.id === 'railFold' || t.id === 'railOpen' || t.id === 'paneFold' || t.id === 'paneOpen' || t.id === 'sideFold' || t.id === 'sideOpen') { foldClick(t.id); return; }
     if (t.id === 'pvToggle' || t.id === 'fPvShow') {
       L.pv = t.id === 'fPvShow' ? true : !L.pv;
       saveLayout();
@@ -1859,13 +2382,23 @@
     if (d.movenew !== undefined) { moveGroup(d.moveg, { name: d.movenew }); return; }
     if (d.move) { const to = JSON.parse(d.to); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'move', pc: d.move, to }); return; }
     if (d.all) { const to = JSON.parse(d.all); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'moveAll', pcs: pcs().map((p) => p.note), to }); return; }
-    if (d.off) { act({ type: 'move', pc: d.off, to: 'off' }); return; }
-    if (d.pt) {
+    if (d.off) { if (G.ui.picked) delete G.ui.picked[d.off]; act({ type: 'move', pc: d.off, to: 'off' }); return; }
+    if (d.wpick) {
+      G.ui.picked = G.ui.picked || {};
+      if (G.ui.picked[d.wpick] === d.wrowkey) delete G.ui.picked[d.wpick]; else G.ui.picked[d.wpick] = d.wrowkey;
+      update();
+      return;
+    }
+    if (d.wback) { bringBack(d.wback); return; }
+    if (d.pt || d.ptalt) {
+      const key = d.pt || d.ptkey;
       const b = beatOfKey(d.beat);
-      const p = b && b.points.find((x) => x.key === d.pt);
-      const cur = G.state.points[d.pt] && G.state.points[d.pt].mark;
+      const p = b && b.points.find((x) => x.key === key);
+      const cur = (G.state.points[key] && G.state.points[key].mark) || '';
+      // the box: unmarked to landed, any mark back to none; a button: its mark, or none when it is already that
+      const want = d.pt ? (cur ? '' : 'landed') : (cur === d.ptalt ? '' : d.ptalt);
       G.ui.focus = d.beat;
-      act({ type: 'mark', point: d.pt, mark: RS.cyclePoint(cur), beat: d.beat, beatTitle: b ? b.title : '', text: p ? p.text : '' });
+      act({ type: 'mark', point: key, mark: want, beat: d.beat, beatTitle: b ? b.title : '', text: p ? p.text : '' });
       return;
     }
     if (d.hand) {
@@ -1947,14 +2480,34 @@
     if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     // the hit location list (GURPS, Task 25) is picked by its letters (J for Jaw): J stays in it
     const picking = t.matches && t.matches('select[data-fhlocsel]');
-    if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
+    // the page stays where the GM is reading: a box in the sticky header, focused plainly, scrolled the page to its top
+    if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus({ preventScroll: true }); return; }
+    // "/" reaches the find box from anywhere but a box being typed in, opening the rail first when it is folded (a
+    // fight at 1100 folds it) (Task 9 fix round 1), or at the sheet's top in one column (fix round 2)
+    if (!typing && !picking && ev.key === '/' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+      ev.preventDefault();
+      // one column: the box tops the sheet, brought into view below the header
+      if (window.innerWidth <= NARROW) { placeFind(); findInput.focus(); return; }
+      // in a fight, never at the cost of the open pane (Task 12): with no room for both, the box tops the pane
+      const inPane = G.lay.rail && fightLayout() && !G.lay.pane && !railFitsBesidePane();
+      if (inPane) { findInPane = true; placeFind(); } else if (G.lay.rail) foldClick('railOpen');
+      findInput.focus({ preventScroll: true });
+      // atop a pane scrolled down, the box is brought into view under the pane's bar, the folds as they were (CodeRabbit #895)
+      if (inPane) {
+        const bar = $('#sheet > .rbar');
+        findbox.style.scrollMarginTop = `${bar ? bar.offsetHeight : 0}px`;
+        findbox.scrollIntoView({ block: 'nearest' });
+      }
+      return;
+    }
     // a letter on a closed status list never picks a status by the browser's type-ahead: a status is chosen, not typed
     if (t.matches && t.matches('select[data-fstatus]') && ev.key.length === 1 && ev.key !== ' ' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && (d.go || d.pane)) { ev.preventDefault(); t.click(); return; }
     if (ev.key !== 'Enter' || ev.isComposing) return;
-    if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v); return; }
-    if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v); return; }
+    if (t.id === 'rtitle') { ev.preventDefault(); commitTitle(); return; }
+    if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v, d.jot); return; }
+    if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v, 'hjot'); return; }
     if (d.bring !== undefined) {
       const hits = RS.castSearch(G.model.cast || [], t.value);
       if (!hits.length) { t.setCustomValidity('No one in the vault by that name'); t.reportValidity(); return; }
@@ -1965,17 +2518,30 @@
     if (t.id === 'newBeat') { ev.preventDefault(); addBeat(); }
     if (d.moveg !== undefined && t.tagName === 'INPUT') {
       ev.preventDefault();
-      const top = placeChoices(t.value)[0];
-      if (top && !top.isNew) { moveGroup(d.moveg, { note: top.note }); return; }
-      if (t.value.trim()) { t.setCustomValidity(NO_PLACE); t.reportValidity(); }
+      if (!t.value.trim()) { moveSay(d.movebox, MOVE_EMPTY); return; }
+      // a known place only when the words truly name it (a word's start, a near typo); a shared last word alone stays a
+      // choice in the list (Task 9 fix round 1)
+      const top = FM ? FM.enterChoice(knownPlaces(), t.value, RS.castSearch) : null;
+      if (top) { moveGroup(d.moveg, { note: top.note }); return; }
+      moveGroup(d.moveg, { name: t.value });
     }
   });
 
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
+    if (t.id === 'hjot' && notedNow('hjot')) clearNoted();
+    // the title box: kept as a draft while typed, sent on Enter, on the GM leaving the box, before any other action, or
+    // when the tab closes; a character the vault can't hold is named beside it (D8)
+    if (t.id === 'rtitle') {
+      G.ui.titleDraft = t.value;
+      const bad = $('#rtbad');
+      if (bad) bad.textContent = TITLE_BAD.test(t.value) ? TITLE_BAD_TEXT : '';
+      return;
+    }
     if (t.dataset && t.dataset.moveg !== undefined && t.tagName === 'INPUT') {
       const id = t.dataset.movebox;
+      moveSay(id, '');
       G.ui.moveHits = G.ui.moveHits || {};
       G.ui.moveHits[id] = placeChoices(t.value);
       const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
@@ -2050,12 +2616,20 @@
     if (d.vcond) { act({ type: 'endSet', vitals: { [d.vcond]: { conditions: t.value.trim() } } }); return; }
     if (t.id === 'advance') act({ type: 'endSet', advancement: t.value });
   });
+  // The title goes on Enter, or when the GM leaves the box; a redraw that replaces the box (another window's change)
+  // fires focusout and change while drawing, and is never a commit: the words typed so far are kept as a draft (fix
+  // round 1, minor 3). Any other action sends a draft first (`act`).
+  document.addEventListener('focusout', (ev) => {
+    if (ev.target && ev.target.id === 'rtitle' && !drawing && ev.target.isConnected) commitTitle();
+  });
 
   // A header that wraps on a narrower window is taller: the jump offset follows it.
   window.addEventListener('resize', measureTop);
 
   // A tab closed while clicks are still unsent (the server not answering) would lose them: the browser asks first.
   window.addEventListener('beforeunload', (ev) => {
+    // a title still a draft goes with the rest: queued now, so the browser asks before the tab closes (fix round 3)
+    if (G.ui.titleDraft != null) commitTitle();
     if (!G.pending.length) return;
     ev.preventDefault();
     ev.returnValue = '';
@@ -2072,7 +2646,9 @@
       notes: G.notes.map((n) => n.text), rev: G.rev, heardRev: G.heardRev, pending: G.pending.length, answered: G.answered.length,
       stateId: G.stateId, clientId: G.clientId,
       marked: document.querySelectorAll('#sheet .ptb.landed[data-pt]').length,
-      jots: Array.from(document.querySelectorAll('#sheet ul.jots li > span:not(.tm)'), (el) => el.textContent),
+      // the beats' jots; the no-Plan page's Tonight so far is its own field (Task 9 fix round 1)
+      jots: Array.from(document.querySelectorAll('#sheet ul.jots:not(#tonight) li > span:not(.tm)'), (el) => el.textContent),
+      tonight: Array.from(document.querySelectorAll('#tonight li > span:not(.tm)'), (el) => el.textContent),
       requests: { ...requests }, view: G.view, focusGroup: G.state ? focusedGroup() : null,
     };
     // one part's probe throwing must not freeze the rest: its message goes to dataset.probeError (tests only)
@@ -2100,7 +2676,9 @@
     focusTo,
     parts,
     // helpers the parts share with the page
-    esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
+    esc, armBtn, armed, link, face, nameOf, getJson, ptAltHTML, PT_TITLE, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
+    // the no-Plan page (Task 8): the crew the sheet has not placed stand where the record has them, before Fight here
+    placeCrew,
     // the fight's layout (plan 6a Task 10)
     layout: L, rightRoom, rightWidth, orderMin: () => G.om, paneTop, layoutProbe,
     OTHER_STATUS_PLACEHOLDER, SIDE_PRESETS, sideCss, swatches,

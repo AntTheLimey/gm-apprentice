@@ -261,6 +261,8 @@
   function fightHere(note) {
     const key = (model().placeKeys || {})[note];
     if (!key || state().fight) return;
+    // a night with no Plan: the crew the sheet has not placed stand where the record has them first (Task 8, P7)
+    if (model().record && RP.placeCrew) RP.placeCrew();
     // the beat or spot where a PC of the focused group stands now, else the first unvisited (final review O2)
     const plan = RS.planTarget(model(), state(), note, groupPcs(RP.focusedGroup()));
     if (plan) { startFight(plan.beat, { at: plan.spot || plan.beat, place: note }); return; }
@@ -294,16 +296,16 @@
     if (note) addTo({ cast: note, count: n });
     else addTo({ name, count: n }, `${name}${n > 1 ? ` ×${n}` : ''}`);
   }
-  // What Add and Enter take: the top hit, when the cast has one; when "+ New" is the only choice, a blank row by that
-  // name (a foe made up at the table, PRENTICE review M3). With cast hits, a blank row is only ever the explicit "+ New".
+  // What Add and Enter take: a cast note only when the typed words truly name it (a word's start, a near typo:
+  // FM.enterChoice, Task 9 fix round 2), else a blank row by the typed name (a foe made up at the table, PRENTICE review
+  // M3). A note that only shares a surname ("Mary Goodwin", Peter Goodwin) stays in the list for a click.
   function addTop(text) {
-    const all = FM.addChoices(model().cast || [], text, RS.castSearch);
-    const top = all[0];
-    if (top && !top.isNew) { addByName(top.note); return true; }
-    if (top && top.isNew && all.length === 1) { addByName(null, top.name); return true; }
-    return false;
+    const name = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!name) return false;
+    const pick = FM.enterChoice(model().cast || [], name, RS.castSearch);
+    if (pick) addByName(pick.note); else addByName(null, name);
+    return true;
   }
-  const NO_ONE = 'No one in the vault by that name: choose "+ New" to add them with no note';
   const groupPcs = (key) => ((RP.groups().find((g) => g.key === key) || {}).pcs || []);
   const groupWho = (key) => groupPcs(key).map((p) => first(pcName(p))).join(', ');
 
@@ -1957,9 +1959,14 @@
     const inFight = FM.fightGroupKeys(f, RP.groups());
     // a group nobody stands in any more (its people joined another) goes once someone is in (PRENTICE's review 2)
     const someone = inFight.filter((g) => groupWho(g));
-    h += `<div class="fin"><span class="muted">In this fight:</span> ${(someone.length ? someone : inFight).map((g) => `<span class="gchip">${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}</span>`).join(' ')}</div>`;
+    // a night with no Plan (Task 8, P7): a place nobody stands at yet reads as the place alone, never "— · <place>", and a
+    // group holding every PC is "the crew"
+    const rec = Boolean(model().record);
+    const chip = (g) => (rec && !groupWho(g) ? esc(RP.groupLabel(g, d)) : `${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}`);
+    const addWho = (k) => (rec && groupPcs(k).length && groupPcs(k).length === (model().pcs || []).length ? 'the crew' : groupWho(k));
+    h += `<div class="fin"><span class="muted">In this fight:</span> ${(someone.length ? someone : inFight).map((g) => `<span class="gchip">${chip(g)}</span>`).join(' ')}</div>`;
     const others = RP.groups().filter((g) => !inFight.includes(g.key));
-    h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(groupWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
+    h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(addWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
       + contingencyAdds(f, d)
       + `<span class="addname"><input id="fAddName" value="${esc(ui.addText)}" placeholder="anyone, by name" autocomplete="off" aria-label="Add anyone in the cast to the fight"><span class="fhits" id="fHits">${hitsHTML()}</span></span>`
       + `<input id="fAddCount" type="number" min="1" max="20" value="${esc(ui.addCount)}" aria-label="How many"><button type="button" id="fAddGo">Add</button></div>`;
@@ -2049,7 +2056,8 @@
   function pointsHTML(b, lit) {
     return `<ul class="pts">${(b.points || []).map((p) => {
       const st = (state().points[p.key] && state().points[p.key].mark) || '';
-      return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" aria-label="Mark this point">${PT[st]}</button><span class="pt-t">${lit.has(p.key) ? '<b class="now">NOW</b> ' : ''}${p.textHtml || esc(p.text)}</span></li>`;
+      // the beat's own marks (audit S7): the box lands or clears, missed and overtaken a small button each
+      return `<li class="${st}"><button class="ptb ${st}" data-pt="${esc(p.key)}" data-beat="${esc(b.key)}" type="button" title="${esc(RP.PT_TITLE[st])}" aria-label="${esc(RP.PT_TITLE[st])}">${PT[st]}</button><span class="pt-t">${lit.has(p.key) ? '<b class="now">NOW</b> ' : ''}${p.textHtml || esc(p.text)}</span>${RP.ptAltHTML(p, b, st)}</li>`;
     }).join('')}</ul>`;
   }
   function cutHTML(d) {
@@ -2324,7 +2332,7 @@
     if (t.id === 'fAddGo') {
       const box = $('#fAddName');
       const text = (box || {}).value || '';
-      if (text.trim() && !addTop(text) && box) { box.setCustomValidity(NO_ONE); box.reportValidity(); }
+      addTop(text);
       return true;
     }
     if (d.faddpick) { addByName(d.faddpick); return true; }
@@ -2782,7 +2790,7 @@
     if (t.id === 'fAddName') {
       ev.preventDefault();
       if (!t.value.trim()) return;
-      if (!addTop(t.value)) { t.setCustomValidity(NO_ONE); t.reportValidity(); }
+      addTop(t.value);
       return;
     }
     if (t.id === 'fAreaDmg') { ev.preventDefault(); applyArea(); }

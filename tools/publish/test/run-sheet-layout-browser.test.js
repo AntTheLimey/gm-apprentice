@@ -1986,3 +1986,267 @@ describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input'
     });
   });
 });
+
+// Task 9, audit S2: outside a fight the players' column had no fold and no grip; it was a fixed 400 px, the sheet 480
+// at 1100, and a drag at its edge selected the page's text. It folds and drags as the fight's pane does, with the same
+// layout code and the same kept choices (`rs:layout`): it folds itself at 1100 unless the GM set a fold, and the GM's
+// fold, either way, is remembered.
+describe('S2: the players\' column outside a fight', { skip: browserSkip() }, () => {
+  const side = (page) => page.evaluate(`(() => { const r = (s) => Math.round(document.querySelector(s).getBoundingClientRect().width);
+    const app = document.getElementById('app'); return { side: r('#side'), sheet: r('#sheet'), rail: r('#rail'), folded: app.classList.contains('sidef'),
+      grip: getComputedStyle(document.getElementById('grip')).visibility !== 'hidden' && document.getElementById('grip').getBoundingClientRect().width > 0,
+      wide: document.documentElement.scrollWidth > innerWidth }; })()`);
+  const probe = (page) => page.evaluate(PROBE);
+  const reloaded = async (page) => {
+    await page.evaluate('window.__before = true');
+    await page.reload();
+    await until(page, '!window.__before && p.saved === "Saved" && p.pending === 0');
+  };
+
+  for (const w of [1449, 1280]) {
+    it(`${w}: the grip drags 60 px each way, Fold folds to a strip, and both are kept through a reload`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: 762 }, async (page) => {
+        await page.goto(`${run.base}/?probe=1`);
+        await settled(page);
+        let s = await side(page);
+        assert.deepStrictEqual([s.side, s.folded, s.grip, s.wide], [400, false, true, false], JSON.stringify(s));
+        assert.strictEqual(s.sheet, w - 220 - 12 - 400);
+        const g = await page.box('#grip');
+        await page.drag(g.left + g.width / 2, 400, g.left + g.width / 2 - 60, 400);
+        s = await side(page);
+        assert.strictEqual(s.side, 460, 'dragged 60 left: the column is 60 wider');
+        assert.strictEqual(await page.evaluate('String(getSelection())'), '', 'a drag selects no text');
+        const g2 = await page.box('#grip');
+        await page.drag(g2.left + g2.width / 2, 300, g2.left + g2.width / 2 + 120, 300);
+        s = await side(page);
+        assert.strictEqual(s.side, 340, 'and 120 back the other way');
+        await reloaded(page);
+        assert.strictEqual((await side(page)).side, 340, 'the width is kept');
+        await tap(page, '#sideFold');
+        s = await side(page);
+        assert.deepStrictEqual([s.folded, s.side, s.grip], [true, 40, false]);
+        assert.strictEqual(s.sheet, w - 220 - 40, 'the sheet takes the room');
+        await reloaded(page);
+        assert.strictEqual((await side(page)).folded, true, 'the fold is kept');
+        // the strip opens it from anywhere along its height
+        const strip = await page.box('#sideOpen');
+        await page.clickAt(strip.left + strip.width / 2, strip.bottom - 40);
+        s = await side(page);
+        assert.deepStrictEqual([s.folded, s.side], [false, 340]);
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+  }
+
+  it('1100: the column folds itself; opened by hand it stays open, through a reload and a fight', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      let p = await settled(page);
+      let s = await side(page);
+      assert.deepStrictEqual([s.folded, s.side, s.wide], [true, 40, false], JSON.stringify(s));
+      assert.strictEqual(s.sheet, 1100 - 220 - 40, 'the sheet has the room it lacked (480 before)');
+      assert.strictEqual(p.layout.auto.side, true, 'folded by the page, not the GM');
+      assert.strictEqual(p.layout.saved.sideFolded, null, 'nothing kept');
+      await tap(page, '#sideOpen');
+      s = await side(page);
+      assert.strictEqual(s.folded, false);
+      p = await settled(page);
+      assert.strictEqual(p.layout.saved.sideFolded, false, 'the GM\'s open is kept');
+      await reloaded(page);
+      assert.strictEqual((await side(page)).folded, false, 'a fold the GM set wins over the page\'s own');
+      // a fight and back leaves it as the GM set it
+      p = await fightAt(page, run);
+      sane(p, '1100 fight');
+      await tap(page, '#fEnd');
+      await tap(page, '#fEnd');
+      await until(page, '!p.fight');
+      assert.strictEqual((await side(page)).folded, false);
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  it('a fold set at 1449 holds at 1100, and a window made wide again leaves the GM\'s fold alone', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      await tap(page, '#sideFold');
+      await page.resize(1100, 762);
+      await page.sleep(200);
+      let p = await probe(page);
+      assert.deepStrictEqual([(await side(page)).folded, p.layout.auto.side], [true, false], 'folded by the GM, not the page');
+      await page.resize(1449, 762);
+      await page.sleep(200);
+      assert.strictEqual((await side(page)).folded, true);
+      // never touched: folded at 1100 by the page, open again at 1449
+      await tap(page, '#sideOpen');
+      await page.evaluate('localStorage.removeItem("rs:layout")');
+      await page.reload();
+      await settled(page);
+      await page.resize(1100, 762);
+      await page.sleep(200);
+      assert.strictEqual((await side(page)).folded, true, 'the page folds it at 1100');
+      await page.resize(1449, 762);
+      await page.sleep(200);
+      p = await probe(page);
+      assert.deepStrictEqual([(await side(page)).folded, p.layout.auto.side], [false, false], 'and opens it with room again');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
+
+// Task 9 fix round 1: the find box lives in the rail, which a fight at 1100 folds. "/" reaches it from anywhere (never
+// while typing in a box), opening the rail first.
+describe('the find box from the keyboard', { skip: browserSkip() }, () => {
+  // fix round 2: one column (1000 wide and under) has no rail; the box tops the sheet there, and "/" reaches it
+  it('1000, one column: the find box tops the sheet, and "/" from far down the page brings it into view', async () => {
+    const run = await start();
+    await withPage({ width: 1000, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('document.getElementById("find").closest("#sheet") !== null'), true, 'in the sheet');
+      await tap(page, '#endBtn');
+      await page.sleep(400);
+      assert.ok(await page.evaluate('scrollY') > 500, 'far down the page');
+      await page.click('#end h2', { offsetX: 6 });
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      await page.waitFor('(() => { const r = document.getElementById("find").getBoundingClientRect(); return r.width > 0 && r.top >= document.getElementById("top").getBoundingClientRect().bottom && r.bottom <= innerHeight; })()', 2000);
+      await page.type('chapel');
+      await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+      await page.key('Enter');
+      await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Chapel Yard"');
+      assert.deepStrictEqual((await P(page)).errors, []);
+    });
+  });
+  // Task 12 (Task 9's deferred minor): opening the rail at 1100 would fold the fight's open pane, so "/" puts the box
+  // atop the pane instead, rail and pane as they were; once the GM leaves it, it goes back under the rail's heading.
+  it('1100, in a fight with the rail folded: "/" tops the open pane with the box, folding nothing; Enter opens the first hit', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
+      assert.strictEqual(p.layout.railFolded, true, 'the fight folded the rail');
+      assert.strictEqual(p.layout.folded, false, 'the pane is open');
+      // focus off any box: a click on the fight's round line
+      await page.click('#round');
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      await page.sleep(200);
+      p = await P(page);
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], [true, false], 'nothing folded or opened');
+      assert.strictEqual(await page.evaluate('document.getElementById("find").closest("#sheet") !== null'), true, 'atop the pane');
+      const v = await page.evaluate('(() => { const r = document.getElementById("find").getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; })()');
+      assert.strictEqual(v, true, 'the box is on screen');
+      assert.strictEqual(await page.evaluate('document.getElementById("find").value'), '', 'the slash is not typed');
+      await page.type('chapel');
+      await page.waitFor('document.querySelector("#findHits [data-findhit]")');
+      await page.key('Enter');
+      await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Chapel Yard"');
+      sane(await P(page), '1100 fight, find atop the pane');
+      await page.key('Escape');
+      await tap(page, '#fAddName');
+      await page.waitFor('document.getElementById("find").closest("#rail") !== null', 2000);
+      // "/" typed in a box is a slash
+      await page.key('/');
+      assert.strictEqual(await page.evaluate('document.getElementById("fAddName").value'), '/');
+    });
+  });
+  // CodeRabbit #895: with the pane scrolled down, "/" brings the box atop the pane into view, below the pane's bar
+  it('1100, in a fight with the pane scrolled down: "/" brings the box into view under the bar, folding nothing', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], [true, false]);
+      await tap(page, '#paneWhole');
+      await page.waitFor('document.querySelector("#sheet section#people")');
+      const pane = await page.box('#sheet');
+      await page.wheel(pane.left + 100, 400, 900);
+      p = await until(page, 'p.layout.paneTop >= 450');
+      await page.click('#sheet section#people h2', { offsetX: 6 });
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      await page.waitFor(`(() => { const r = document.getElementById("find").getBoundingClientRect(); const bar = document.querySelector("#sheet > .rbar").getBoundingClientRect();
+        return r.width > 0 && r.top >= bar.bottom - 1 && r.bottom <= innerHeight; })()`, 2000);
+      p = await P(page);
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], [true, false], 'nothing folded or opened');
+    });
+  });
+  it('1100, in a fight with the rail and the pane folded: "/" opens the rail and the box', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
+      await tap(page, '#paneFold');
+      p = await until(page, 'p.layout.folded');
+      assert.strictEqual(p.layout.railFolded, true, 'the fight folded the rail');
+      await page.click('#round');
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      p = await until(page, '!p.layout.railFolded');
+      assert.strictEqual(p.layout.folded, true, 'the pane stays folded');
+      assert.strictEqual(await page.evaluate('document.getElementById("find").closest("#rail") !== null'), true, 'in the rail');
+      sane(await P(page), '1100 fight, rail opened by "/"');
+    });
+  });
+});
+
+// Task 9 fix round 1 (audit S7 in a fight): the cut's points take missed and overtaken as the beat's do
+describe('S7 in a fight: the cut\'s points', { skip: browserSkip() }, () => {
+  it('missed and overtaken are settable on the cut, and one click on the box clears either', async () => {
+    const run = await start();
+    const b = run.model.beats[0];
+    assert.ok((b.points || []).length, 'the first beat has points');
+    const key = b.points[0].key;
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightAt(page, run);
+      const li = '#fightCut ul.pts li:first-child';
+      const mark = async () => { await settled(page); const s = (await (await fetch(`${run.base}/api/state`)).json()).state; return (s.points[key] || {}).mark || ''; };
+      await tap(page, `${li} [data-ptalt="missed"]`);
+      assert.strictEqual(await mark(), 'missed');
+      await tap(page, `${li} [data-ptalt="overtaken"]`);
+      assert.strictEqual(await mark(), 'overtaken');
+      await tap(page, `${li} .ptb[data-pt]`);
+      assert.strictEqual(await mark(), '', 'one click on the box clears it');
+      await tap(page, `${li} .pt-t`);
+      assert.strictEqual(await mark(), 'landed', 'the words take the click');
+      sane(await P(page), 'cut points');
+    });
+  });
+});
+
+// Task 9 fix round 2: the Add box's Enter took nearCast's surname-only top hit ("Mary Goodwin" added Peter Goodwin).
+// A known note wins on Enter only on a word start or a near typo (FM.enterChoice); otherwise Enter adds a blank row by
+// the typed name. The list a click picks from is unchanged.
+describe('the Add box\'s Enter', { skip: browserSkip() }, () => {
+  it('a shared surname adds a blank row; a word start or a near typo adds the note', async () => {
+    const run = await start();
+    // Garrick Fell, in no beat of this Plan, so not in the fight already
+    const FELL = 'Characters/NPCs/Garrick Fell.md';
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightAt(page, run);
+      const enter = async (text, test) => {
+        await tap(page, '#fAddName');
+        await page.type(text);
+        await page.waitFor('document.querySelector("#fHits button")');
+        await page.key('Enter');
+        return until(page, `p.saved === "Saved" && p.pending === 0 && (${test})`);
+      };
+      // the list still offers Garrick Fell for a click
+      await tap(page, '#fAddName');
+      await page.type('Mary Fell');
+      await page.waitFor(`document.querySelector('#fHits [data-faddpick="${FELL}"]')`);
+      await page.key('Enter');
+      let p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Mary Fell")');
+      const mary = p.fight.rows.find((r) => r.name === 'Mary Fell');
+      assert.strictEqual(mary.note || null, null, 'a blank row, no note');
+      assert.ok(!p.fight.rows.some((r) => r.note === FELL), 'Garrick Fell is not added');
+      p = await enter('Garick Fell', `p.fight.rows.some((r) => r.note === ${JSON.stringify(FELL)})`);
+      assert.strictEqual(p.fight.rows.filter((r) => r.note === FELL).length, 1, 'a near typo adds the note');
+      const FEN = 'Characters/NPCs/Sister Fen.md';
+      p = await enter('Sister F', `p.fight.rows.some((r) => r.note === ${JSON.stringify(FEN)})`);
+      assert.ok(!p.fight.rows.some((r) => r.name === 'Sister F'), 'a word start adds the note, not a blank row');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});

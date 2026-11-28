@@ -722,6 +722,95 @@
     "_QA",
     "_inbox"
   ],
+  "entity_types": {
+    "abstract": [
+      "person",
+      "character",
+      "agent",
+      "place",
+      "artifact",
+      "narrative",
+      "world"
+    ],
+    "hierarchy": {
+      "person": [
+        "player",
+        "game_master",
+        "character"
+      ],
+      "character": [
+        "pc",
+        "npc"
+      ],
+      "agent": [
+        "character",
+        "creature",
+        "faction",
+        "organization"
+      ],
+      "creature": [
+        "beast",
+        "undead",
+        "construct",
+        "spirit",
+        "deity",
+        "aberration"
+      ],
+      "organization": [
+        "government",
+        "corporation",
+        "cult",
+        "guild",
+        "military",
+        "criminal"
+      ],
+      "place": [
+        "location"
+      ],
+      "artifact": [
+        "item",
+        "document",
+        "prop"
+      ],
+      "item": [
+        "weapon",
+        "armor",
+        "vehicle",
+        "treasure",
+        "relic",
+        "tool",
+        "consumable"
+      ],
+      "document": [
+        "spell",
+        "map",
+        "letter",
+        "prophecy",
+        "contract",
+        "journal"
+      ],
+      "narrative": [
+        "event",
+        "clue",
+        "plan",
+        "adventure-brief",
+        "campaign_overview"
+      ],
+      "event": [
+        "battle",
+        "ritual",
+        "disaster",
+        "discovery",
+        "betrayal_event",
+        "celebration"
+      ],
+      "world": [
+        "heritage",
+        "world_domain",
+        "world_flags"
+      ]
+    }
+  },
   "predicates": [
     {
       "type": "parent_of",

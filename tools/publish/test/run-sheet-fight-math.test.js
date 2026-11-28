@@ -486,6 +486,38 @@ test('near match comes first: Petr Goodwin finds Peter Goodwin, and New is last'
   assert.ok(!M.addChoices(cast, 'Ze', RS.castSearch).slice(0, -1).some((x) => x.note === 'N/Anna Goodwin.md'));
 });
 
+// Task 9 fix round 1: Enter in Move them takes a known place only on a word-start hit or a near typo, never on a shared
+// last word alone ("The Old Inn" is not The Salt Inn; "North Gate" is not The Gate). Such a place stays in the list.
+test('enterChoice: a word-start hit or a near typo wins on Enter; a shared last word never does', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const places = [
+    { note: 'L/The Salt Inn.md', name: 'The Salt Inn', type: 'location' },
+    { note: 'L/The Gate.md', name: 'The Gate', type: 'location' },
+    { note: 'L/Harbour District.md', name: 'Harbour District', type: 'location' },
+  ];
+  const at = (q) => { const c = M.enterChoice(places, q, RS.castSearch); return c && c.note; };
+  assert.equal(at('salt'), 'L/The Salt Inn.md', 'a word start');
+  assert.equal(at('harb'), 'L/Harbour District.md');
+  assert.equal(at('The Slat Inn'), 'L/The Salt Inn.md', 'a near typo');
+  assert.equal(at('gate'), 'L/The Gate.md');
+  assert.equal(at('The Old Inn'), null, 'a shared last word is not enough');
+  assert.equal(at('North Gate'), null);
+  assert.equal(at('alt'), null, 'inside a word is not a word start');
+  // fix round 2: several words from a word's start count, anywhere in the name
+  const more = [places[0], { note: 'L/Old Harbour District.md', name: 'Old Harbour District', type: 'location' }];
+  assert.equal(M.enterChoice(more, 'Harbour Dist', RS.castSearch).note, 'L/Old Harbour District.md');
+  assert.equal(M.enterChoice(more, 'arbour Dist', RS.castSearch), null, 'not from inside a word');
+  // the list still offers the last-word match for a click
+  assert.ok(M.addChoices(places, 'The Old Inn', RS.castSearch).some((c) => c.note === 'L/The Salt Inn.md'));
+  // CodeRabbit #895: spaces in a name are as the query's, so a doubled one still starts a word
+  assert.equal(M.enterChoice([{ note: 'L/x.md', name: 'Old Harbour  District', type: 'location' }], 'Harbour District', RS.castSearch).note, 'L/x.md');
+  // CodeRabbit #895: Enter takes only a place the list shows; one past its eight is never the move
+  const gates = ['Lantern', 'Harbour', 'Chapel', 'Market', 'Bridge', 'Temple', 'Quillon', 'Castle', 'Old North']
+    .map((n) => ({ note: `L/${n} Gate.md`, name: `${n} Gate`, type: 'location' }));
+  assert.ok(!M.addChoices(gates, 'North Gate', RS.castSearch).some((c) => c.note === 'L/Old North Gate.md'), 'the list does not show it');
+  assert.equal(M.enterChoice(gates, 'North Gate', RS.castSearch), null);
+});
+
 test('placeRow: one insert at the sorted place, the rest never re-sorted', () => {
   const r = (id, ini, o) => row({ id, ini, ...o });
   const rows = [r('a', 20), r('b', 5), r('c', 12), r('d', null), r('e', null)];

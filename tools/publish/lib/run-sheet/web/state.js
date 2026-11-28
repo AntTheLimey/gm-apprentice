@@ -6,7 +6,7 @@
 //
 // State is stored against the reader's keys (beat, spot, point, loot, handout), each with the words
 // it had, so an item whose key the Plan later loses can still be shown (an orphan) and re-attached.
-// `rev`, `stateId` and `recordHash` belong to the server: `reduce` never touches them. Keys the page
+// `rev`, `stateId`, `recordHash` and `filed` belong to the server: `reduce` never touches them. Keys the page
 // does not know pass through `reduce` and `derive` untouched.
 //
 // The fight (plan 5b) lives here too: fight-math.js holds its pure helpers and fight.js its handlers, which
@@ -33,6 +33,10 @@
       seenEver: {},
       // the last side the GM set per note (plan 6a): 'foe' | 'ally' | 'neutral'
       sides: {},
+      // the no-Plan sheet (Task 7, D2): the title the GM typed for the session, and `filed` ({ index, at }), which the
+      // server sets once it has filed the session. The title is refused from then on: wrap-up renames a filed note.
+      title: '',
+      filed: null,
     };
   }
 
@@ -77,8 +81,15 @@
       entries(f.rows, `${where}.rows`);
     }
     for (const [id, v] of Object.entries(out.panels)) if (kind(v) !== 'object') throw bad(`panels.${id} is ${kind(v)}, not object`);
+    if (out.title !== undefined) out.title = cleanTitle(out.title);
     return out;
   }
+
+  // The session title as the state keeps it: text, trimmed, at most 80 characters (UTF-16 units, as the box's maxlength
+  // counts them), a character the limit would split left out whole. One rule for the action and for a whole state a page
+  // PUTs (upgrade runs on every PUT).
+  const TITLE_MAX = 80;
+  const cleanTitle = (v) => (typeof v === 'string' ? v.trim().slice(0, TITLE_MAX).replace(/[\uD800-\uDBFF]$/, '') : '');
 
   const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -109,6 +120,7 @@
   // Each handler changes the (already cloned) state `s`. `a.id` is made by the page; fields beyond
   // the action's own words (titles, text) are the words to keep for an orphan or the Log.
   const HANDLERS = {
+    setTitle(s, a) { s.title = cleanTitle(a.title); },
     move(s, a, at) {
       if (!a.pc) return;
       const to = a.to;
@@ -385,8 +397,11 @@
   function reduce(state, action, at) {
     if (!action || typeof action !== 'object' || !has(HANDLERS, action.type)) return state;
     if (action.id != null && state.applied && state.applied.includes(action.id)) return state;
+    // a title once the session is filed is refused: the state is left as it was
+    if (action.type === 'setTitle' && state.filed) return state;
     const s = clone(state);
-    if (!s.startedAt) s.startedAt = at || null;
+    // typing a title is not play (D2)
+    if (!s.startedAt && action.type !== 'setTitle') s.startedAt = at || null;
     HANDLERS[action.type](s, remapAction(s.attached, action), at || null);
     if (action.id != null) {
       s.applied = (s.applied || []).concat(action.id).slice(-APPLIED_KEEP);
@@ -395,6 +410,7 @@
     s.rev = state.rev;
     s.stateId = state.stateId;
     s.recordHash = state.recordHash;
+    if (has(state, 'filed')) s.filed = state.filed; else delete s.filed;
     return s;
   }
 
@@ -954,5 +970,5 @@
     return left.length ? { fight: f.id, title: f.title || '', rows: left } : null;
   }
 
-  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight, fightFigures, endFigureProblem, vitalColumns, poolWords };
+  return { emptyState, upgrade, cleanTitle, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight, fightFigures, endFigureProblem, vitalColumns, poolWords };
 }));
