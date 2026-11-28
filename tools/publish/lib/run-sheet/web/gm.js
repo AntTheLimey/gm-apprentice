@@ -2489,8 +2489,15 @@
       // one column: the box tops the sheet, brought into view below the header
       if (window.innerWidth <= NARROW) { placeFind(); findInput.focus(); return; }
       // in a fight, never at the cost of the open pane (Task 12): with no room for both, the box tops the pane
-      if (G.lay.rail && fightLayout() && !G.lay.pane && !railFitsBesidePane()) { findInPane = true; placeFind(); } else if (G.lay.rail) foldClick('railOpen');
+      const inPane = G.lay.rail && fightLayout() && !G.lay.pane && !railFitsBesidePane();
+      if (inPane) { findInPane = true; placeFind(); } else if (G.lay.rail) foldClick('railOpen');
       findInput.focus({ preventScroll: true });
+      // atop a pane scrolled down, the box is brought into view under the pane's bar, the folds as they were (CodeRabbit #895)
+      if (inPane) {
+        const bar = $('#sheet > .rbar');
+        findbox.style.scrollMarginTop = `${bar ? bar.offsetHeight : 0}px`;
+        findbox.scrollIntoView({ block: 'nearest' });
+      }
       return;
     }
     // a letter on a closed status list never picks a status by the browser's type-ahead: a status is chosen, not typed

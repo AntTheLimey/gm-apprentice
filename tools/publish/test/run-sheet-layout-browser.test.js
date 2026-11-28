@@ -2153,6 +2153,26 @@ describe('the find box from the keyboard', { skip: browserSkip() }, () => {
       assert.strictEqual(await page.evaluate('document.getElementById("fAddName").value'), '/');
     });
   });
+  // CodeRabbit #895: with the pane scrolled down, "/" brings the box atop the pane into view, below the pane's bar
+  it('1100, in a fight with the pane scrolled down: "/" brings the box into view under the bar, folding nothing', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], [true, false]);
+      await tap(page, '#paneWhole');
+      await page.waitFor('document.querySelector("#sheet section#people")');
+      const pane = await page.box('#sheet');
+      await page.wheel(pane.left + 100, 400, 900);
+      p = await until(page, 'p.layout.paneTop >= 450');
+      await page.click('#sheet section#people h2', { offsetX: 6 });
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      await page.waitFor(`(() => { const r = document.getElementById("find").getBoundingClientRect(); const bar = document.querySelector("#sheet > .rbar").getBoundingClientRect();
+        return r.width > 0 && r.top >= bar.bottom - 1 && r.bottom <= innerHeight; })()`, 2000);
+      p = await P(page);
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], [true, false], 'nothing folded or opened');
+    });
+  });
   it('1100, in a fight with the rail and the pane folded: "/" opens the rail and the box', async () => {
     const run = await start();
     await withPage({ width: 1100, height: 762 }, async (page) => {
