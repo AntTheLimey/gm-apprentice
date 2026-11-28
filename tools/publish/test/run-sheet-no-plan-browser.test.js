@@ -243,6 +243,8 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         assert.strictEqual(await page.evaluate('document.querySelector("#scenes details[data-cards=elsewhere]").open'), false, 'Elsewhere is folded');
         assert.deepStrictEqual(await page.evaluate('Array.from(document.querySelectorAll("#places .place a.lk"), (a) => a.textContent)'), ['Marrow Market']);
         const s = await stateOf(run);
+        // all four PCs moved, not one (CodeRabbit #895)
+        assert.deepStrictEqual(Object.keys(s.positions).sort(), ['Joss Harker', 'Mirren Fell', 'Pell Rowan', 'Yarrow Tide'].map((n) => `Characters/PCs/${n}.md`));
         assert.ok(Object.values(s.positions).every((p) => p && p.beat === 'pl-3b2cc69c'), JSON.stringify(s.positions));
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
@@ -509,7 +511,14 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await page.goto(`${run.base}?probe=1`);
         await settled(page);
         const views = [];
-        const look = async () => views.push(JSON.stringify(await api(run, '/api/players/view')));
+        // a players' view, or the test fails: an error body holds no card text, and proves nothing (CodeRabbit #895)
+        const look = async () => {
+          const res = await fetch(`${run.base}api/players/view`);
+          assert.strictEqual(res.status, 200);
+          const v = await res.json();
+          assert.ok(v && typeof v.campaign === 'string' && Array.isArray(v.panels), `a players' view: ${JSON.stringify(v).slice(0, 200)}`);
+          views.push(JSON.stringify(v));
+        };
         // the players' own event stream, read the whole time
         let streamed = '';
         const stream = http.get(`${run.base}api/players/events`, (res) => { res.setEncoding('utf8'); res.on('data', (c) => { streamed += c; }); });
@@ -538,7 +547,9 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await look();
         await page.sleep(300);
         stream.destroy();
-        assert.match(streamed, /event: (hello|view)/, `the stream was read: ${streamed.slice(0, 200)}`);
+        // at least one players' view came down the stream, not only its hello
+        const streamedViews = [...streamed.matchAll(/event: view\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]));
+        assert.ok(streamedViews.length > 0 && streamedViews.every((v) => Array.isArray(v.panels)), `a view on the stream: ${streamed.slice(0, 200)}`);
         views.push(streamed);
         for (const v of views) for (const w of SECRET_WORDS) assert.ok(!v.toLowerCase().includes(w.toLowerCase()), `the players' screen holds "${w}": ${v.slice(0, 400)}`);
         assert.deepStrictEqual((await probe(page)).errors, []);
