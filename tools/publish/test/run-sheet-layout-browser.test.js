@@ -2121,16 +2121,22 @@ describe('the find box from the keyboard', { skip: browserSkip() }, () => {
       assert.deepStrictEqual((await P(page)).errors, []);
     });
   });
-  it('1100, in a fight with the rail folded: "/" opens the rail and the box, and Enter opens the first hit', async () => {
+  // Task 12 (Task 9's deferred minor): opening the rail at 1100 would fold the fight's open pane, so "/" puts the box
+  // atop the pane instead, rail and pane as they were; once the GM leaves it, it goes back under the rail's heading.
+  it('1100, in a fight with the rail folded: "/" tops the open pane with the box, folding nothing; Enter opens the first hit', async () => {
     const run = await start();
     await withPage({ width: 1100, height: 762 }, async (page) => {
       let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
       assert.strictEqual(p.layout.railFolded, true, 'the fight folded the rail');
+      assert.strictEqual(p.layout.folded, false, 'the pane is open');
       // focus off any box: a click on the fight's round line
       await page.click('#round');
       await page.key('/');
       await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
-      p = await until(page, '!p.layout.railFolded');
+      await page.sleep(200);
+      p = await P(page);
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], [true, false], 'nothing folded or opened');
+      assert.strictEqual(await page.evaluate('document.getElementById("find").closest("#sheet") !== null'), true, 'atop the pane');
       const v = await page.evaluate('(() => { const r = document.getElementById("find").getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; })()');
       assert.strictEqual(v, true, 'the box is on screen');
       assert.strictEqual(await page.evaluate('document.getElementById("find").value'), '', 'the slash is not typed');
@@ -2138,12 +2144,29 @@ describe('the find box from the keyboard', { skip: browserSkip() }, () => {
       await page.waitFor('document.querySelector("#findHits [data-findhit]")');
       await page.key('Enter');
       await page.waitFor('document.querySelector("#drawer.open h2") && document.querySelector("#drawer h2").textContent === "The Chapel Yard"');
-      sane(await P(page), '1100 fight, rail opened by "/"');
-      // "/" typed in a box is a slash
+      sane(await P(page), '1100 fight, find atop the pane');
       await page.key('Escape');
       await tap(page, '#fAddName');
+      await page.waitFor('document.getElementById("find").closest("#rail") !== null', 2000);
+      // "/" typed in a box is a slash
       await page.key('/');
       assert.strictEqual(await page.evaluate('document.getElementById("fAddName").value'), '/');
+    });
+  });
+  it('1100, in a fight with the rail and the pane folded: "/" opens the rail and the box', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
+      await tap(page, '#paneFold');
+      p = await until(page, 'p.layout.folded');
+      assert.strictEqual(p.layout.railFolded, true, 'the fight folded the rail');
+      await page.click('#round');
+      await page.key('/');
+      await page.waitFor('document.activeElement && document.activeElement.id === "find"', 2000);
+      p = await until(page, '!p.layout.railFolded');
+      assert.strictEqual(p.layout.folded, true, 'the pane stays folded');
+      assert.strictEqual(await page.evaluate('document.getElementById("find").closest("#rail") !== null'), true, 'in the rail');
+      sane(await P(page), '1100 fight, rail opened by "/"');
     });
   });
 });

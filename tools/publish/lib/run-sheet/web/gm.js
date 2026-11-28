@@ -1702,16 +1702,32 @@
   // a press outside the box closes its list (the press goes on to do what it says)
   document.addEventListener('pointerdown', (ev) => { if (find.hits.length && !findbox.contains(ev.target)) findClose(); }, true);
   // Under the rail's heading; in one column (1000 wide and under, no rail) at the top of the sheet (fix round 2)
+  // In a fight whose rail is folded and has no room to open beside the open pane, "/" puts the box atop the pane instead
+  // (Task 12): opening the rail would fold the pane. It goes back under the rail's heading once the GM leaves it.
+  let findInPane = false;
   function placeFind() {
     if (window.innerWidth <= NARROW) {
       const sheet = $('#sheet');
       if (sheet && sheet.firstChild !== findbox) sheet.insertBefore(findbox, sheet.firstChild);
       return;
     }
+    if (findInPane && fightLayout() && !G.lay.pane) {
+      const bar = $('#sheet > .rbar');
+      if (bar && bar.nextSibling !== findbox) bar.after(findbox);
+      if (bar) return;
+    }
+    findInPane = false;
     const head = $('#rail .rhd');
     if (head && head.nextSibling !== findbox) head.after(findbox);
   }
   window.addEventListener('resize', () => { if (G.model && G.state) placeFind(); });
+  // checked once the redraw that may have moved the box has put the focus back
+  findbox.addEventListener('focusout', () => {
+    if (!findInPane) return;
+    setTimeout(() => { if (findInPane && !findbox.contains(document.activeElement)) { findInPane = false; placeFind(); } }, 0);
+  });
+  // whether the rail opens in this fight without folding the open pane: the room applyLayout asks for
+  const railFitsBesidePane = () => RAIL_W + G.om + GRIP_W + (opened.pane ? PANE_LEAST : RIGHT_MIN) <= appW();
 
   // ------------------------------------------------------------------ the drawer
   async function openNote(p) {
@@ -2465,7 +2481,8 @@
       ev.preventDefault();
       // one column: the box tops the sheet, brought into view below the header
       if (window.innerWidth <= NARROW) { placeFind(); findInput.focus(); return; }
-      if (G.lay.rail) foldClick('railOpen');
+      // in a fight, never at the cost of the open pane (Task 12): with no room for both, the box tops the pane
+      if (G.lay.rail && fightLayout() && !G.lay.pane && !railFitsBesidePane()) { findInPane = true; placeFind(); } else if (G.lay.rail) foldClick('railOpen');
       findInput.focus({ preventScroll: true });
       return;
     }
