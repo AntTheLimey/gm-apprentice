@@ -568,7 +568,9 @@ describe('real-vault shapes (Task 11b)', () => {
         "- The question of who opened the chandler's safe: carried on a live list.\n"
         + '- Means to haul the lamp oil up from the cellar herself. — closed: Mirren carried the casks up the stair; Pell held the door. (Mirren Fell)\n'
         + '- Whether the deputy keeps his word. — closed: carried forward to the next session (Session 14)\n'
-        + '- The bell-ringer\'s debt. — closed: still live on the shared list\n'));
+        + '- The bell-ringer\'s debt. — closed: still live on the shared list\n'
+        // the open wording before "closed:" says nothing: the closure decides (Canticle's shape, found on the re-run)
+        + '- The deputy\'s offer is still live at the inn. — closed: retired by the keeper: he withdrew it (Joss Harker)\n'));
       const bg = readRecord(dir, session()).record.background.filter((b) => b.from === 'Resolved Threads').map((b) => b.md);
       assert.deepStrictEqual(bg, [
         "The question of who opened the chandler's safe: carried on a live list.",

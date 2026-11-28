@@ -412,7 +412,10 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   if (wrapUp) {
     for (const md of sectionBullets(/^pending consequences$/i)) if (!isDone(md)) background.push({ from: 'Pending Consequences', md: oneLine(md) });
     for (const md of sectionBullets(/^resolved threads$/i)) {
-      if (!CARRIED.test(md) || isDone(md)) continue;
+      // an entry "<the thread> — closed: <how>" is judged by its closure alone: the thread's own words ("is still live
+      // in that house") were true when it was open
+      const closure = /\bclosed:\s*([\s\S]*)$/i.exec(md);
+      if (!CARRIED.test(closure ? closure[1] : md) || isDone(md)) continue;
       background.push({ from: 'Resolved Threads', md: oneLine(md) });
     }
   }
