@@ -66,6 +66,9 @@ const RECORD_RETRY_MS = [2000, 5000, 10000, 30000];
 const FILE_LOG_TIMEOUT_MS = 60000;
 // After the timeout's SIGINT (POSIX), the child's time to roll its batch back before SIGTERM; then as long again before SIGKILL.
 const FILE_LOG_GRACE_MS = 1000;
+// A change sent once the sheet is stopping is refused, never answered and then left out of the last save: the page keeps
+// it queued and sends it to the next start (CodeRabbit #895).
+const STOPPING = 'the sheet is stopping: this change was not saved here; the page keeps it for the next start';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const pad2 = (n) => String(n).padStart(2, '0');
 // The sheet's open date in local time, as the frontmatter takes it and as a blank title reads (D3). Never the locale.
@@ -706,6 +709,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
             json(res, 409, { reason: 'stale', stateId, rev: store.get().rev, label });
             return;
           }
+          if (closing) { json(res, 503, { error: STOPPING }); return; }
           let r;
           try { r = store.put({ stateId: msg.stateId, base: msg.base, state: msg.state }); } catch (err) {
             json(res, 400, { error: String((err && err.message) || err).split('\n')[0] });
@@ -736,6 +740,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
       path: '/api/actions',
       handle: (req, res) => {
         withJson(req, res, (msg) => {
+          if (closing) { json(res, 503, { error: STOPPING }); return; }
           if (!msg || !Array.isArray(msg.actions) || msg.actions.length > MAX_ACTIONS) { json(res, 400, { error: `the body needs { stateId, base, actions }, at most ${MAX_ACTIONS} actions` }); return; }
           const before = store.get().rev;
           let r;

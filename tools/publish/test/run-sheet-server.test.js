@@ -2063,6 +2063,32 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     assert.ok(saved.recordHash, 'the record hash is saved');
   });
 
+  // CodeRabbit #895: once the sheet is stopping, a change is refused, never answered 200 and then left out of the saved
+  // state. The page keeps a refused change queued and sends it to the next start.
+  it('a change sent while the sheet stops is refused, not acknowledged and lost', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    let release;
+    const hold = new Promise((r) => { release = r; });
+    const runFileLog = async (cmd) => { await hold; return f.runFileLog(cmd); };
+    const run = await startRec(vault, { runFileLog });
+    await jot(run, 'The crew lands.');
+    await waitFor(() => JSON.stringify(savedState(run)).includes('The crew lands.'));
+    const stopping = run.close();
+    const late = await jot(run, 'Odalys sends word.');
+    assert.strictEqual(late.status, 503);
+    assert.match(late.json.error, /stopping/);
+    const got = run.store.get();
+    const put = await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, base: got.rev, state: { ...got.state, title: 'Late' } } });
+    assert.strictEqual(put.status, 503);
+    release();
+    await stopping;
+    const saved = savedState(run);
+    assert.ok(!JSON.stringify(saved).includes('Odalys sends word.'), 'the refused jot is not in the state');
+    assert.notStrictEqual(saved.title, 'Late');
+    assert.ok(logHas(vault, '29 Nov 2026', /The crew lands\./), 'the filing the stop waited for ended');
+  });
+
   // Task 12, F4: a filing over its time gets SIGINT first, so a Python batch rolls back (KeyboardInterrupt); SIGTERM only
   // when the child is still alive after the grace, and SIGKILL a grace after that (CodeRabbit #895). The filing ends when
   // the child does, never before. A real child stands in for gma table-file. The server's timers are the test's (mocked
