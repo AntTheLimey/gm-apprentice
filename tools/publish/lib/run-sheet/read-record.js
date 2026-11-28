@@ -158,6 +158,9 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   // name of `cands` ({ note, whole: names said whole, any case; single: words said whole, case kept }). The longest
   // match wins: a name inside a longer match, a link or another note's longer name, is dropped, so "Corvin" is not named
   // inside "Corvin Tash", nor the alias "Harl" inside "[[Harl Brannock]]".
+  // Every link hides the names inside it, even a link to a note that is not `wanted` (a place, a faction): the words of
+  // "[[Corvin's Landing]]" name the place, never Corvin. That is the trade: a person said only inside such a link is not
+  // found, which a GM who links the place has already said is the place.
   const namedIn = (text, cands, wanted) => {
     const hits = [];
     for (const m of text.matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)) {
