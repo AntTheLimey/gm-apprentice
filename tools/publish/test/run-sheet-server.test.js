@@ -2064,30 +2064,79 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
   });
 
   // Task 12, F4: a filing over its time gets SIGINT first, so a Python batch rolls back (KeyboardInterrupt); SIGTERM only
-  // when the child is still alive after the grace. A real child stands in for gma table-file.
-  it('a filing over its time is sent SIGINT first, then SIGTERM if it stays', { skip: process.platform === 'win32' }, async () => {
-    const vault = recVault();
-    const marks = path.join(vault, '_marks.txt');
-    const child = (onInt) => ({ cmd: [process.execPath, '-e', `const fs = require('fs'); const m = ${JSON.stringify(marks)};
-      fs.appendFileSync(m, 'start\\n');
+  // when the child is still alive after the grace, and SIGKILL a grace after that (CodeRabbit #895). The filing ends when
+  // the child does, never before. A real child stands in for gma table-file. The server's timers are the test's (mocked
+  // setTimeout), so a signal is sent only once the child says its handlers are in: a loaded machine cannot race them.
+  describe('a filing over its time', { skip: process.platform === 'win32' }, () => {
+    const childCmd = (marks, { onInt, onTerm }) => ({ cmd: [process.execPath, '-e', `const fs = require('fs'); const m = ${JSON.stringify(marks)};
       process.on('SIGINT', () => { fs.appendFileSync(m, 'SIGINT\\n'); ${onInt} });
-      process.on('SIGTERM', () => { fs.appendFileSync(m, 'SIGTERM\\n'); process.exit(143); });
+      process.on('SIGTERM', () => { fs.appendFileSync(m, 'SIGTERM\\n'); ${onTerm} });
+      fs.appendFileSync(m, 'ready ' + process.pid + '\\n');
       setInterval(() => {}, 1000);`, '--'], takesTitle: true });
-    const lines = [];
-    const marksNow = () => (fs.existsSync(marks) ? fs.readFileSync(marks, 'utf8').split('\n').filter(Boolean) : []);
-    // rolls back and ends on SIGINT: no SIGTERM
-    let run = await startRec(vault, { fileLog: child('process.exit(130);'), deps: { fileLogTimeoutMs: 150, fileLogGraceMs: 300, recordRetryMs: [60000], log: (l) => lines.push(l) } });
-    await jot(run, 'The crew lands.');
-    await waitFor(() => lines.some((l) => /took over 0\.15 s and was stopped/.test(l)), 3000);
-    assert.deepStrictEqual(marksNow(), ['start', 'SIGINT']);
-    await run.close();
-    fs.rmSync(marks, { force: true });
-    // ignores SIGINT: SIGTERM a grace later
-    lines.length = 0;
-    run = await startRec(vault, { fileLog: child('/* stays */'), deps: { fileLogTimeoutMs: 150, fileLogGraceMs: 300, recordRetryMs: [60000], log: (l) => lines.push(l) } });
-    await jot(run, 'The crew lands again.');
-    await waitFor(() => lines.some((l) => /took over 0\.15 s and was stopped/.test(l)), 3000);
-    assert.deepStrictEqual(marksNow(), ['start', 'SIGINT', 'SIGTERM']);
+    const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    // polled on setImmediate and the wall clock: setTimeout is the test's
+    async function until(fn, ms = 5000) {
+      const t0 = Date.now();
+      for (;;) {
+        const v = fn();
+        if (v) return v;
+        if (Date.now() - t0 > ms) throw new Error('timed out waiting');
+        await new Promise((r) => { setImmediate(r); });
+      }
+    }
+    async function overTime(t, { onInt, onTerm }) {
+      const vault = recVault();
+      const marks = path.join(vault, '_marks.txt');
+      const marksNow = () => (fs.existsSync(marks) ? fs.readFileSync(marks, 'utf8').split('\n').filter(Boolean) : []);
+      const lines = [];
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      const run = await startRec(vault, { fileLog: childCmd(marks, { onInt, onTerm }), deps: { fileLogTimeoutMs: 150, fileLogGraceMs: 300, recordRetryMs: [60000], log: (l) => lines.push(l) } });
+      await jot(run, 'The crew lands.');
+      const ready = await until(() => marksNow().find((l) => l.startsWith('ready ')));
+      const pid = Number(ready.split(' ')[1]);
+      t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } });
+      const stopped = () => lines.some((l) => /took over 0\.15 s and was stopped/.test(l));
+      const step = async (ms, mark) => {
+        t.mock.timers.tick(ms);
+        if (mark) await until(() => marksNow().includes(mark) || !alive(pid));
+      };
+      return { run, marksNow, pid, stopped, step };
+    }
+
+    it('one that ends on SIGINT gets no SIGTERM', async (t) => {
+      const o = await overTime(t, { onInt: 'process.exit(130);', onTerm: 'process.exit(143);' });
+      await o.step(150, 'SIGINT');
+      await until(o.stopped);
+      t.mock.timers.tick(1000);
+      assert.deepStrictEqual(o.marksNow().slice(1), ['SIGINT']);
+      t.mock.timers.reset();
+      await o.run.close();
+    });
+
+    it('one that stays after SIGINT gets SIGTERM a grace later', async (t) => {
+      const o = await overTime(t, { onInt: '/* stays */', onTerm: 'process.exit(143);' });
+      await o.step(150, 'SIGINT');
+      assert.ok(!o.stopped(), 'the filing waits for the rollback');
+      await o.step(300, 'SIGTERM');
+      await until(o.stopped);
+      assert.deepStrictEqual(o.marksNow().slice(1), ['SIGINT', 'SIGTERM']);
+      t.mock.timers.reset();
+      await o.run.close();
+    });
+
+    it('one that stays after SIGTERM too is killed, and the filing ends only once it is gone', async (t) => {
+      const o = await overTime(t, { onInt: '/* stays */', onTerm: '/* stays */' });
+      await o.step(150, 'SIGINT');
+      await o.step(300, 'SIGTERM');
+      assert.ok(alive(o.pid));
+      t.mock.timers.tick(300);
+      await until(() => o.stopped() || !alive(o.pid));
+      assert.ok(!alive(o.pid) || !o.stopped(), 'the filing ended while its child was still running');
+      await until(o.stopped);
+      assert.ok(!alive(o.pid), 'the child is gone');
+      t.mock.timers.reset();
+      await o.run.close();
+    });
   });
 
   it('a runFileLog that throws at once does not leave the filing stuck', async () => {

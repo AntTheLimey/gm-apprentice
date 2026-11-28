@@ -64,7 +64,7 @@ const UNAVAILABLE = { error: 'unavailable' };
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const RECORD_RETRY_MS = [2000, 5000, 10000, 30000];
 const FILE_LOG_TIMEOUT_MS = 60000;
-// After the timeout's SIGINT (POSIX), the child's time to roll its batch back before SIGTERM; then as long again to end.
+// After the timeout's SIGINT (POSIX), the child's time to roll its batch back before SIGTERM; then as long again before SIGKILL.
 const FILE_LOG_GRACE_MS = 1000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -213,7 +213,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   // the vault said no, so it is tried again on the GM's next action, never on the timer.
   // A filing over its time is stopped. On POSIX it gets SIGINT first, which Python raises as KeyboardInterrupt, so the
   // batch rolls back (vault_write.apply); SIGTERM ends Python with no rollback, so it is sent only if the child is still
-  // alive a second later (Task 12, F4). The filing ends when the child does. Windows has no SIGINT to send: kill() as before.
+  // alive a second later (Task 12, F4), and SIGKILL a second after that. The filing ends when the child does. Windows has no SIGINT to send: kill() as before.
   const timeoutMs = deps.fileLogTimeoutMs || FILE_LOG_TIMEOUT_MS;
   const graceMs = deps.fileLogGraceMs || FILE_LOG_GRACE_MS;
   const runFileLog = deps.runFileLog || ((cmd) => new Promise((resolve) => {
@@ -237,7 +237,9 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
       try { child.kill('SIGINT'); } catch { /* already gone */ }
       late = setTimeout(() => {
         try { child.kill('SIGTERM'); } catch { /* already gone */ }
-        late = setTimeout(() => finish(overTime()), graceMs);
+        // a child that stays after SIGTERM too is killed a grace later; the filing still ends only on its exit, so no
+        // retry starts and the lock is never let go while it can write the vault (CodeRabbit #895)
+        late = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* already gone */ } }, graceMs);
       }, graceMs);
     }, timeoutMs);
     child.stdout.setEncoding('utf8');
@@ -245,6 +247,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     child.stdout.on('data', (c) => { out += c; });
     child.stderr.on('data', (c) => { errText += c; });
     child.on('error', (err) => finish({ ok: false, why: err.message, out }));
+    // stopped on the timeout: its exit ends the filing, even when something it started still holds its output open
+    child.on('exit', () => { if (late !== null) finish(overTime()); });
     child.on('close', (code, signal) => {
       if (code === 0) { finish({ ok: true, out }); return; }
       // stopped on the timeout: said as that, whatever the child said as it rolled back
