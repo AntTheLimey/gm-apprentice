@@ -637,6 +637,18 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.doesNotMatch(p.mdHtml, /\[\[|\*\*/);
     });
 
+    // Fix round 1: the In-game date is a World line like the others: nested items stay items, never joined.
+    it(`F5: an In-game date of nested items keeps each as its own line${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **In-game date:** Day 11\n', '- **In-game date:**\n  - Day 11, at dusk.\n  - Three days to the [[Harbour Festival Grounds|fair]].\n'));
+      const m = readRecord(dir, session());
+      const w = m.record.world;
+      assert.strictEqual(w.date, 'Day 11, at dusk.\nThree days to the [[Harbour Festival Grounds|fair]].');
+      assert.match(w.md, /^- \*\*In-game date:\*\*\n {2}- Day 11, at dusk\.\n {2}- Three days to the \[\[Harbour Festival Grounds\|fair\]\]\.$/m);
+      const p = present(m, { index: buildIndex(dir) }).record.world;
+      assert.match(p.dateHtml, /^Day 11, at dusk\.<br>Three days to the <a class="lk" [^>]*>fair<\/a>\.$/);
+    });
+
     it(`F5: the Location line is its own words, with nested bullets kept as items${tag}`, () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t

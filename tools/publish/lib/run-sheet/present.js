@@ -106,7 +106,7 @@ function present(model, { index }) {
     addHtml(r.lastTime, ['recap'], index, false);
     addHtml(r.world, ['md'], index, false);
     // the In-game date and the Clocks, as the record wrote them, links as links (Task 11b, F5 and F9)
-    addHtml(r.world, ['date'], index, true);
+    if (r.world && typeof r.world.date === 'string' && r.world.date) r.world.dateHtml = r.world.date.split('\n').map((t) => toHtml(t, index, { inline: true })).join('<br>');
     if (r.world && Array.isArray(r.world.clocks)) r.world.clocksHtml = r.world.clocks.map((t) => toHtml(t, index, { inline: true }));
     const cu = r.comingUp || {};
     addHtml(cu, ['handoff'], index, false);

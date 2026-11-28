@@ -214,7 +214,9 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   const worldText = stripComments(sectionText(gm, 3, /^world state$/i));
   const locItems = labelRaw(worldText, 'Location');
   const worldLoc = placesIn(locItems.join('\n'))[0] || null;
-  const date = labelRaw(worldText, 'In-game date').join(' ');
+  // the In-game date's items, one per line (fix round 1): never joined into one sentence
+  const dateItems = labelRaw(worldText, 'In-game date');
+  const date = dateItems.join('\n');
   const threats = labelRaw(worldText, 'Active threats');
   const clocks = labelRaw(worldText, 'Ticking clocks');
   // the lead card searches these: each item split on sentence ends and `;`
@@ -223,7 +225,7 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   const world = {
     date, location: worldLoc, threats, clocks,
     md: [
-      date ? `- **In-game date:** ${date}` : '',
+      worldLine('In-game date', dateItems),
       worldLine('Location', locItems),
       worldLine('Active threats', threats),
       worldLine('Ticking clocks', clocks),
