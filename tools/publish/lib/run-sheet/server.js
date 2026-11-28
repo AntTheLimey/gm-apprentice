@@ -64,6 +64,8 @@ const UNAVAILABLE = { error: 'unavailable' };
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const RECORD_RETRY_MS = [2000, 5000, 10000, 30000];
 const FILE_LOG_TIMEOUT_MS = 60000;
+// After the timeout's SIGINT (POSIX), the child's time to roll its batch back before SIGTERM; then as long again to end.
+const FILE_LOG_GRACE_MS = 1000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const pad2 = (n) => String(n).padStart(2, '0');
 // The sheet's open date in local time, as the frontmatter takes it and as a blank title reads (D3). Never the locale.
@@ -209,6 +211,11 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   // other way) there is no Table Log: the state is kept, nothing else written.
   // The command runs as a child (D9), so the server answers while it runs. `refused` is an exit 1 with an ERROR row:
   // the vault said no, so it is tried again on the GM's next action, never on the timer.
+  // A filing over its time is stopped. On POSIX it gets SIGINT first, which Python raises as KeyboardInterrupt, so the
+  // batch rolls back (vault_write.apply); SIGTERM ends Python with no rollback, so it is sent only if the child is still
+  // alive a second later (Task 12, F4). The filing ends when the child does. Windows has no SIGINT to send: kill() as before.
+  const timeoutMs = deps.fileLogTimeoutMs || FILE_LOG_TIMEOUT_MS;
+  const graceMs = deps.fileLogGraceMs || FILE_LOG_GRACE_MS;
   const runFileLog = deps.runFileLog || ((cmd) => new Promise((resolve) => {
     let child;
     try { child = spawn(cmd[0], cmd.slice(1), { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
@@ -218,11 +225,21 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     let out = '';
     let errText = '';
     let ended = false;
-    const finish = (r) => { if (ended) return; ended = true; clearTimeout(timer); resolve(r); };
+    let late = null;
+    const overTime = () => ({ ok: false, why: `it took over ${timeoutMs / 1000} s and was stopped`, out });
+    const finish = (r) => { if (ended) return; ended = true; clearTimeout(timer); clearTimeout(late); resolve(r); };
     const timer = setTimeout(() => {
-      try { child.kill(); } catch { /* already gone */ }
-      finish({ ok: false, why: `it took over ${FILE_LOG_TIMEOUT_MS / 1000} s and was stopped`, out });
-    }, FILE_LOG_TIMEOUT_MS);
+      if (process.platform === 'win32') {
+        try { child.kill(); } catch { /* already gone */ }
+        finish(overTime());
+        return;
+      }
+      try { child.kill('SIGINT'); } catch { /* already gone */ }
+      late = setTimeout(() => {
+        try { child.kill('SIGTERM'); } catch { /* already gone */ }
+        late = setTimeout(() => finish(overTime()), graceMs);
+      }, graceMs);
+    }, timeoutMs);
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (c) => { out += c; });
@@ -230,6 +247,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     child.on('error', (err) => finish({ ok: false, why: err.message, out }));
     child.on('close', (code, signal) => {
       if (code === 0) { finish({ ok: true, out }); return; }
+      // stopped on the timeout: said as that, whatever the child said as it rolled back
+      if (late !== null) { finish(overTime()); return; }
       const errorRow = out.split(/\r?\n/).find((l) => l.startsWith('ERROR\t'));
       const said = errorRow ? errorRow.split('\t').slice(3).join('\t').trim() : `${errText}\n${out}`.split(/\r?\n/).map((l) => l.trim()).find(Boolean);
       finish({ ok: false, refused: code === 1 && Boolean(errorRow), why: said || (code === null ? `stopped by ${signal}` : `exit ${code}`), out });

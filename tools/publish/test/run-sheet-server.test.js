@@ -2044,6 +2044,33 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     assert.ok(saved.recordHash, 'the record hash is saved');
   });
 
+  // Task 12, F4: a filing over its time gets SIGINT first, so a Python batch rolls back (KeyboardInterrupt); SIGTERM only
+  // when the child is still alive after the grace. A real child stands in for gma table-file.
+  it('a filing over its time is sent SIGINT first, then SIGTERM if it stays', { skip: process.platform === 'win32' }, async () => {
+    const vault = recVault();
+    const marks = path.join(vault, '_marks.txt');
+    const child = (onInt) => ({ cmd: [process.execPath, '-e', `const fs = require('fs'); const m = ${JSON.stringify(marks)};
+      fs.appendFileSync(m, 'start\\n');
+      process.on('SIGINT', () => { fs.appendFileSync(m, 'SIGINT\\n'); ${onInt} });
+      process.on('SIGTERM', () => { fs.appendFileSync(m, 'SIGTERM\\n'); process.exit(143); });
+      setInterval(() => {}, 1000);`, '--'], takesTitle: true });
+    const lines = [];
+    const marksNow = () => (fs.existsSync(marks) ? fs.readFileSync(marks, 'utf8').split('\n').filter(Boolean) : []);
+    // rolls back and ends on SIGINT: no SIGTERM
+    let run = await startRec(vault, { fileLog: child('process.exit(130);'), deps: { fileLogTimeoutMs: 150, fileLogGraceMs: 300, recordRetryMs: [60000], log: (l) => lines.push(l) } });
+    await jot(run, 'The crew lands.');
+    await waitFor(() => lines.some((l) => /took over 0\.15 s and was stopped/.test(l)), 3000);
+    assert.deepStrictEqual(marksNow(), ['start', 'SIGINT']);
+    await run.close();
+    fs.rmSync(marks, { force: true });
+    // ignores SIGINT: SIGTERM a grace later
+    lines.length = 0;
+    run = await startRec(vault, { fileLog: child('/* stays */'), deps: { fileLogTimeoutMs: 150, fileLogGraceMs: 300, recordRetryMs: [60000], log: (l) => lines.push(l) } });
+    await jot(run, 'The crew lands again.');
+    await waitFor(() => lines.some((l) => /took over 0\.15 s and was stopped/.test(l)), 3000);
+    assert.deepStrictEqual(marksNow(), ['start', 'SIGINT', 'SIGTERM']);
+  });
+
   it('a runFileLog that throws at once does not leave the filing stuck', async () => {
     const vault = recVault();
     const f = tableFiler(vault);
