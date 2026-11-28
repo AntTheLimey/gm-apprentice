@@ -17,7 +17,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Changed
 
-- The run sheet: the players' column folds outside a fight, one find box (/) for people and places, a jot says where it landed, and Enter in Move them makes a typed new place.
+- The run sheet: the players' column folds outside a fight, one find box (/) for people and places, a jot says where it landed, Enter in Move them makes a typed new place, a point's mark clears with a second click (missed and overtaken have their own buttons), and a click outside the drawer closes it.
 
 ## [1.12.150] — 2026-11-25
 
