@@ -1762,6 +1762,23 @@ describe('run sheet server: a session from the record (Task 7)', () => {
     assert.match(fs.readFileSync(run.stateFile, 'utf8'), /The crew lands at Dock Row\./);
   });
 
+  // CodeRabbit #895: the filing's own read is the page's next model only while nothing newer was read: colours set after
+  // the filing and before that fetch are not undone by it.
+  it('F3: a model read after the filing (new side colours) is what the next model gives', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    const sse = listen(run.port);
+    try {
+      await jot(run, 'The crew lands at Dock Row.');
+      await waitFor(() => sse.events.find((e) => e.event === 'record-filed'));
+      const r = await req(run.port, 'POST', '/api/settings/side-colours', { body: { preset: 'colour_blind' } });
+      assert.strictEqual(r.status, 200, r.text);
+      const m = (await req(run.port, 'GET', '/api/model')).json;
+      assert.strictEqual(m.model.sideColours.preset, 'colour_blind');
+    } finally { sse.close(); }
+  });
+
   // Fix round 1: after a refusal (D5) the next actions are not each a filing: the save delay gathers them, and the next
   // write after it tries again (D9's "retried on the GM's next action").
   it('F3: after a refused filing, quick actions are gathered into one try, not one each', async () => {

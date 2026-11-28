@@ -205,6 +205,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     if (tl.warning && Array.isArray(model.warnings) && !model.warnings.some((w) => w.text === tl.warning.text)) model.warnings.push(tl.warning);
     lastIndex = idx;
     lastModel = model;
+    // a read of its own is newer than the filing's: the page's next model is this one (CodeRabbit #895)
+    if (!given) justRead = null;
     return { model, idx };
   };
 
