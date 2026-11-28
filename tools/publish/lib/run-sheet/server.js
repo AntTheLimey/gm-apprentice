@@ -258,7 +258,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
       try { done = await runFileLog(cmd); } catch (err) { done = { ok: false, why: String((err && err.message) || err) }; }
       if (!done || typeof done !== 'object') done = { ok: false, why: 'the filing gave no answer' };
       if (filing === p) filing = null;
-      try { filed(done); } catch (err) { recordFailed(err); }
+      refusedLast = false;
+      try { filed(done); } catch (err) { refusedLast = Boolean(err && err.refused); recordFailed(err); }
       filingIs(false);
     })();
     filing = p;
@@ -273,10 +274,13 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   // the filing is told, and a second read of the vault then is a second of waiting (Task 11b, F3).
   let justRead = null;
   const FRESH_MS = 5000;
+  // The last filing was refused (D5): the next tries wait for the save delay, so quick actions make one try, not one
+  // each (D9: a refusal is retried on the GM's next action, through the usual write).
+  let refusedLast = false;
   // The first thing at the table files the session at once: the state is saved now, not after the save delay, and the
   // filing starts from that save (the log is never ahead of the saved state). Later writes keep the delay.
   function fileSoon() {
-    if (closed || filing || !fileCmd || logOf(indexNow())) return;
+    if (closed || filing || refusedLast || !fileCmd || logOf(indexNow())) return;
     store.flushNow();
   }
   // The filing ended: take the index from its first CREATED or ADDED row (never a re-list), check the vault links its

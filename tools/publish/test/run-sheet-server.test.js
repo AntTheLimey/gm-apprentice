@@ -1762,6 +1762,24 @@ describe('run sheet server: a session from the record (Task 7)', () => {
     assert.match(fs.readFileSync(run.stateFile, 'utf8'), /The crew lands at Dock Row\./);
   });
 
+  // Fix round 1: after a refusal (D5) the next actions are not each a filing: the save delay gathers them, and the next
+  // write after it tries again (D9's "retried on the GM's next action").
+  it('F3: after a refused filing, quick actions are gathered into one try, not one each', async () => {
+    const vault = recVault();
+    const calls = [];
+    const runFileLog = async (cmd) => { calls.push(cmd); return { ok: false, refused: true, why: 'no chapter note', out: 'ERROR\t\t\tno chapter note\n' }; };
+    const run = await startRec(vault, { runFileLog, deps: { delayMs: 300 } });
+    await jot(run, 'First.');
+    await waitFor(() => calls.length === 1);
+    await wait(50);
+    for (const t of ['Two.', 'Three.', 'Four.', 'Five.']) await jot(run, t);
+    await wait(100);
+    assert.strictEqual(calls.length, 1, 'no try per action');
+    await waitFor(() => calls.length === 2, 2000);
+    await wait(500);
+    assert.strictEqual(calls.length, 2, 'one try for the four');
+  });
+
   it('F3: the page is told a filing is running, from its start to its end, and a page that connects meanwhile too', async () => {
     const vault = recVault();
     const f = tableFiler(vault, { delayMs: 300 });
