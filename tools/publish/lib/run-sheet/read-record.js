@@ -88,8 +88,12 @@ const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.tr
 // A sentence end: a stop and a space, but never the dot after a lone capital ("Q.R.L. Council", "J. Smith"), which is
 // an initialism's or an initial's, not a sentence's end (Task 11b, F1).
 const ITEM_BREAK = /(?<=[.!?])(?<!(?:^|[^\p{L}])\p{Lu}\.)\s+(?=\p{Lu})|;\s*/u;
-// A Resolved Threads entry still open: it says it is carried on, carried forward or still live.
-const CARRIED = /\bcarried\s+(?:on|forward)\b|\bstill\s+live\b/i;
+// A Resolved Threads entry still open: it says it is carried forward, carried on a list (or "carried on" with nothing
+// after), or still live. "Carried on his back" is the physical sense, and carries nothing forward.
+const CARRIED = /\bcarried\s+forward\b|\bcarried\s+on\s+(?:(?:the|a|an)\s+)?(?:[\p{L}-]+\s+)?(?:list|record|board|sheet)\b|\bcarried\s+on\s*(?:[.;:)(—–]|$)|\bstill\s+live\b/iu;
+// The closure of an entry "<the thread> — closed: <how>": "closed:" at the start, after a dash or a bracket. A "closed:"
+// mid-sentence ("the road is closed: they go round") is the thread's own words, not its closure.
+const CLOSURE = /(?:^|[—–-]\s*|\()closed:\s*([\s\S]*)$/i;
 // One World State label's items, word for word (Task 11b, F5 and F9): the line's own words and each nested bullet, a
 // wrapped line joined to the one above. What the page shows.
 function labelRaw(text, name) {
@@ -423,7 +427,7 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
     for (const md of sectionBullets(/^resolved threads$/i)) {
       // an entry "<the thread> — closed: <how>" is judged by its closure alone: the thread's own words ("is still live
       // in that house") were true when it was open
-      const closure = /\bclosed:\s*([\s\S]*)$/i.exec(md);
+      const closure = CLOSURE.exec(md);
       if (!CARRIED.test(closure ? closure[1] : md) || isDone(md)) continue;
       background.push({ from: 'Resolved Threads', md: oneLine(md) });
     }
