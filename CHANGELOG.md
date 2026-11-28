@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.151] — 2026-11-27
+
+### Added
+
+- The run sheet opens with no Plan, from the last Wrap-Up: what's coming up, the open threads as cards ranked around where the crew is, and fights anywhere. It files the session and its Table Log on the first thing that happens at the table.
+
+### Changed
+
+- The run sheet: the players' column folds outside a fight, one find box (/) for people and places, a jot says where it landed, and Enter in Move them makes a typed new place.
+
 ## [1.12.150] — 2026-11-25
 
 ### Fixed
