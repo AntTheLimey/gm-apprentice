@@ -906,12 +906,19 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
         }
       };
       await settle();
-      try { await store.close(); } catch (err) { saveError = err; } // the last write, and its record, land before the end
-      await settle(); // the last write may have started one
       // A record write still waiting on its retry gets one last try; if it fails, the next start's
       // reconcile brings the log up to date (it was the server's own last write, or the skeleton).
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; if (lastWritten) writeRecord(lastWritten); }
-      await settle(); // that last try may have started a filing too
+      // The state still due is written now; that write, or the last try, may start a filing. Each such filing ends
+      // before the store closes, so the `filed` and `recordHash` it saves land in the state file (Task 12).
+      for (let i = 0; i < 5; i++) {
+        await settle();
+        store.flushNow();
+        if (!filing) break;
+      }
+      await settle();
+      try { await store.close(); } catch (err) { saveError = err; } // the last write, and its record, land before the end
+      await settle(); // a refused filing's next try may start from that last write
       closed = true;
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
       for (const res of [...clients, ...playersClients]) res.end();

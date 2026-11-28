@@ -2011,6 +2011,37 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     assert.strictEqual(calls.length, 2, 'the last try ran');
     assert.ok(logHas(vault, '29 Nov 2026', /The crew lands\./), 'and finished before close() resolved');
     assert.ok(lines.includes("Finishing the session's filing before stopping…"), lines.join('\n'));
+    // Task 12: what that filing wrote to the state lands too (it ended after the last write was due)
+    const saved = savedState(run);
+    assert.strictEqual(saved.filed && saved.filed.index, `${S15}/Session 15 - 29 Nov 2026.md`);
+    assert.ok(saved.recordHash, 'the record hash is saved');
+  });
+
+  // Task 12 (Task 7's deferred minor): a filing that the stop's own last write starts ends after it; its `filed` and
+  // `recordHash` still reach the state file before close() resolves.
+  it('a filing the last write starts at the stop saves its filed and recordHash', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault, { delayMs: 200 });
+    let n = 0;
+    // the first try is refused, so the next action waits for the save delay, and only the stop writes it
+    const runFileLog = async (cmd) => {
+      n++;
+      if (n === 1) return { ok: false, refused: true, why: 'no chapter note', out: 'ERROR\t\t\tno chapter note\n' };
+      return f.runFileLog(cmd);
+    };
+    const run = await startRec(vault, { runFileLog, deps: { delayMs: 60000 } });
+    await jot(run, 'First.');
+    await waitFor(() => n === 1);
+    await wait(50);
+    await jot(run, 'The crew lands.');
+    await wait(50);
+    assert.strictEqual(n, 1, 'nothing filed before the stop');
+    await run.close();
+    assert.strictEqual(n, 2, 'the stop filed it');
+    assert.ok(logHas(vault, '29 Nov 2026', /The crew lands\./));
+    const saved = savedState(run);
+    assert.strictEqual(saved.filed && saved.filed.index, `${S15}/Session 15 - 29 Nov 2026.md`);
+    assert.ok(saved.recordHash, 'the record hash is saved');
   });
 
   it('a runFileLog that throws at once does not leave the filing stuck', async () => {
