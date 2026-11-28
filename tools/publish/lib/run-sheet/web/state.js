@@ -85,10 +85,11 @@
     return out;
   }
 
-  // The session title as the state keeps it: text, trimmed, at most 80 characters. One rule for the action and for a
-  // whole state a page PUTs (upgrade runs on every PUT).
+  // The session title as the state keeps it: text, trimmed, at most 80 characters (UTF-16 units, as the box's maxlength
+  // counts them), a character the limit would split left out whole. One rule for the action and for a whole state a page
+  // PUTs (upgrade runs on every PUT).
   const TITLE_MAX = 80;
-  const cleanTitle = (v) => (typeof v === 'string' ? v.trim().slice(0, TITLE_MAX) : '');
+  const cleanTitle = (v) => (typeof v === 'string' ? v.trim().slice(0, TITLE_MAX).replace(/[\uD800-\uDBFF]$/, '') : '');
 
   const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);

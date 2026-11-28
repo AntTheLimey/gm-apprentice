@@ -841,6 +841,9 @@ describe('the session title', () => {
     assert.strictEqual(run([{ type: 'setTitle', title: 'x'.repeat(120) }]).title, 'x'.repeat(80));
     assert.strictEqual(run([{ type: 'setTitle', title: 'A' }, { type: 'setTitle', title: '' }]).title, '');
     assert.strictEqual(run([{ type: 'setTitle', title: null }]).title, '');
+    // a character the limit would split is left out whole, never half (CodeRabbit #895)
+    assert.strictEqual(run([{ type: 'setTitle', title: `${'x'.repeat(79)}🌙` }]).title, 'x'.repeat(79));
+    assert.strictEqual(run([{ type: 'setTitle', title: `${'x'.repeat(78)}🌙` }]).title, `${'x'.repeat(78)}🌙`);
   });
 
   it('setTitle is refused after filing: the state is left as it was', () => {
