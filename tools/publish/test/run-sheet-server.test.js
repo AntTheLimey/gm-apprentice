@@ -1653,11 +1653,13 @@ describe('run sheet server: a session from the record (Task 7)', () => {
   const argOf = (cmd, name) => { const a = cmd.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : null; };
 
   // Stands in for `gma table-file`: the index and its empty Table Log, the index's CREATED row first, as the real one prints.
-  const tableFiler = (vault, { delayMs = 0, failFirst = false, writeThenTimeOut = false } = {}) => {
+  // `hold`: a promise the filing waits on, so a test keeps it running for exactly as long as it needs.
+  const tableFiler = (vault, { delayMs = 0, failFirst = false, writeThenTimeOut = false, hold = null } = {}) => {
     const calls = [];
     const runFileLog = async (cmd) => {
       calls.push(cmd);
       if (delayMs) await wait(delayMs);
+      if (hold) await hold;
       if (failFirst && calls.length === 1) return { ok: false, why: 'the vault was busy' };
       const title = argOf(cmd, 'title');
       const stem = `Session 15 - ${title}`;
@@ -1799,7 +1801,9 @@ describe('run sheet server: a session from the record (Task 7)', () => {
 
   it('F3: the page is told a filing is running, from its start to its end, and a page that connects meanwhile too', async () => {
     const vault = recVault();
-    const f = tableFiler(vault, { delayMs: 300 });
+    let release;
+    const hold = new Promise((r) => { release = r; });
+    const f = tableFiler(vault, { hold });
     const run = await startRec(vault, { runFileLog: f.runFileLog });
     const sse = listen(run.port);
     let late;
@@ -1811,10 +1815,11 @@ describe('run sheet server: a session from the record (Task 7)', () => {
       late = listen(run.port);
       const hello = await waitFor(() => late.events.find((e) => e.event === 'hello'));
       assert.strictEqual(hello.data.status.filing, true);
+      release();
       await waitFor(() => sse.events.find((e) => e.event === 'filing' && e.data.on === false));
       const names = sse.events.map((e) => e.event).filter((n) => n === 'filing' || n === 'record-filed');
       assert.deepStrictEqual(names, ['filing', 'record-filed', 'filing']);
-    } finally { sse.close(); if (late) late.close(); }
+    } finally { release(); sse.close(); if (late) late.close(); }
   });
 
   it('F3: after the filing the vault is read once, and the page\'s next model is that read', async () => {
