@@ -256,9 +256,6 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   }));
 
   let filing = null; // the filing running now: one at a time
-  // A filing of a new session ended with no answer (a crash, a timeout): it may have written the index and its log
-  // all the same, and only then is a refusal naming them taken as this session's filing.
-  let unsure = false;
   // The command for this filing: a session not filed yet takes the title the GM typed, else the open date (D2, D3).
   function fileCommand() {
     if (!fileCmd.takesTitle) return fileCmd.cmd;
@@ -311,10 +308,12 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     justRead = null;
     if (fileCmd.takesTitle && !session.index) {
       let at = filedIndexOf(done.out);
-      // a filing that wrote and then failed (a timeout) is refused next time with "already has a Table Log": that index
-      // is the one it filed, or every retry would be refused
-      const already = !done.ok && done.refused && unsure ? alreadyFiledOf(done.why) : null;
-      if (!at && already && tableLogOf(lastIndex, already.index).log === already.log) at = already.index;
+      // a refusal "already has a Table Log" names a filing of this session that wrote: one that then failed here (a
+      // timeout), or one an earlier server's child finished after a restart (Task 12, F5). That index is taken when it
+      // is this session's number and links the log named, or every retry would be refused.
+      const already = !done.ok && done.refused ? alreadyFiledOf(done.why) : null;
+      const ours = already && lastIndex.has(already.index) && String((lastIndex.read(already.index).fm || {}).session_number) === String(session.number);
+      if (!at && ours && tableLogOf(lastIndex, already.index).log === already.log) at = already.index;
       if (at && lastIndex.has(at)) {
         session.index = at;
         session.title = displayTitleOf(lastIndex.read(at).fm || {}, stemOf(at));
@@ -324,7 +323,6 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
     // A command that wrote the note and then failed (a timeout, an exit after the write) has still filed it: the log
     // found is the log, or every retry would be refused with "already has a Table Log".
     if (!rel) {
-      if (fileCmd.takesTitle && !done.refused) unsure = true;
       const err = new Error(done.ok ? 'it was filed, but the session does not link it' : `filing it failed: ${done.why}`);
       if (!done.ok && done.refused) err.refused = true;
       throw err;

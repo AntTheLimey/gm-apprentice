@@ -1992,6 +1992,25 @@ setTimeout(() => { process.stdout.write('ERROR\\t\\t\\tstill refused\\n'); proce
     assert.strictEqual((await req(run.port, 'GET', '/api/model')).json.session.filed, true);
   });
 
+  // Task 12, F5: a server that died while its filing ran, restarted before the filing ended: the pick found no index, so
+  // the fresh server is not unsure. Its first action's refusal names the index and log the old filing made: adopted.
+  it('a fresh server after a filing finished behind its back files nothing twice and is not refused', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    const lines = [];
+    const run = await startRec(vault, { runFileLog: f.runFileLog, deps: { log: (l) => lines.push(l) } });
+    // the old server's child finishes now, under the date title the fresh server would use too
+    await f.runFileLog([...CMD, '--title=29 Nov 2026', '--play-date', '2026-11-29']);
+    await jot(run, 'The crew lands.');
+    await waitFor(() => logHas(vault, '29 Nov 2026', /The crew lands\./));
+    assert.deepStrictEqual(session15(vault), ['Session 15 - 29 Nov 2026 - Table Log.md', 'Session 15 - 29 Nov 2026.md']);
+    assert.strictEqual((await req(run.port, 'GET', '/api/model')).json.session.filed, true);
+    assert.ok(!lines.some((l) => /could not be written/.test(l)), lines.join('\n'));
+    await jot(run, 'Odalys sends word.');
+    await waitFor(() => logHas(vault, '29 Nov 2026', /Odalys sends word\./));
+    assert.strictEqual(f.calls.length, 2, 'the old filing and one refused try');
+  });
+
   it('a stop with a filing retry pending waits for the filing that last try starts: no child outlives the sheet', async () => {
     const vault = recVault();
     const lines = [];
