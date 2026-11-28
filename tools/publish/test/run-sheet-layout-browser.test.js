@@ -2074,10 +2074,13 @@ describe('S2: the players\' column outside a fight', { skip: browserSkip() }, ()
       await settled(page);
       await tap(page, '#sideFold');
       await page.resize(1100, 762);
+      // a slow machine lays the page out again well after the resize: wait for the width, then let it settle
+      await until(page, 'innerWidth === 1100');
       await page.sleep(200);
       let p = await probe(page);
       assert.deepStrictEqual([(await side(page)).folded, p.layout.auto.side], [true, false], 'folded by the GM, not the page');
       await page.resize(1449, 762);
+      await until(page, 'innerWidth === 1449');
       await page.sleep(200);
       assert.strictEqual((await side(page)).folded, true);
       // never touched: folded at 1100 by the page, open again at 1449
@@ -2086,10 +2089,10 @@ describe('S2: the players\' column outside a fight', { skip: browserSkip() }, ()
       await page.reload();
       await settled(page);
       await page.resize(1100, 762);
-      await page.sleep(200);
+      await until(page, 'innerWidth === 1100 && p.layout.sideFolded');
       assert.strictEqual((await side(page)).folded, true, 'the page folds it at 1100');
       await page.resize(1449, 762);
-      await page.sleep(200);
+      await until(page, 'innerWidth === 1449 && !p.layout.sideFolded');
       p = await probe(page);
       assert.deepStrictEqual([(await side(page)).folded, p.layout.auto.side], [false, false], 'and opens it with room again');
       assert.deepStrictEqual(p.errors, []);

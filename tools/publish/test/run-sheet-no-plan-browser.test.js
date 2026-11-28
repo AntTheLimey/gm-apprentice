@@ -194,7 +194,8 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         const idOf = (t) => model.record.cards.find((c) => c.title === t).id;
         for (const t of ['Odalys Venn', 'Corvin Tash']) {
           const head = `[id="card:${idOf(t)}"] h3`;
-          if (t === 'Corvin Tash') { await page.wheel(400, 400, -20000); }
+          // a slow machine lands the wheel's scroll after the turn returns: wait for the top before measuring
+          if (t === 'Corvin Tash') { await page.wheel(400, 400, -20000); await page.waitFor('window.scrollY === 0'); }
           const was = await inView(page, head);
           assert.ok(was.found && !was.whole, `${t}'s card is out of view before the jump: ${JSON.stringify(was)}`);
           const y0 = await page.evaluate('window.scrollY');
@@ -207,6 +208,7 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
           assert.strictEqual(await page.evaluate(`document.querySelector(${JSON.stringify(head)}).textContent`), t);
         }
         await page.wheel(400, 400, -20000);
+        await page.waitFor('window.scrollY === 0');
         // Move them, by the keyboard, to the other city
         await page.click('#where .wrow input[data-movebox]');
         await page.type('Marrow');
