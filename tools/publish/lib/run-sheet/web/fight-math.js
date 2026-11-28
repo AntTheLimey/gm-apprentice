@@ -1024,7 +1024,8 @@
   // name, a word of it starting with them (castSearch's word-start hit) or a near typo of it (within nearCast's edits).
   // A place that only shares the last word ("The Old Inn", The Salt Inn) stays in the list for a click, and Enter then
   // makes the typed place. Null when none qualifies.
-  function enterChoice(cast, query, search) {
+  // Only a place the list shows (its `limit`, as addChoices'), never one past it (CodeRabbit #895).
+  function enterChoice(cast, query, search, limit = 8) {
     const text = String(query == null ? '' : query).replace(/\s+/g, ' ').trim();
     if (!text) return null;
     const q = fold(text);
@@ -1033,9 +1034,9 @@
     const names = (c) => [c.name, ...(c.aliases || []), ...(c.gmAliases || [])].filter(Boolean);
     // the typed words from the start of any word of the name: "Harbour Dist" is Old Harbour District (fix round 2)
     const at = new RegExp(`(^|[^\\p{L}\\p{N}])${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'u');
-    const wordStart = (c) => names(c).some((n) => at.test(fold(n)));
+    const wordStart = (c) => names(c).some((n) => at.test(fold(n).replace(/\s+/g, ' ')));
     const typo = (c) => k.length >= 3 && names(c).some((n) => { const t = nameKey(n); return Boolean(t) && editDistance(k, t) <= most; });
-    const pick = addChoices(cast, text, search, Infinity).filter((x) => !x.isNew).find((x) => {
+    const pick = addChoices(cast, text, search, limit).filter((x) => !x.isNew).find((x) => {
       const c = (cast || []).find((y) => y.note === x.note);
       return c && (wordStart(c) || typo(c));
     });
