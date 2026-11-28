@@ -520,6 +520,8 @@ describe('the no-Plan page in a browser', { skip: browserSkip() }, () => {
         await page.click('#scenes .card a.lk');
         await page.waitFor('document.querySelector("#drawer.open")');
         await page.key('Escape');
+        // the drawer slides away over 0.18 s; a hand clicks what it sees once the drawer has gone, not under it
+        await page.waitFor('getComputedStyle(document.getElementById("drawer")).visibility === "hidden"');
         await look();
         await page.click(`#coming .lead [data-fplace="${FESTIVAL}"]`);
         await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.saved === 'Saved' && p.pending === 0 && p; })()`);
