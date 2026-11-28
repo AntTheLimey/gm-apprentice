@@ -58,9 +58,13 @@ function shortDate(v) {
 }
 
 // Text a template leaves behind: nothing, or only a `{...}` placeholder: one with a block anchor after it
-// ("{…} ^recap"), or under a bold label ("**Thread name:** {…}", "**MAJOR —** {…}") (Task 12, Task 4's edges).
+// ("{…} ^recap"), or under a bold label ("**Thread name:** {…}", "**MAJOR —** {…}") (Task 12, Task 4's edges). A bold
+// label with nothing after it is empty only when it reads as a label ("**Thread name:**"): a bullet all in bold ("**Find
+// the missing courier**") is a live item (CodeRabbit #895).
 const isPlaceholder = (s) => {
-  const t = String(s || '').trim().replace(/\s\^[\w-]+$/, '').replace(/^\*\*[^*]+\*\*\s*/, '');
+  let t = String(s || '').trim().replace(/\s\^[\w-]+$/, '');
+  const bold = /^\*\*([^*]+)\*\*\s*/.exec(t);
+  if (bold && (t.length > bold[0].length || /[:—–-]\s*$/.test(bold[1]))) t = t.slice(bold[0].length);
   return t === '' || /^\{[\s\S]*\}$/.test(t);
 };
 // An item that only says there is nothing (Task 11b, F4 and F6; fix round 1): the nothing-phrase is the whole item,
@@ -284,13 +288,15 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   // survives a restart and a played-not-wrapped reopen (Task 8 fix round 2). This is where the crew starts tonight.
   const logNote = tableLogOf(index, given.after || null).log;
   const logPlaces = logNote ? placesIn(sectionText(nl(index.read(logNote).body), 2, /^where everyone ended$/i)) : [];
-  const pcPlaces = Object.values(byPc).filter(Boolean);
   // Task 11b, F8: then the first place the Handoff links (a place it says they came "from" is where they were, not where
   // they are), and the PC notes last, only when the record says nothing of where they are: a World State Location in
-  // words ("the party has walked down") is newer than any PC note, so it never falls back to a stale one.
+  // words ("the party has walked down") is newer than any PC note, so it never falls back to a stale one. Nor does a PC
+  // note naming a place the Handoff says they came from: they left it (CodeRabbit #895).
   const handoffText = prose(sectionText(gm, 3, /^handoff to session-prep$/i));
-  const handoffPlace = [...handoffText.matchAll(/(\bfrom\s+)?\[\[([^\]|#]+)/gi)].filter((m) => !m[1])
-    .map((m) => index.resolve(m[2].trim())).find(isPlace) || null;
+  const handoffLinks = [...handoffText.matchAll(/(\bfrom\s+)?\[\[([^\]|#]+)/gi)].map((m) => ({ from: Boolean(m[1]), note: index.resolve(m[2].trim()) }));
+  const handoffPlace = (handoffLinks.find((l) => !l.from && isPlace(l.note)) || {}).note || null;
+  const left = new Set(handoffLinks.filter((l) => l.from).map((l) => l.note));
+  const pcPlaces = Object.values(byPc).filter((p) => p && !left.has(p));
   if (logPlaces.length) Object.assign(whereNow, { place: deepest(logPlaces), from: 'table-log' });
   else if (worldLoc) Object.assign(whereNow, { place: worldLoc, from: 'world-state' });
   else if (handoffPlace) Object.assign(whereNow, { place: handoffPlace, from: 'handoff' });
@@ -424,6 +430,18 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
     return n ? nameOf(n) : t;
   });
   const firstFive = (md) => stripMd(linkWords(md)).split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
+  // A card's id is its items' words; two cards with the same words (one line in two sections) take their sections too, and
+  // a repeat within one section its place among them, so every id is its own and the same on every read (CodeRabbit #895).
+  const used = new Set();
+  const idOf = (grp) => {
+    const hash = (v) => crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 12);
+    let id = hash(grp.items.map((it) => it.md).sort());
+    const withSource = grp.items.map((it) => [it.source, it.md]).sort();
+    if (used.has(id)) id = hash(withSource);
+    for (let n = 2; used.has(id); n++) id = hash([withSource, n]);
+    used.add(id);
+    return id;
+  };
   const cards = pool.map((grp) => {
     const subj = grp.frozen || grp.subj;
     let title;
@@ -441,9 +459,8 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
       const best = top.find((x) => x[0] === grp.joinedOn) || top[0];
       title = nameOf(best ? best[0] : grp.joinedOn);
     } else title = firstFive(grp.items[0].md);
-    const texts = grp.items.map((it) => it.md).sort();
     return {
-      id: crypto.createHash('sha256').update(JSON.stringify(texts)).digest('hex').slice(0, 12),
+      id: idOf(grp),
       title,
       items: grp.items.map((it) => ({ md: it.md, source: it.source })),
       notes: [...subj.keys()],

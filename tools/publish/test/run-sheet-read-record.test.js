@@ -841,6 +841,39 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.strictEqual(r.comingUp.lead.title, 'Day 14 the "Harbour Festival; the big one" opens at dusk.');
     });
 
+    // CodeRabbit #895: a bullet that is all bold is a live item; a bold label with nothing after it is still empty.
+    it(`a bullet written all in bold stays; a bare bold label reads as empty${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+        '- **Find the missing courier**\n- **Thread name:**\n'));
+      const all = readRecord(dir, session()).record.cards.flatMap((c) => c.items.map((i) => i.md));
+      assert.ok(all.includes('**Find the missing courier**'), all.join(' | '));
+      assert.ok(!all.some((m) => /Thread name/.test(m)), all.join(' | '));
+    });
+
+    // CodeRabbit #895: the same words in two sections make two cards, and each keeps an id of its own, read after read.
+    it(`two cards with the same words have different ids, the same on every read${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+        '- Wait for the morning bell.\n').replace('#### Pending Consequences\n', '- Wait for the morning bell.\n\n#### Pending Consequences\n'));
+      const ids = () => readRecord(dir, session()).record.cards.filter((c) => c.items.some((i) => i.md === 'Wait for the morning bell.')).map((c) => c.id);
+      const first = ids();
+      assert.strictEqual(first.length, 2);
+      assert.notStrictEqual(first[0], first[1]);
+      assert.deepStrictEqual(ids(), first);
+    });
+
+    // CodeRabbit #895: a Handoff that says the crew left a place, with an empty World State Location, does not let a PC
+    // note put them back there.
+    it(`a Handoff that says the crew left a place keeps a PC note from putting them back there${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Location:** [[The Salt Inn]]\n', '- **Location:**\n')
+        .replace('The crew sits in [[The Salt Inn]] after dark', 'The crew has left from [[The Salt Inn]] after dark'));
+      const w = readRecord(dir, session()).record.whereNow;
+      assert.strictEqual(w.byPc['Characters/PCs/Pell Rowan.md'], loc('The Salt Inn'));
+      assert.deepStrictEqual([w.place, w.from], [null, null]);
+    });
+
     // Task 12 (Task 5's deferred minor): a card joined on a place is titled by that place when a person ties it.
     it(`a card joined on a place, tied with a person, is titled by the place${tag}`, () => {
       const dir = open({ crlf });
