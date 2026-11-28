@@ -7,7 +7,7 @@ const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn: nodeSpawn, spawnSync: nodeSpawnSync, execFile } = require('node:child_process');
-const { listSessions, pickSession, stateFileFor } = require('./sessions');
+const { listSessions, pickSession, stateFileFor, noPlanIdOf } = require('./sessions');
 const { createTableServer, listenLocal } = require('./server');
 const { lockHolder, inCloudOnly } = require('./store');
 const { siteFileNamedBy } = require('../settings/site-tool');
@@ -245,7 +245,11 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   // One server per session: another one (on another port) would write the same state and Table Log.
   const { file: stateFile, stateId } = stateFileFor(vaultPath, chosen);
   const hello = deps.hello || defaultHello;
-  const holder = await lockHolder(stateFile, { hello });
+  // A session prep filed with a Plan while a no-Plan sheet had it open: that sheet holds the number-named lock, and may
+  // have saved nothing yet (CodeRabbit #895). Its lock is asked too, so the session never has two sheets.
+  const numbered = chosen.plan && chosen.number !== null && chosen.number !== undefined ? path.join(path.dirname(stateFile), `${noPlanIdOf(chosen)}.json`) : null;
+  const lockedNow = async () => (await lockHolder(stateFile, { hello })) || (numbered && numbered !== stateFile ? await lockHolder(numbered, { hello }) : null);
+  const holder = await lockedNow();
   if (holder) return refuse(lockedMessage(chosen.label, holder));
   // A saved state iCloud has taken off this computer would read as none: the sheet would start empty.
   if ((deps.inCloud || inCloudOnly)(stateFile)) return refuse(inCloudMessage(chosen.label, vaultPath, stateFile));
@@ -289,7 +293,7 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   }
 
   // Asked again: another start may have taken the session while this one flushed.
-  const late = await lockHolder(stateFile, { hello });
+  const late = await lockedNow();
   if (late) return refuse(lockedMessage(chosen.label, late));
 
   let app;

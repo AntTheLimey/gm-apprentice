@@ -276,4 +276,4 @@ function stateFileFor(vaultPath, session, { exists = fs.existsSync, readDir = fs
   return { file: at(stateId), stateId };
 }
 
-module.exports = { listSessions, pickSession, nextFromRecord, stateFileFor, tableLogOf, isPlayed, stateIdOf, wrapUpOf, playNotesOf };
+module.exports = { listSessions, pickSession, nextFromRecord, stateFileFor, noPlanIdOf, tableLogOf, isPlayed, stateIdOf, wrapUpOf, playNotesOf };

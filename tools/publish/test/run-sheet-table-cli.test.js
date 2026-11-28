@@ -210,6 +210,22 @@ describe('gm-publish table: a session from the record', () => {
     assert.strictEqual(errs.join('\n'), 'The record for Session 15 cannot be read: the Wrap-Up is torn');
   });
 
+  // CodeRabbit #895: a no-Plan sheet open for an unfiled session holds the number-named lock with no state saved yet. Prep
+  // then files that session with a Plan; a second start finds the Plan-named state file, and must still find the first sheet.
+  it('a sheet started once prep has filed a Plan still finds the no-Plan sheet open for that session', async () => {
+    const vault = copyRecordFixture();
+    after(() => removeFixture(vault));
+    const a = await start({ vault, fileLog: { cmd: ['gma-never-run'], takesTitle: true } });
+    assert.ok(a.h && a.h.url, a.errs.join('\n'));
+    const dir = path.join(vault, 'Chapters', 'Chapter 3', 'Sessions', 'Session 15');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Session 15 - Lamps.md'), '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\ndocuments:\n  plan: "[[Session 15 - Lamps - Plan]]"\n---\n\n# Session 15 - Lamps\n');
+    fs.writeFileSync(path.join(dir, 'Session 15 - Lamps - Plan.md'), '---\ntype: session-plan\nsession: "[[Session 15 - Lamps]]"\nchapter: "[[Chapter 3]]"\n---\n\n## Session Intent\n\nLamps.\n');
+    const b = await start({ vault });
+    assert.strictEqual(b.h, 1, b.lines.join('\n'));
+    assert.match(b.errs.join('\n'), new RegExp(`already running \\(pid ${process.pid}, port ${a.port}`));
+  });
+
   it('a state iCloud has taken is found under the number name (the lock and iCloud checks use stateFileFor)', async () => {
     const vault = copyRecordFixture();
     after(() => removeFixture(vault));
