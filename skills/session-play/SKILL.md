@@ -65,9 +65,9 @@ sheet's) beside it is not Play Notes: leave it alone. Before play,
 players' screen and writes the Table Log; you still write the Play
 Notes beside it. With no Plan, the sheet files the session index on
 the first thing at the table: Play Notes go beside that index, or,
-if the sheet isn't used, beside the one `session-new --upcoming`
-files (with no index yet, `session-new --upcoming --number N --title
-T`). Acknowledge and hold — no editing or reorganizing;
+if the sheet isn't used, beside an index you file first with
+`gma vault-write <vault> session-new --upcoming --number N --title "T"
+--created-by session-play --write`. Acknowledge and hold — no editing or reorganizing;
 wrap-up processes it. Mark entities with:
 
 | Marker | Use when |
