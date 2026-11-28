@@ -72,16 +72,16 @@ async function startRec({ crlf = false, prepped = null, noPlace = false, undersc
   const vault = copyRecordFixture({ crlf });
   made.push(vault);
   // Task 11b, F11: a vault whose notes are named by their stems with `_` (Canticle's shape): Mirren's PC note is
-  // Mirren_Fell, with no name of its own, and a follow-up links an NPC note Wren_Halloway
+  // Mirren_Fell, with no name of its own, and a follow-up links an NPC note Ottilie_Marsh
   if (underscored) {
     fs.renameSync(path.join(vault, 'Characters/PCs/Mirren Fell.md'), path.join(vault, 'Characters/PCs/Mirren_Fell.md'));
     rewriteAll(vault, (t) => t.split('Mirren Fell').join('Mirren_Fell'));
-    fs.writeFileSync(path.join(vault, 'Characters/NPCs/Wren_Halloway.md'), '---\ntype: npc\n---\n\nA bell-ringer.\n');
+    fs.writeFileSync(path.join(vault, 'Characters/NPCs/Ottilie_Marsh.md'), '---\ntype: npc\n---\n\nA bell-ringer.\n');
     const w = path.join(vault, 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Wrap-Up.md');
     const t = fs.readFileSync(w, 'utf8');
     const nl = t.includes('\r\n') ? '\r\n' : '\n';
     fs.writeFileSync(w, t.replace(`- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.${nl}`,
-      `- **[[Wren_Halloway]]** rings the bell at odd hours.${nl}`));
+      `- **[[Ottilie_Marsh]]** rings the bell at odd hours.${nl}`));
   }
   // a record that names no place for the crew: the World State's Location and Pell's note's are left empty
   if (noPlace) {
@@ -723,13 +723,13 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         // each chip is the face's initial (no portrait) and the first word of the name
         assert.ok(chips.some((c) => /Mirren$/.test(c)) && chips.every((c) => !c.includes('_')), JSON.stringify(chips));
         const text = (sel) => page.evaluate(`document.querySelector(${JSON.stringify(sel)}).textContent`);
-        // a card's own lines keep the record's words (a bare [[Wren_Halloway]] reads as written); its title, the chips,
+        // a card's own lines keep the record's words (a bare [[Ottilie_Marsh]] reads as written); its title, the chips,
         // People, the PCs and the rail show display names
         const heads = await page.evaluate('Array.from(document.querySelectorAll("#scenes .card h3"), (h) => h.textContent).join(" | ")');
         assert.doesNotMatch(heads, /_/, heads);
-        for (const sel of ['#where', '#people', '#pcs', '#rail']) assert.doesNotMatch(await text(sel), /Mirren_Fell|Wren_Halloway/, sel);
-        assert.ok((await cardTitles(page, 'here')).concat(await cardTitles(page, 'could')).includes('Wren Halloway'));
-        assert.match(await text('#people'), /Wren Halloway/);
+        for (const sel of ['#where', '#people', '#pcs', '#rail']) assert.doesNotMatch(await text(sel), /Mirren_Fell|Ottilie_Marsh/, sel);
+        assert.ok((await cardTitles(page, 'here')).concat(await cardTitles(page, 'could')).includes('Ottilie Marsh'));
+        assert.match(await text('#people'), /Ottilie Marsh/);
         assert.match(await text('#pcs'), /Mirren Fell/);
         // Move them: the Table Log's line names her by her display name too
         await page.click('#where .wrow input[data-movebox]');

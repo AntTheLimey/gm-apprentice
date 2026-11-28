@@ -681,18 +681,18 @@ describe('real-vault shapes (Task 11b)', () => {
     // and a card's title comes only from notes its items link or name, never from a note one hop away.
     it(`F11: a card and the names map show display names, never a raw stem${tag}`, () => {
       const dir = open({ crlf });
-      put(dir, npc('Wren_Halloway'), '---\ntype: npc\n---\n\nA bell-ringer.\n');
+      put(dir, npc('Ottilie_Marsh'), '---\ntype: npc\n---\n\nA bell-ringer.\n');
       put(dir, 'Items/Ferry_Charter.md', '---\ntype: item\ntitle: The Ferry Charter\n---\n');
       edit(dir, 'Characters/PCs/Pell Rowan.md', (t) => t.replace('type: pc\n', 'type: pc\nname: Pell Rowan-Ashe\n'));
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
-        '- **[[Wren_Halloway]]** rings the bell at odd hours.\n- [[Ferry_Charter]] terms are still unsigned.\n'));
+        '- **[[Ottilie_Marsh]]** rings the bell at odd hours.\n- [[Ferry_Charter]] terms are still unsigned.\n'));
       const r = readRecord(dir, session()).record;
       const ts = r.cards.map((c) => c.title);
-      assert.ok(ts.includes('Wren Halloway'), ts.join(' | '));
+      assert.ok(ts.includes('Ottilie Marsh'), ts.join(' | '));
       // the first five words, the link read as the note's title
       assert.ok(ts.includes('The Ferry Charter terms are'), ts.join(' | '));
       assert.ok(ts.every((x) => !x.includes('_')), ts.join(' | '));
-      assert.strictEqual(r.names[npc('Wren_Halloway')], 'Wren Halloway');
+      assert.strictEqual(r.names[npc('Ottilie_Marsh')], 'Ottilie Marsh');
       assert.strictEqual(r.names['Items/Ferry_Charter.md'], 'The Ferry Charter');
       assert.strictEqual(r.names['Characters/PCs/Pell Rowan.md'], 'Pell Rowan-Ashe');
       assert.strictEqual(r.names['Characters/PCs/Joss Harker.md'], 'Joss Harker');

@@ -85,7 +85,7 @@ const sectionText = (body, level, re) => {
 };
 const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.trim()).filter((t) => !isPlaceholder(t) && !isNothing(t));
 
-// A sentence end: a stop and a space, but never the dot after a lone capital ("P.E.T.A. Council", "J. Smith"), which is
+// A sentence end: a stop and a space, but never the dot after a lone capital ("Q.R.L. Council", "J. Smith"), which is
 // an initialism's or an initial's, not a sentence's end (Task 11b, F1).
 const ITEM_BREAK = /(?<=[.!?])(?<!(?:^|[^\p{L}])\p{Lu}\.)\s+(?=\p{Lu})|;\s*/u;
 // A Resolved Threads entry still open: it says it is carried on, carried forward or still live.
@@ -152,8 +152,8 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   const placesIn = (text) => uniq(pt.links(text).map((t) => index.resolve(t)).filter(isPlace));
   // The notes `text` names, each at its first place (Task 11b, F2 and F10): a link to one of `wanted` (by its type), or a
   // name of `cands` ({ note, whole: names said whole, any case; single: words said whole, case kept }). The longest
-  // match wins: a name inside a longer match, a link or another note's longer name, is dropped, so "Paul" is not named
-  // inside "Paul Harrelson", nor the alias "Charles" inside "[[Charles_Ashworth]]".
+  // match wins: a name inside a longer match, a link or another note's longer name, is dropped, so "Corvin" is not named
+  // inside "Corvin Tash", nor the alias "Harl" inside "[[Harl Brannock]]".
   const namedIn = (text, cands, wanted) => {
     const hits = [];
     for (const m of text.matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)) {
@@ -413,7 +413,7 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   });
 
   // Background: Pending Consequences, and Resolved Threads entries that say they are carried on, carried forward or
-  // still live, one line each; a closed entry that merely holds the word "carried" ("Kael carried Tam up") is closed
+  // still live, one line each; a closed entry that merely holds the word "carried" ("Mirren carried the casks up") is closed
   // (Task 11b, F7). Each line is its whole bullet, never cut into sentences, so an initialism and the bold survive
   // (Task 11b, F1).
   const oneLine = (s) => nl(s).replace(/\s*\n\s*/g, ' ').trim();
