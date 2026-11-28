@@ -61,7 +61,9 @@ const isPlaceholder = (s) => {
 // and "No one knows…".
 const NOTHING_WORD = /^(?:none|nothing|nil|n\/a|—|–|-+)$/;
 const NOTHING_OPEN = /^(?:none|nothing)\s+(?:(?:is|are)\s+)?(?:left\s+)?(?:open|outstanding|pending|active|running|ticking|carried|new|yet|pressing|on the record)(?:\s+(?:by|in|on|at|for|from|this|so|yet|right)(?:\s+[\p{L}\p{N}'-]+){0,4})?$/u;
-const NO_KIND = /^no\s+(?:(?:open|new|active|further|other|outstanding|unresolved|pending|live|current|more)\s+)*(?:threads?|clocks?|threats?|intentions?|consequences?|follow-?ups?|npcs?|items?|changes?|deadlines?|timers?|plans?)(?:\s+[\p{L}\p{N}'-]+){0,4}$/u;
+// "No <kind>" takes at most one of yet, left, open, remain(s), pending, new, known after it: "No threats near the Guild"
+// names a place, and stays (fix round 2).
+const NO_KIND = /^no\s+(?:(?:open|new|active|further|other|outstanding|unresolved|pending|live|current|more)\s+)*(?:threads?|clocks?|threats?|intentions?|consequences?|follow-?ups?|npcs?|items?|changes?|deadlines?|timers?|plans?)(?:\s+(?:yet|left|open|remains?|pending|new|known))?$/u;
 // a further clause: a comma, colon, semicolon, dash or bracket, a second sentence, or "but", "except" and their kin
 const MORE = /[,;:—–()]|\s-\s|[.!?]\s|\b(?:but|except|save|unless|besides|apart|other than|until)\b/;
 const nothingPhrase = (s) => {
@@ -88,12 +90,13 @@ const bulletsOf = (text) => pt.bullets(stripComments(text)).map((b) => b.text.tr
 // A sentence end: a stop and a space, but never the dot after a lone capital ("Q.R.L. Council", "J. Smith"), which is
 // an initialism's or an initial's, not a sentence's end (Task 11b, F1).
 const ITEM_BREAK = /(?<=[.!?])(?<!(?:^|[^\p{L}])\p{Lu}\.)\s+(?=\p{Lu})|;\s*/u;
-// A Resolved Threads entry still open: it says it is carried forward, carried on a list (or "carried on" with nothing
-// after), or still live. "Carried on his back" is the physical sense, and carries nothing forward.
-const CARRIED = /\bcarried\s+forward\b|\bcarried\s+on\s+(?:(?:the|a|an)\s+)?(?:[\p{L}-]+\s+)?(?:list|record|board|sheet)\b|\bcarried\s+on\s*(?:[.;:)(—–]|$)|\bstill\s+live\b/iu;
-// The closure of an entry "<the thread> — closed: <how>": "closed:" at the start, after a dash or a bracket. A "closed:"
+// A Resolved Threads entry still open: it says it is carried forward, carried on to somewhere ("carried on to the next
+// session"), carried on a list (or "carried on" with nothing after), or still live. "Carried on his back" is the physical sense, and carries nothing forward.
+const CARRIED = /\bcarried\s+forward\b|\bcarried\s+on\s+to\b|\bcarried\s+on\s+(?:(?:the|a|an)\s+)?(?:[\p{L}-]+\s+)?(?:list|record|board|sheet)\b|\bcarried\s+on\s*(?:[.;:)(—–]|$)|\bstill\s+live\b/iu;
+// The closure of an entry "<the thread> — closed: <how>": "closed:" at the start, after a dash that starts the entry
+// or has a space before it ("re-closed:" is not one), or after a bracket. A "closed:"
 // mid-sentence ("the road is closed: they go round") is the thread's own words, not its closure.
-const CLOSURE = /(?:^|[—–-]\s*|\()closed:\s*([\s\S]*)$/i;
+const CLOSURE = /(?:^|(?:^|\s)[—–-]\s*|\()closed:\s*([\s\S]*)$/i;
 // One World State label's items, word for word (Task 11b, F5 and F9): the line's own words and each nested bullet, a
 // wrapped line joined to the one above. What the page shows.
 function labelRaw(text, name) {

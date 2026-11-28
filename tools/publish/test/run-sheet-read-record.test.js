@@ -573,13 +573,18 @@ describe('real-vault shapes (Task 11b)', () => {
         + '- The deputy\'s offer is still live at the inn. — closed: retired by the keeper: he withdrew it (Joss Harker)\n'
         // fix round 1: a "closed:" mid-sentence is no closure, and "carried on his back" is the physical sense
         + '- Whether the quay bridge holds is still live — the road is closed: the crew must go round\n'
-        + '- Joss means to bring the old lamp home. — closed: Joss carried on his back the old lamp to the inn (Joss Harker)\n'));
+        + '- Joss means to bring the old lamp home. — closed: Joss carried on his back the old lamp to the inn (Joss Harker)\n'
+        // fix round 2: "carried on to …" carries; "re-closed:" is no closure, so the whole entry is read
+        + '- Who rang the bell at noon. — closed: carried on to the next session (Session 14)\n'
+        + '- The lamp-man\'s debt is still live. — re-closed: the keeper looked again\n'));
       const bg = readRecord(dir, session()).record.background.filter((b) => b.from === 'Resolved Threads').map((b) => b.md);
       assert.deepStrictEqual(bg, [
         "The question of who opened the chandler's safe: carried on a live list.",
         'Whether the deputy keeps his word. — closed: carried forward to the next session (Session 14)',
         "The bell-ringer's debt. — closed: still live on the shared list",
         'Whether the quay bridge holds is still live — the road is closed: the crew must go round',
+        'Who rang the bell at noon. — closed: carried on to the next session (Session 14)',
+        "The lamp-man's debt is still live. — re-closed: the keeper looked again",
       ]);
     });
 
@@ -600,7 +605,9 @@ describe('real-vault shapes (Task 11b)', () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
         '- **None left open by the quay.** The lamp is lit again and the guild has gone quiet. The ledger is the port\'s.\n'
-        + '- Nothing.\n- n/a\n- —\n- No open threads this session.\n'
+        // changed on purpose (fix round 2: "No <kind>" takes at most one of yet, left, open, remain(s), pending, new,
+        // known after it): "No open threads this session." would now stay
+        + '- Nothing.\n- n/a\n- —\n- No open threads yet.\n'
         + '- Nothing stops the deputy from reading the page aloud.\n- No one knows who rang the bell.\n'));
       const all = readRecord(dir, session()).record.cards.flatMap((c) => c.items.map((i) => i.md));
       assert.ok(!all.some((m) => /None left open|^Nothing\.$|^n\/a$|^—$|No open threads/.test(m)), all.join('\n'));
@@ -771,7 +778,7 @@ describe('real-vault shapes (Task 11b)', () => {
     it(`F6: a nothing-phrase with a further clause says something, and stays${tag}`, () => {
       const keep = ['None new; the old one still ticks: the deputy rides at dawn.', 'Nothing new, but the bell rings at dusk.',
         'None pending — except the toll, due Friday.', 'No threats remain but the Guild', 'No clocks tick except the tide',
-        'None. The deputy rides at dawn.'];
+        'None. The deputy rides at dawn.', 'No threats near the Guild'];
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
         `${keep.map((k) => `- ${k}`).join('\n')}\n`)
