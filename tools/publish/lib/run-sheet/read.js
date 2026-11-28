@@ -504,7 +504,10 @@ function readSheet(vaultPath, { planRel = null, fm = {}, body = '', session = nu
       const publishesToPlayers = (rel) => strict.switches.site === true
         && !matchExcludedDir(rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '', strict.exclude_dirs)
         && publishesPage(decidePage({ rel, frontmatter: fmOf(rel) }, { rel, publishConfig: strict, manifest, folderMapped: strictMapped(rel) }));
-      model.seenFrom = readSeen({ vaultPath, index, sessionIndex: sessionIndex || given.after || null, publishes: publishesToPlayers, config: strict, deps });
+      // With no Plan, a session not filed yet reads every session up to and including `after` (as readCarried does).
+      model.seenFrom = readSeen({
+        vaultPath, index, sessionIndex: sessionIndex || (plan ? given.after : null) || null, after: plan ? null : given.after || null, publishes: publishesToPlayers, config: strict, deps,
+      });
     }
   }
   // What the players' screen needs of each: its own name (never the stem) and its picture.

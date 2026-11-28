@@ -64,6 +64,18 @@ describe('readRecord', () => {
       assert.strictEqual(m.partyFrom, before.partyFrom);
     });
   }
+  // Someone named in the last played session's Play Notes is seen on the players' screen before tonight is filed, as after.
+  for (const crlf of [false, true]) {
+    it(`a person named in after's Play Notes is seen before the filing and after it${crlf ? ' (CRLF)' : ''}`, () => {
+      const dir = open({ crlf });
+      const P14 = 'Chapters/Chapter 3/Sessions/Session 14/Session 14 - Ledger - Play Notes.md';
+      put(dir, P14, '---\ntype: session-play-notes\nsession: "[[Session 14 - Ledger]]"\n---\n\n# Play Notes\n\nThe crew met Odalys Venn at the shop door.\n');
+      const want = { [npc('Odalys Venn')]: 'named in Session 14' };
+      assert.deepStrictEqual(readRecord(dir, session()).seenFrom, want);
+      put(dir, S15, '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\n---\n\n# Session 15 - Next\n');
+      assert.deepStrictEqual(readRecord(dir, session({ index: S15, title: 'Session 15 - Next' })).seenFrom, want);
+    });
+  }
   it('the header and the no-Plan line', () => {
     const dir = open();
     const m = readRecord(dir, session({ planVault: true }));
