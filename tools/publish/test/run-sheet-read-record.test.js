@@ -802,16 +802,18 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.deepStrictEqual(r.world.clocks, ['Nothing new, but the bell rings at dusk.']);
     });
 
-    // Task 12, F2: a bold nothing-heading keeps its item when the rest turns against it (still, except, but…) about a note
-    // it links or a person or place it names: that rest is a live fact, and the item stays, heading and all. A gloss of
-    // why nothing is open drops, even one that names people (Snowbound's shape: "The dragon is dead, … [[Sister X]]").
+    // Task 12, F2: a bold nothing-heading keeps its item, heading and all, whenever the rest turns against it (still,
+    // except, but…), named or not: keeping a finished item costs a glance, dropping a live one loses it. A rest with no
+    // such word glosses why nothing is open and drops, even one that names people (Snowbound's shape: "The dragon is
+    // dead, … [[Sister X]]"), and so does a plain fact with none ("The Marrow Market reopens", accepted).
     it(`F2: a bold nothing-heading over a live fact keeps the item; over a gloss it drops${tag}`, () => {
       const keep = ['**Nothing new.** Except Odalys still wants the ledger back.',
         '**No threats.** The guild still watches [[Dock Row]].',
-        '**Nothing pending.** But the Marrow Market opens at dawn.'];
+        '**Nothing pending.** But the Marrow Market opens at dawn.',
+        '**No threats.** But the bell still rings at dusk.'];
       const drop = ['**None left open by the quay.** The lamp is lit again and the guild has gone quiet.',
         '**None left open by the story.** The safe is shut, Corvin is mended and [[Harl Brannock]] has closed the case.',
-        '**No threats.** But the bell still rings at dusk.'];
+        '**Nothing pending.** The Marrow Market reopens at dawn.'];
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
         `${[...keep, ...drop].map((k) => `- ${k}`).join('\n')}\n`)
