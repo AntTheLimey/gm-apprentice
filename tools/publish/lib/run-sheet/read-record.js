@@ -54,17 +54,26 @@ const isPlaceholder = (s) => {
   const t = String(s || '').trim();
   return t === '' || /^\{[\s\S]*\}$/.test(t);
 };
-// An item that only says there is nothing (Task 11b, F4 and F6): "none.", "Nothing.", "n/a", "—", "None left open by the
-// story." (its first sentence says so, whatever follows), or a whole item "No open threads". An item that only starts
-// with such a word ("Nothing stops the deputy…", "No one knows…") says something, and stays.
+// An item that only says there is nothing (Task 11b, F4 and F6; fix round 1): the nothing-phrase is the whole item,
+// give or take a full stop ("None.", "Nothing.", "n/a", "—", "None left open by the story.", "No open threads."), or the
+// whole bold heading of one ("**None left open by the story.** The dragon is dead…": the rest glosses why). Any further
+// clause keeps the item: "Nothing new, but the bell rings at dusk." says something, as do "Nothing stops the deputy…"
+// and "No one knows…".
 const NOTHING_WORD = /^(?:none|nothing|nil|n\/a|—|–|-+)$/;
-const NOTHING_OPEN = /^(?:none|nothing)\s+(?:(?:is|are)\s+)?(?:left\s+)?(?:open|outstanding|pending|active|running|ticking|carried|new|yet|pressing|on the record)\b/;
-const NO_KIND = /^no\s+(?:(?:open|new|active|further|other|outstanding|unresolved|pending|live|current|more)\s+)*(?:threads?|clocks?|threats?|intentions?|consequences?|follow-?ups?|npcs?|items?|changes?|deadlines?|timers?|plans?)\b(?:\s+[\p{L}\p{N}'-]+){0,4}$/u;
+const NOTHING_OPEN = /^(?:none|nothing)\s+(?:(?:is|are)\s+)?(?:left\s+)?(?:open|outstanding|pending|active|running|ticking|carried|new|yet|pressing|on the record)(?:\s+(?:by|in|on|at|for|from|this|so|yet|right)(?:\s+[\p{L}\p{N}'-]+){0,4})?$/u;
+const NO_KIND = /^no\s+(?:(?:open|new|active|further|other|outstanding|unresolved|pending|live|current|more)\s+)*(?:threads?|clocks?|threats?|intentions?|consequences?|follow-?ups?|npcs?|items?|changes?|deadlines?|timers?|plans?)(?:\s+[\p{L}\p{N}'-]+){0,4}$/u;
+// a further clause: a comma, colon, semicolon, dash or bracket, a second sentence, or "but", "except" and their kin
+const MORE = /[,;:—–()]|\s-\s|[.!?]\s|\b(?:but|except|save|unless|besides|apart|other than|until)\b/;
+const nothingPhrase = (s) => {
+  const t = stripMd(s).replace(/\s+/g, ' ').trim().toLowerCase().replace(/[.!?]+$/, '').trim();
+  if (NOTHING_WORD.test(t)) return true;
+  return !MORE.test(t) && (NOTHING_OPEN.test(t) || NO_KIND.test(t));
+};
 const isNothing = (s) => {
-  const t = stripMd(s).replace(/\s+/g, ' ').trim().toLowerCase();
-  const first = t.split(/(?<=[.!?])\s+/)[0].replace(/[.!?]+$/, '').trim();
-  const whole = t.replace(/[.!?]+$/, '').trim();
-  return NOTHING_WORD.test(first) || NOTHING_OPEN.test(first) || (first === whole && NO_KIND.test(whole));
+  const t = String(s || '').trim();
+  if (nothingPhrase(t)) return true;
+  const head = /^\*\*([^*]+)\*\*/.exec(t);
+  return Boolean(head) && nothingPhrase(head[1]);
 };
 const stripComments = (s) => nl(s).replace(/<!--[\s\S]*?-->/g, '');
 // Text read as prose: comments gone, placeholder paragraphs gone, blank edges trimmed.

@@ -732,6 +732,22 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.deepStrictEqual([w.place, w.from, w.text], [null, null, '']);
     });
 
+    // Fix round 1: an item is empty only when the nothing-phrase is the whole item (or the bold heading of one, as
+    // "**None left open by the quay.**" heads its gloss); any further clause keeps it.
+    it(`F6: a nothing-phrase with a further clause says something, and stays${tag}`, () => {
+      const keep = ['None new; the old one still ticks: the deputy rides at dawn.', 'Nothing new, but the bell rings at dusk.',
+        'None pending — except the toll, due Friday.', 'No threats remain but the Guild', 'No clocks tick except the tide',
+        'None. The deputy rides at dawn.'];
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+        `${keep.map((k) => `- ${k}`).join('\n')}\n`)
+        .replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** Nothing new, but the bell rings at dusk.\n'));
+      const r = readRecord(dir, session()).record;
+      const all = r.cards.flatMap((c) => c.items.map((i) => i.md));
+      for (const k of keep) assert.ok(all.includes(k), `${k} stays: ${all.join(' | ')}`);
+      assert.deepStrictEqual(r.world.clocks, ['Nothing new, but the bell rings at dusk.']);
+    });
+
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {
       const dir = open({ crlf });
       edit(dir, W14, (t) => t.replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** The Q.R.L. Council marches on the Harbour Festival Grounds at noon. The bell rings at dusk.\n'));
