@@ -512,7 +512,7 @@ test('enterChoice: a word-start hit or a near typo wins on Enter; a shared last 
   // CodeRabbit #895: spaces in a name are as the query's, so a doubled one still starts a word
   assert.equal(M.enterChoice([{ note: 'L/x.md', name: 'Old Harbour  District', type: 'location' }], 'Harbour District', RS.castSearch).note, 'L/x.md');
   // CodeRabbit #895: Enter takes only a place the list shows; one past its eight is never the move
-  const gates = ['Lantern', 'Harbour', 'Chapel', 'Market', 'Bridge', 'Temple', 'Garden', 'Castle', 'Old North']
+  const gates = ['Lantern', 'Harbour', 'Chapel', 'Market', 'Bridge', 'Temple', 'Quillon', 'Castle', 'Old North']
     .map((n) => ({ note: `L/${n} Gate.md`, name: `${n} Gate`, type: 'location' }));
   assert.ok(!M.addChoices(gates, 'North Gate', RS.castSearch).some((c) => c.note === 'L/Old North Gate.md'), 'the list does not show it');
   assert.equal(M.enterChoice(gates, 'North Gate', RS.castSearch), null);

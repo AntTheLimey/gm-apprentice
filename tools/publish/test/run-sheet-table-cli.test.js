@@ -234,8 +234,8 @@ describe('gm-publish table: a session from the record', () => {
     assert.ok(a.h && a.h.url, a.errs.join('\n'));
     const dir = path.join(vault, 'Chapters', 'Chapter 3', 'Sessions', 'Session 15');
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'Session 15 - Lamps.md'), '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\ndocuments:\n  plan: "[[Session 15 - Lamps - Plan]]"\n---\n\n# Session 15 - Lamps\n');
-    fs.writeFileSync(path.join(dir, 'Session 15 - Lamps - Plan.md'), '---\ntype: session-plan\nsession: "[[Session 15 - Lamps]]"\nchapter: "[[Chapter 3]]"\n---\n\n## Session Intent\n\nLamps.\n');
+    fs.writeFileSync(path.join(dir, 'Session 15 - Wickwork.md'), '---\ntype: session\nsession_number: 15\nchapter: "[[Chapter 3]]"\nstatus: planned\ndocuments:\n  plan: "[[Session 15 - Wickwork - Plan]]"\n---\n\n# Session 15 - Wickwork\n');
+    fs.writeFileSync(path.join(dir, 'Session 15 - Wickwork - Plan.md'), '---\ntype: session-plan\nsession: "[[Session 15 - Wickwork]]"\nchapter: "[[Chapter 3]]"\n---\n\n## Session Intent\n\nWickwork.\n');
     const b = await start({ vault });
     assert.strictEqual(b.h, 1, b.lines.join('\n'));
     assert.match(b.errs.join('\n'), new RegExp(`already running \\(pid ${process.pid}, port ${a.port}`));
