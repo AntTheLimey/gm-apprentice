@@ -495,8 +495,9 @@ describe('the possible scenes', () => {
       const dir = open({ crlf });
       edit(dir, W14, link('[[Dock Row]]'));
       const m = readRecord(dir, session());
-      // Dock Row and Odalys are each reached by two items; the tie goes to the note first seen in the record (Odalys)
-      assert.deepStrictEqual(titles(m), ['Harl Brannock', 'Corvin Tash', 'Odalys Venn']);
+      // Dock Row and Odalys are each reached by two items; the tie goes to the note the cards joined on (changed on
+      // purpose, Task 12: it was the note first seen, Odalys, which titled a place's card by a person)
+      assert.deepStrictEqual(titles(m), ['Harl Brannock', 'Corvin Tash', 'Dock Row']);
       assert.deepStrictEqual(m.record.cards[2].places, [loc('Dock Row')]);
     });
   }
@@ -820,6 +821,34 @@ describe('real-vault shapes (Task 11b)', () => {
       for (const k of keep) assert.ok(all.includes(k), `${k} stays: ${all.join(' | ')}`);
       for (const d of drop) assert.ok(!all.includes(d), `${d} drops: ${all.join(' | ')}`);
       assert.deepStrictEqual(r.world.threats, ['**No threats.** The guild still watches [[Dock Row]].']);
+    });
+
+    // Task 12 (Task 4's deferred edges): a placeholder paragraph with a block anchor after it, a bold-labelled
+    // placeholder bullet, and a ';' inside quotes.
+    it(`Task 4 edges: an anchored placeholder and a labelled one read as empty; a quoted ';' is no split${tag}`, () => {
+      const dir = open({ crlf });
+      edit(dir, W14, (t) => t
+        .replace('## Narrative Recap\n', '## Narrative Recap\n\n{More recap to come, every entity [[wiki-linked]].} ^more\n')
+        .replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+          '- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n- **Thread name:** {what is still open}\n- **MAJOR —** {arc-level beat}\n')
+        .replace(/- \*\*Ticking clocks:\*\*.*\n/, '- **Ticking clocks:** Day 14 the "Harbour Festival; the big one" opens at dusk.\n'));
+      const r = readRecord(dir, session()).record;
+      assert.ok(r.lastTime.recap && !/[{}]|\^more/.test(r.lastTime.recap), r.lastTime.recap);
+      const all = r.cards.flatMap((c) => c.items.map((i) => i.md));
+      assert.ok(!all.some((m) => /\{/.test(m)), all.join(' | '));
+      assert.strictEqual(r.comingUp.lead.title, 'Day 14 the "Harbour Festival; the big one" opens at dusk.');
+    });
+
+    // Task 12 (Task 5's deferred minor): a card joined on a place is titled by that place when a person ties it.
+    it(`a card joined on a place, tied with a person, is titled by the place${tag}`, () => {
+      const dir = open({ crlf });
+      put(dir, npc('Tamsin Reed'), '---\nname: Tamsin Reed\ntype: npc\n---\n');
+      put(dir, npc('Bram Holt'), '---\nname: Bram Holt\ntype: npc\n---\n');
+      edit(dir, W14, (t) => t.replace('- **Unsigned notes:** someone keeps slipping the crew notes with no name on them.\n',
+        '- **Stall fire:** [[Tamsin Reed]] watches the stalls at [[Marrow Market]].\n- **Smoke:** Bram Holt tells Tamsin Reed about [[Marrow Market]].\n'));
+      const card = readRecord(dir, session()).record.cards.find((c) => c.items.some((i) => /Stall fire/.test(i.md)));
+      assert.ok(card.items.some((i) => /Smoke/.test(i.md)), 'the two joined');
+      assert.strictEqual(card.title, 'Marrow Market');
     });
 
     it(`F1: a clock is never split at an initialism's dots${tag}`, () => {

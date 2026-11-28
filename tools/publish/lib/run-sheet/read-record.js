@@ -57,9 +57,10 @@ function shortDate(v) {
   return t || null;
 }
 
-// Text a template leaves behind: nothing, or only a `{...}` placeholder.
+// Text a template leaves behind: nothing, or only a `{...}` placeholder: one with a block anchor after it
+// ("{…} ^recap"), or under a bold label ("**Thread name:** {…}", "**MAJOR —** {…}") (Task 12, Task 4's edges).
 const isPlaceholder = (s) => {
-  const t = String(s || '').trim();
+  const t = String(s || '').trim().replace(/\s\^[\w-]+$/, '').replace(/^\*\*[^*]+\*\*\s*/, '');
   return t === '' || /^\{[\s\S]*\}$/.test(t);
 };
 // An item that only says there is nothing (Task 11b, F4 and F6; fix round 1): the nothing-phrase is the whole item,
@@ -131,7 +132,14 @@ function labelRaw(text, name, live) {
   return parts.map((p) => p.trim()).filter((p) => !isPlaceholder(p) && !isNothing(p, live));
 }
 // The same items split on sentence ends and `;`, for the lead card's search only: never shown re-joined.
-const labelItems = (text, name, live) => labelRaw(text, name, live).flatMap((p) => p.split(ITEM_BREAK))
+// A `;` or a sentence end inside quotes ("…", “…”) splits nothing: the quote is one item's words (Task 12).
+const QUOTED = /"[^"\n]*"|“[^”\n]*”/g;
+const splitItem = (p) => {
+  const quotes = [];
+  const held = p.replace(QUOTED, (q) => { quotes.push(q); return `\u0000${quotes.length - 1}\u0000`; });
+  return held.split(ITEM_BREAK).map((x) => x.replace(/\u0000(\d+)\u0000/g, (m, i) => quotes[Number(i)]));
+};
+const labelItems = (text, name, live) => labelRaw(text, name, live).flatMap(splitItem)
   .map((p) => p.trim()).filter((p) => p && !isPlaceholder(p) && !isNothing(p, live));
 // A World line as the record wrote it: one item on the label's line, several as nested bullets.
 const worldLine = (label, items) => {
@@ -427,11 +435,15 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
     if (grp.person) title = nameOf(grp.person);
     else if (grp.joinedOn) {
       // A title comes only from notes the items link or name (Task 11b, F11): a note one hop away joins cards, never
-      // titles them. Most items linking or naming it wins; a tie goes to the note first seen in the record, in item order
-      // (the sort is stable and the map is filled in that order). With none, the note the cards joined on.
+      // titles them. Most items linking or naming it wins; a tie goes to the note the cards joined on, else the note first
+      // seen in the record, in item order (the sort is stable and the map is filled in that order). With none, the note
+      // the cards joined on.
       const count = new Map();
       for (const it of grp.items) for (const n of uniq([...it.links, ...it.people])) if (keep(n)) count.set(n, (count.get(n) || 0) + 1);
-      const best = [...count.entries()].sort((x, y) => y[1] - x[1])[0];
+      const sorted = [...count.entries()].sort((x, y) => y[1] - x[1]);
+      // on a tie, the note the cards joined on (Task 12): a card joined on a place is not titled by a person it ties
+      const top = sorted.length ? sorted.filter((x) => x[1] === sorted[0][1]) : [];
+      const best = top.find((x) => x[0] === grp.joinedOn) || top[0];
       title = nameOf(best ? best[0] : grp.joinedOn);
     } else title = firstFive(grp.items[0].md);
     const texts = grp.items.map((it) => it.md).sort();
