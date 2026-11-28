@@ -786,8 +786,27 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         assert.strictEqual(await page.evaluate('document.getElementById("rfiling")'), null);
         assert.strictEqual(run.filer.calls.length, 1);
         assert.ok(run.filer.calls[0].includes('--title=29 Nov 2026'), JSON.stringify(run.filer.calls[0]));
+        fs.mkdirSync(SHOTS, { recursive: true });
         await page.screenshot(path.join(SHOTS, `task-11b-f3-filed-${width}.png`));
         assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // CodeRabbit #895: a model read that fails once after the filing is read again (the filing is not), and the box says
+    // Filed as when it comes; the title box stays read-only until then.
+    it(`F3: a model read that fails after the filing is tried again, and the box then says Filed as (${width})`, async () => {
+      const run = await startRec();
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        await page.evaluate(`(() => { const real = window.fetch; let fail = 1;
+          window.fetch = (u, o) => (/\\/api\\/model/.test(String(u)) && fail-- > 0 ? Promise.reject(new TypeError('Failed to fetch')) : real(u, o)); })()`);
+        await page.click('#hjot');
+        await page.type('The crew lands at Dock Row.');
+        await page.key('Enter');
+        await page.waitFor('/Filed as: Session 15 - 29 Nov 2026/.test((document.getElementById("rfiled") || {}).textContent || "")', 5000);
+        assert.strictEqual(await page.evaluate('document.getElementById("rtitle")'), null, 'the box is gone once filed');
+        assert.strictEqual(run.filer.calls.length, 1, 'filed once');
       });
     });
 

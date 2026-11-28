@@ -396,7 +396,14 @@
       if (G.session && G.session.fromRecord) {
         G.filedWait = true;
         const done = () => { G.filedWait = false; G.filing = false; update(); };
-        getJson('/api/model').then((m) => { takeModel(m); done(); }).catch(done);
+        // a read that fails is tried again each second, for half a minute (the filing never is): the session is filed,
+        // and the title box stays read-only until the model says under what (CodeRabbit #895)
+        let tries = 0;
+        const read = () => getJson('/api/model').then((m) => { takeModel(m); done(); }).catch(() => {
+          if (!G.filedWait) return;
+          if (++tries < 30) setTimeout(read, 1000); else done();
+        });
+        read();
       }
     });
     es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
