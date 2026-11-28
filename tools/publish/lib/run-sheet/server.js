@@ -272,6 +272,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   }
   // The model the filing's own read gave, for the page's next model, once and briefly: the page asks for it the moment
   // the filing is told, and a second read of the vault then is a second of waiting (Task 11b, F3).
+  // The trade-off: a vault edit in the 5 s between the filing and the page's fetch is not seen until the next model;
+  // the page asks within milliseconds, so the window is the fetch, and it saves a second read of the whole vault.
   let justRead = null;
   const FRESH_MS = 5000;
   // The last filing was refused (D5): the next tries wait for the save delay, so quick actions make one try, not one
