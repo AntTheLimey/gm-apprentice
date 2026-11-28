@@ -4,7 +4,7 @@ const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { readRecord } = require('../lib/run-sheet/read-record');
+const { readRecord, ENTITY_TYPES } = require('../lib/run-sheet/read-record');
 const { areaOf } = require('../lib/run-sheet/web/record-rank');
 const { copyRecordFixture } = require('./helpers/record-fixture');
 const { present } = require('../lib/run-sheet/present');
@@ -830,4 +830,24 @@ describe('real-vault shapes (Task 11b)', () => {
       assert.strictEqual(lead.place, loc('Harbour Festival Grounds'));
     });
   }
+});
+
+// Task 12 (Task 5's deferred minor): a card's subject types come from the ontology, and every template's type is either
+// one of them or a record, a PC or a meta note, named here: a new template type fails this until it is placed.
+describe('the subject types', () => {
+  const NOT_SUBJECTS = new Set(['pc', 'character-story', 'chapter', 'scene', 'session', 'session-plan', 'session_wrap', 'plan',
+    'adventure-brief', 'campaign_overview', 'world_flags', 'meta']);
+  const dir = path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'templates');
+  const types = fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => {
+    const m = /^type:\s*(\S+)/m.exec(fs.readFileSync(path.join(dir, f), 'utf8'));
+    return [f, m ? m[1] : null];
+  });
+  it('every template type is a subject or named as not one', () => {
+    for (const [f, t] of types) assert.ok(ENTITY_TYPES.has(t) !== NOT_SUBJECTS.has(t), `${f}: ${t}`);
+  });
+  it('the ontology\'s entity types are subjects, and heritage and world_domain among them', () => {
+    for (const t of ['npc', 'npc_group', 'creature', 'deity', 'faction', 'guild', 'location', 'item', 'relic', 'document', 'map', 'prop',
+      'clue', 'event', 'ritual', 'heritage', 'world_domain']) assert.ok(ENTITY_TYPES.has(t), t);
+    for (const t of ['pc', 'person', 'character', 'agent', 'plan', 'world_flags', 'session']) assert.ok(!ENTITY_TYPES.has(t), t);
+  });
 });

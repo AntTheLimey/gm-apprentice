@@ -30,12 +30,20 @@ const spansOf = (t, name, flags = 'iu') => [...t.matchAll(new RegExp(`(?<![\\p{L
 const stripMd = (s) => nl(s).replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, '$2').replace(/[*~`]/g, '');
 // A line that is one struck span and nothing else; "~~old~~ still true ~~maybe~~" is a live line.
 const STRUCK = /^\s*~~(?:(?!~~)[\s\S])+~~\s*$/;
-// The notes a card may be about (the ontology's entity types, subtypes included). Sessions, chapters, scenes, plans,
-// wrap-ups and other records never count as a subject.
-const ENTITY_TYPES = new Set(['npc', 'npc_group', 'creature', 'beast', 'undead', 'construct', 'spirit', 'deity', 'aberration',
-  'faction', 'organization', 'government', 'corporation', 'cult', 'guild', 'military', 'criminal', 'location',
-  'item', 'weapon', 'armor', 'vehicle', 'treasure', 'relic', 'tool', 'consumable', 'document', 'spell', 'map', 'letter', 'prophecy',
-  'contract', 'journal', 'prop', 'clue', 'event', 'battle', 'ritual', 'disaster', 'discovery', 'betrayal_event', 'celebration']);
+// The notes a card may be about: the ontology's entity types, subtypes included, read from its one list (Task 12; Task
+// 5's hand list left heritage and world_domain out). Not people the players are (pc and above), not plans, briefs or
+// world flags; and npc_group, the run sheet's own group type (beats.js, foes.js). Sessions, chapters, scenes, wrap-ups
+// and other records are no entity type, so never a subject.
+const ONTOLOGY_TYPES = require('../ontology.json').entity_types;
+const NOT_SUBJECTS = new Set(['person', 'player', 'game_master', 'character', 'pc', 'plan', 'adventure-brief', 'campaign_overview', 'world_flags']);
+const ENTITY_TYPES = (() => {
+  const out = new Set(['npc_group']);
+  const abstract = new Set(ONTOLOGY_TYPES.abstract);
+  for (const [parent, kids] of Object.entries(ONTOLOGY_TYPES.hierarchy)) {
+    for (const t of [parent, ...kids]) if (!abstract.has(t) && !NOT_SUBJECTS.has(t)) out.add(t);
+  }
+  return out;
+})();
 const HOP = /^(member_of|located_at|part_of|works_for|owned_by|based_at)$/i;
 // Words that say nothing about which item a Keeper Checklist line is.
 const STOP = new Set('that this with what whether from their they have been were will into which about there where when after before over under while still only also every each some more most other than then them your'.split(' '));
@@ -485,4 +493,4 @@ function readRecord(vaultPath, session, { party = [], deps, index: built = null 
   return model;
 }
 
-module.exports = { readRecord };
+module.exports = { readRecord, ENTITY_TYPES };
