@@ -129,7 +129,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   let savedRev = null;
   const recordRetryMs = deps.recordRetryMs || RECORD_RETRY_MS;
   // What a page that connects now needs to know: is the state being saved, is the record being written.
-  const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null };
+  // `filing`: a filing of this session runs now (Task 11b, F3): the page says so and holds the title box until it ends.
+  const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null, filing: false };
   const playersText = (error) => `The players' screen could not be updated: ${error}`;
   const statusNotices = () => [
     ...(status.saving === 'failing' ? [{ kind: 'save-failing', error: status.saveError }] : []),
@@ -189,9 +190,11 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
   const logOf = (idx) => (session.index ? tableLogOf(idx, session.index).log : null);
   // Filed, by the vault: the index is there and links its Table Log.
   const isFiled = (idx) => Boolean(session.index && idx.has(session.index) && logOf(idx));
-  const loadModel = () => {
-    const idx = index(vaultPath, { deps: vaultDeps });
-    const model = session.plan ? read(vaultPath, session.plan, { party, deps: vaultDeps }) : readFromRecord(vaultPath, session, { party, deps: vaultDeps });
+  // `given`: an index built a moment ago (the filing's own), so the vault is not read twice (Task 11b, F3). The record
+  // reader takes the same index, never building its own.
+  const loadModel = (given = null) => {
+    const idx = given || index(vaultPath, { deps: vaultDeps });
+    const model = session.plan ? read(vaultPath, session.plan, { party, deps: vaultDeps }) : readFromRecord(vaultPath, session, { party, deps: vaultDeps, index: idx });
     // tonight's Table Log link, when it is refused (another session's log), is a prep note
     const tl = session.index ? tableLogOf(idx, session.index) : { log: null, warning: null };
     if (tl.warning && Array.isArray(model.warnings) && !model.warnings.some((w) => w.text === tl.warning.text)) model.warnings.push(tl.warning);
@@ -256,13 +259,31 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
       if (!done || typeof done !== 'object') done = { ok: false, why: 'the filing gave no answer' };
       if (filing === p) filing = null;
       try { filed(done); } catch (err) { recordFailed(err); }
+      filingIs(false);
     })();
     filing = p;
+    filingIs(true);
+  }
+  function filingIs(on) {
+    if (status.filing === on) return;
+    status.filing = on;
+    broadcast('filing', { on });
+  }
+  // The model the filing's own read gave, for the page's next model, once and briefly: the page asks for it the moment
+  // the filing is told, and a second read of the vault then is a second of waiting (Task 11b, F3).
+  let justRead = null;
+  const FRESH_MS = 5000;
+  // The first thing at the table files the session at once: the state is saved now, not after the save delay, and the
+  // filing starts from that save (the log is never ahead of the saved state). Later writes keep the delay.
+  function fileSoon() {
+    if (closed || filing || !fileCmd || logOf(indexNow())) return;
+    store.flushNow();
   }
   // The filing ended: take the index from its first CREATED or ADDED row (never a re-list), check the vault links its
   // Table Log, and write the log from the newest saved state.
   function filed(done) {
     lastIndex = index(vaultPath, { deps: vaultDeps });
+    justRead = null;
     if (fileCmd.takesTitle && !session.index) {
       let at = filedIndexOf(done.out);
       // a filing that wrote and then failed (a timeout) is refused next time with "already has a Table Log": that index
@@ -284,7 +305,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
       throw err;
     }
     log(`run sheet: filed the Table Log, ${rel}: the session is in play.`);
-    try { loadModel(); } catch { /* the model re-reads on the next load */ }
+    try { const r = loadModel(lastIndex); justRead = { ...r, at: Date.now() }; } catch { /* the model re-reads on the next load */ }
     // only a session from the record: a Plan session is named by its Plan, and only a no-Plan state is adopted by it
     if (session.fromRecord) store.setServer({ filed: { index: session.index, at: now().toISOString() } });
     // the title the vault filed it under (a title it could not hold files under the date, D8)
@@ -582,10 +603,14 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
       handle: (req, res) => {
         let model;
         let idx;
-        try { ({ model, idx } = loadModel()); } catch (err) {
-          json(res, 500, { error: String(err.message).split('\n')[0] });
-          return;
+        if (justRead && Date.now() - justRead.at < FRESH_MS) ({ model, idx } = justRead);
+        else {
+          try { ({ model, idx } = loadModel()); } catch (err) {
+            json(res, 500, { error: String(err.message).split('\n')[0] });
+            return;
+          }
         }
+        justRead = null;
         refreshPlayers();
         json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(idx), stateId, tableLog: logOf(idx), tableLogOnFirst: !!fileCmd, serverId, notices: [...notices, ...statusNotices()] });
       },
@@ -663,6 +688,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
           json(res, 200, { rev: r.rev });
           broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
           refreshPlayers();
+          fileSoon();
         });
       },
     },
@@ -699,6 +725,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, stateId:
           if (r.rev !== before) {
             broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
             refreshPlayers();
+            fileSoon();
           }
         });
       },

@@ -118,13 +118,14 @@ function locOf(index, places) {
   }
   return out;
 }
-function readRecord(vaultPath, session, { party = [], deps } = {}) {
+// `index`: the vault's index, when the caller has just built one (the server's), so the vault is read once (Task 11b, F3).
+function readRecord(vaultPath, session, { party = [], deps, index: built = null } = {}) {
   const given = session || {};
+  const index = built || buildIndex(vaultPath, { deps });
   const model = readSheet(vaultPath, {
     session: { index: given.index || null, title: given.title || '', chapter: given.chapter || null, number: given.number === undefined ? null : given.number, after: given.after || null },
-    party, deps,
+    party, deps, index,
   });
-  const index = buildIndex(vaultPath, { deps });
   const fmOf = (p) => (p && index.has(p) ? index.read(p).fm || {} : {});
   const typeOf = (p) => low(fmOf(p).type);
   // a place is a location note in `loc`: maps and GM halves are not places (read.js already treats them so)

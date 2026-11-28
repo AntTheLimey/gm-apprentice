@@ -166,7 +166,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 // ({ index, title, chapter, number, after }) is the session the record gave: its index path (null when not filed yet),
 // and `after`, the latest wrapped-up session, which the carried vitals and the party walk from when there is no index.
 // `early` holds warnings the caller already has (the Plan's frontmatter), kept first.
-function readSheet(vaultPath, { planRel = null, fm = {}, body = '', session = null, party = [], deps, early = [] } = {}) {
+// `index`: an index of the vault the caller has just built (the record reader's), else one is built here.
+function readSheet(vaultPath, { planRel = null, fm = {}, body = '', session = null, party = [], deps, early = [], index: built = null } = {}) {
   const plan = planRel;
   const given = session || {};
   const warnings = [...early];
@@ -204,7 +205,7 @@ function readSheet(vaultPath, { planRel = null, fm = {}, body = '', session = nu
 
   // the vault's system reads the foes and the PCs and describes the rest (model.rules); none runs as D&D
   const sys = systemFor(system);
-  const index = buildIndex(vaultPath, { deps });
+  const index = built || buildIndex(vaultPath, { deps });
   const fmOf = (p) => (index.has(p) ? index.read(p).fm || {} : {});
   // A link that resolves to no note warns once, saying why (missing, ambiguous, in a skipped folder).
   const warnedLinks = new Set();

@@ -151,6 +151,8 @@
   function takeStatus(st) {
     if (!st) return;
     G.saveFailed = st.saving === 'failing';
+    // a filing running now (Task 11b, F3): the title box says so and is read-only until it ends
+    if (G.filing !== Boolean(st.filing) && !G.filedWait) { G.filing = Boolean(st.filing); if (G.model) update(); }
     if (st.record === 'failing') note(recordFailedText(st.recordError), { kind: 'bad', id: `rf:${st.recordError}` });
     else recordOk();
     indicator();
@@ -381,11 +383,21 @@
       refresh();
     });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
+    // the filing's start and end (Task 11b, F3); its end waits for the model that says what it was filed as
+    es.addEventListener('filing', (ev) => {
+      const on = Boolean(data(ev).on);
+      if (!on && G.filedWait) return;
+      if (G.filing !== on) { G.filing = on; update(); }
+    });
     es.addEventListener('record-filed', (ev) => {
       const d = data(ev);
       if (d.path && !G.tableLog) { G.tableLog = d.path; update(); }
       // a session from the record is named now: the model says under what (the title box's "Filed as")
-      if (G.session && G.session.fromRecord) getJson('/api/model').then((m) => { takeModel(m); update(); }).catch(() => { /* the next load reads it */ });
+      if (G.session && G.session.fromRecord) {
+        G.filedWait = true;
+        const done = () => { G.filedWait = false; G.filing = false; update(); };
+        getJson('/api/model').then((m) => { takeModel(m); done(); }).catch(done);
+      }
     });
     es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
     es.addEventListener('record-ok', () => recordOk());
@@ -984,14 +996,17 @@
     if (ses.index) return `<div class="rtitle" id="rindex"><span class="muted">Named by session-prep:</span> <b>${esc(ses.title || stem(ses.index))}</b></div>`;
     if (filedNow()) return '<div class="rtitle"><span class="muted">Filing…</span></div>';
     const v = G.ui.titleDraft != null ? G.ui.titleDraft : (G.state.title || '');
-    return `<div class="rtitle"><label for="rtitle">Tonight's title (optional)</label> <input id="rtitle" value="${esc(v)}" placeholder="${esc(ses.openTitle || '')}" maxlength="80" autocomplete="off">`
+    // while the filing runs the box holds what it was filed with, read-only, and says so beside it (Task 11b, F3)
+    const busy = Boolean(G.filing || G.filedWait);
+    return `<div class="rtitle"><label for="rtitle">Tonight's title (optional)</label> <input id="rtitle" value="${esc(v)}" placeholder="${esc(ses.openTitle || '')}" maxlength="80" autocomplete="off"${busy ? ' readonly aria-readonly="true"' : ''}>`
       + ` <span class="warn" id="rtbad" role="status">${TITLE_BAD.test(v) ? esc(TITLE_BAD_TEXT) : ''}</span>`
-      + '<span class="note">The session is filed on the first thing that happens at the table.</span></div>';
+      + (busy ? `<span class="note" id="rfiling" role="status">Filing ${esc(ses.label || 'the session')}…</span></div>`
+        : '<span class="note">The session is filed on the first thing that happens at the table.</span></div>');
   }
   function commitTitle() {
     const v = G.ui.titleDraft;
     G.ui.titleDraft = null;
-    if (v == null || filedNow() || RS.cleanTitle(v) === (G.state.title || '')) return;
+    if (v == null || filedNow() || G.filing || G.filedWait || RS.cleanTitle(v) === (G.state.title || '')) return;
     act({ type: 'setTitle', title: v });
   }
 

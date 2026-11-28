@@ -938,7 +938,8 @@ describe('run sheet server: the third review', () => {
       const sse = listen(run.port);
       try {
         await waitFor(() => sse.events.find((e) => e.event === 'hello'));
-        assert.deepStrictEqual(sse.events[0].data.status, { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null });
+        // Changed on purpose (Task 11b, F3): the status also says whether a filing is running
+        assert.deepStrictEqual(sse.events[0].data.status, { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null, filing: false });
         await markFirst(run, 'landed', 0);
         await waitFor(() => sse.events.find((e) => e.event === 'record-failed'));
         await wait(200);
@@ -1745,6 +1746,69 @@ describe('run sheet server: a session from the record (Task 7)', () => {
       } finally { sse.close(); }
     });
   }
+
+  // Task 11b, F3: the page is told while a filing runs, and the filing starts on the first thing at once, not after the
+  // state's save delay; the server reads the vault once after it, and the page's next model is that read.
+  it('F3: the filing starts at once on the first thing, not after the save delay', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault);
+    const run = await startRec(vault, { runFileLog: f.runFileLog, deps: { delayMs: 5000 } });
+    const t0 = Date.now();
+    await jot(run, 'The crew lands at Dock Row.');
+    await waitFor(() => f.calls.length === 1, 1500);
+    assert.ok(Date.now() - t0 < 1500, `the filing started after ${Date.now() - t0} ms`);
+    // the log holds the jot: the state was saved before the filing began, so the log is never ahead of it
+    await waitFor(() => logHas(vault, '29 Nov 2026', /The crew lands at Dock Row\./), 1500);
+    assert.match(fs.readFileSync(run.stateFile, 'utf8'), /The crew lands at Dock Row\./);
+  });
+
+  it('F3: the page is told a filing is running, from its start to its end, and a page that connects meanwhile too', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault, { delayMs: 300 });
+    const run = await startRec(vault, { runFileLog: f.runFileLog });
+    const sse = listen(run.port);
+    let late;
+    try {
+      await waitFor(() => sse.events.find((e) => e.event === 'hello'));
+      assert.strictEqual(sse.events[0].data.status.filing, false);
+      await jot(run, 'The crew lands at Dock Row.');
+      await waitFor(() => sse.events.find((e) => e.event === 'filing' && e.data.on === true));
+      late = listen(run.port);
+      const hello = await waitFor(() => late.events.find((e) => e.event === 'hello'));
+      assert.strictEqual(hello.data.status.filing, true);
+      await waitFor(() => sse.events.find((e) => e.event === 'filing' && e.data.on === false));
+      const names = sse.events.map((e) => e.event).filter((n) => n === 'filing' || n === 'record-filed');
+      assert.deepStrictEqual(names, ['filing', 'record-filed', 'filing']);
+    } finally { sse.close(); if (late) late.close(); }
+  });
+
+  it('F3: after the filing the vault is read once, and the page\'s next model is that read', async () => {
+    const vault = recVault();
+    const f = tableFiler(vault, { delayMs: 200 }); // a filing that takes a while, so its start is seen before its end
+    let builds = 0;
+    const { buildIndex } = require('../lib/run-sheet/notes');
+    const { readRecord } = require('../lib/run-sheet/read-record');
+    const seen = [];
+    const run = await startRec(vault, { runFileLog: f.runFileLog, deps: {
+      buildIndex: (...a) => { builds++; return buildIndex(...a); },
+      readRecord: (v, sess, opts) => { seen.push(opts.index || null); return readRecord(v, sess, opts); },
+    } });
+    const sse = listen(run.port);
+    try {
+      await jot(run, 'The crew lands at Dock Row.');
+      await waitFor(() => sse.events.find((e) => e.event === 'filing' && e.data.on === true));
+      const atStart = builds;
+      await waitFor(() => sse.events.find((e) => e.event === 'record-filed'));
+      const m = (await req(run.port, 'GET', '/api/model')).json;
+      assert.strictEqual(m.session.filed, true);
+      assert.strictEqual(builds - atStart, 1, `the vault was indexed ${builds - atStart} times after the filing`);
+      // the record reader is handed the server's index, never building its own
+      assert.ok(seen.length > 0 && seen.every((x) => x !== null), 'readRecord gets the index');
+      // a later model reads the vault afresh
+      await req(run.port, 'GET', '/api/model');
+      assert.strictEqual(builds - atStart, 2);
+    } finally { sse.close(); }
+  });
 
   it('a blank title files under the date the sheet opened', async () => {
     const vault = recVault();

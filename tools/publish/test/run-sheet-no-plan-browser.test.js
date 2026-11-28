@@ -42,10 +42,11 @@ after(async () => {
 });
 
 // Stands in for `gma table-file`: the index and its empty Table Log, the index's CREATED row first (the server tests' own).
-function tableFiler(vault) {
+function tableFiler(vault, { delayMs = 0 } = {}) {
   const calls = [];
   const runFileLog = async (cmd) => {
     calls.push(cmd);
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
     const a = cmd.find((x) => x.startsWith('--title='));
     const stem = `Session 15 - ${a ? a.slice('--title='.length) : 'untitled'}`;
     const idx = `${S15}/${stem}.md`;
@@ -67,7 +68,7 @@ function rewriteAll(dir, fn) {
   }
 }
 
-async function startRec({ crlf = false, prepped = null, noPlace = false, underscored = false, pcOnly = false } = {}) {
+async function startRec({ crlf = false, prepped = null, noPlace = false, underscored = false, pcOnly = false, fileDelayMs = 0 } = {}) {
   const vault = copyRecordFixture({ crlf });
   made.push(vault);
   // Task 11b, F11: a vault whose notes are named by their stems with `_` (Canticle's shape): Mirren's PC note is
@@ -111,7 +112,7 @@ async function startRec({ crlf = false, prepped = null, noPlace = false, undersc
   const session = pickSession(listSessions(vault), null, vault).session;
   assert.ok(session && session.fromRecord, 'the record gives Session 15');
   const { file, stateId } = stateFileFor(vault, session);
-  const filer = tableFiler(vault);
+  const filer = tableFiler(vault, { delayMs: fileDelayMs });
   const t = createTableServer({ vaultPath: vault, session, stateFile: file, stateId, fileLog: prepped ? ['gma', 'table-log-new'] : { cmd: CMD, takesTitle: true },
     deps: { delayMs: 50, log: () => {}, now: () => OPENED, runFileLog: filer.runFileLog } });
   const port = await listenLocal(t.server, 0);
@@ -756,6 +757,35 @@ describe('the audit\'s frustrations on the no-Plan page (Task 9)', { skip: brows
         assert.doesNotMatch(row, /from the record/);
         const v = await inView(page, '#where .wrow .at .note');
         assert.ok(v.found && v.whole, JSON.stringify(v));
+        assert.deepStrictEqual((await probe(page)).errors, []);
+      });
+    });
+
+    // Task 11b, F3: while the filing runs the page says so beside the title box, and the box takes no typing.
+    it(`F3: while the filing runs, "Filing Session 15…" stands beside a read-only title box (${width})`, async () => {
+      const run = await startRec({ fileDelayMs: 1500, crlf: width === 1449 });
+      await withPage({ width, height: HEIGHT }, async (page) => {
+        await page.goto(`${run.base}?probe=1`);
+        await settled(page);
+        assert.strictEqual(await page.evaluate('document.getElementById("rfiling")'), null, 'nothing is filing yet');
+        await page.click('#hjot');
+        await page.type('The crew lands at Dock Row.');
+        await page.key('Enter');
+        await page.waitFor('/Filing Session 15…/.test((document.getElementById("rfiling") || {}).textContent || "")');
+        assert.strictEqual(await page.evaluate('document.getElementById("rtitle").readOnly'), true);
+        const v = await inView(page, '#rfiling');
+        assert.ok(v.found && v.whole, JSON.stringify(v));
+        const box = await page.evaluate('(() => { const a = document.getElementById("rtitle").getBoundingClientRect(); const b = document.getElementById("rfiling").getBoundingClientRect(); return { boxBottom: a.bottom, top: b.top, sameRow: b.top < a.bottom + 30 }; })()');
+        assert.ok(box.sameRow, `beside the box: ${JSON.stringify(box)}`);
+        // typing in it changes nothing while the filing runs
+        await page.click('#rtitle');
+        await page.type('Late');
+        assert.strictEqual(await page.evaluate('document.getElementById("rtitle").value'), '');
+        await page.waitFor('/Filed as Session 15 - 29 Nov 2026/.test((document.getElementById("rfiled") || {}).textContent || "")', 5000);
+        assert.strictEqual(await page.evaluate('document.getElementById("rfiling")'), null);
+        assert.strictEqual(run.filer.calls.length, 1);
+        assert.ok(run.filer.calls[0].includes('--title=29 Nov 2026'), JSON.stringify(run.filer.calls[0]));
+        await page.screenshot(path.join(SHOTS, `task-11b-f3-filed-${width}.png`));
         assert.deepStrictEqual((await probe(page)).errors, []);
       });
     });
