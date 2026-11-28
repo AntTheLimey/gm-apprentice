@@ -96,6 +96,21 @@ function stream(port, url) {
   return { events, raw: () => raw, headers: () => (resp ? resp.headers : null), close: () => { r.destroy(); if (resp) resp.destroy(); } };
 }
 
+// A players' view, read over HTTP and seen on the players' stream too, or the test fails: an error body or a stream of
+// only `hello` holds no secret and proves nothing (CodeRabbit #895). The view's text is returned.
+async function playersView(port, pstream) {
+  const r = await req(port, 'GET', '/api/players/view');
+  assert.equal(r.status, 200, r.text);
+  const v = JSON.parse(r.text);
+  assert.ok(v && typeof v.campaign === 'string' && Array.isArray(v.panels), `a players' view: ${r.text.slice(0, 200)}`);
+  const want = JSON.stringify(v);
+  await waitFor(() => {
+    const last = pstream.events.filter((e) => e.event === 'view').pop();
+    return last && JSON.stringify(JSON.parse(last.text)) === want;
+  }, "the players' stream to send that view");
+  return r.text;
+}
+
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1659,7 +1674,7 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
       const pstream = stream(port, '/api/players/events');
       try {
         const views = [];
-        const look = async () => { views.push((await req(port, 'GET', '/api/players/view')).text); };
+        const look = async () => { views.push(await playersView(port, pstream)); };
         const noWord = (where) => {
           for (const v of views) assert.ok(!v.toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' view holds the secret word`);
           assert.ok(!pstream.raw().toLowerCase().includes(WORD.toLowerCase()), `${where}: the players' stream holds the secret word`);
@@ -1707,13 +1722,13 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
           await page.sleep(300);
         });
         assert.equal(filed.length, 1, 'filed once');
-        assert.match(pstream.raw(), /event: (hello|view)/, 'the players\' stream was read');
         await look();
         noWord('at the end');
-        // the Table Log the filing made holds no word either
-        for (const f of walk(path.join(vault, S15)).filter((x) => /Table Log/.test(x))) {
-          assert.ok(!fs.readFileSync(f, 'utf8').includes(WORD), `${f} holds the secret word`);
-        }
+        // the Table Log the filing made holds the jot (not the empty stub the filing wrote) and no word
+        const logs = walk(path.join(vault, S15)).filter((x) => /Table Log/.test(x));
+        assert.equal(logs.length, 1, logs.join(', '));
+        const logText = await waitFor(() => { const t = fs.readFileSync(logs[0], 'utf8'); return t.includes('The crew lands at Dock Row.') && t; }, 'the jot in the Table Log');
+        assert.ok(!logText.includes(WORD), `${logs[0]} holds the secret word`);
       } finally {
         pstream.close();
         await run.close();
@@ -1755,7 +1770,7 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
       for (const must of ['Mott Ferrage', 'The Lantern Hand']) assert.ok(gmModel.text.includes(must), `the GM's model holds ${must}`);
       const checks = forbidden.map((x) => ({ ...x, hit: matcher(x) }));
       const views = [];
-      const look = async () => { views.push((await req(port, 'GET', '/api/players/view')).text); };
+      const look = async () => { views.push(await playersView(port, pstream)); };
       const clean = (where) => {
         for (const c of checks) {
           for (const v of views) assert.ok(!c.hit(v), `${where}: the players' view holds ${c.text} (${c.why})`);
@@ -1799,7 +1814,6 @@ describe('the no-Plan sheet leaks no Wrap-Up GM Notes to the players (Task 10)',
       });
       await look();
       clean('at the end');
-      assert.match(pstream.raw(), /event: (hello|view)/, 'the players\' stream was read');
     } finally {
       pstream.close();
       await run.close();
