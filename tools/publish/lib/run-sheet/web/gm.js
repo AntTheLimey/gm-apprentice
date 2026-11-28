@@ -785,6 +785,7 @@
     if (drawing) { drawAgain = true; return; }
     press.owed = false;
     pruneBadVitals();
+    prunePicks();
     let a = document.activeElement;
     if ((!a || a === document.body) && wantFocus) a = document.querySelector(wantFocus) || a;
     if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
@@ -1043,9 +1044,11 @@
     return `<p class="woff note" id="woff">Off-screen: ${off.map((p) => `<span class="pchip">${face(p.note)}${esc(first(nameOf(p.note)))}${back(p)}</span>`).join(' ')}${can ? '' : ' <span class="muted">back: Move them first</span>'}</p>`;
   }
   // A pick holds only while its PC stands in the row it was picked in: a PC moved by any route (Move them, Fight here,
-  // the rail, another window) is unpicked (fix round 3).
-  function prunePicks(rows) {
-    if (!G.ui.picked) return;
+  // the rail, another window) is unpicked (fix round 3). Run before each redraw (update), never inside it: a redraw
+  // only reads the picks, and a stale one already reads as unpicked there (Task 12).
+  function prunePicks() {
+    if (!G.ui.picked || !G.model || !G.state || !G.model.record) return;
+    const rows = whereGroups();
     for (const [pc, key] of Object.entries(G.ui.picked)) {
       const row = rows.find((g) => g.key === key);
       if (!row || !row.pcs.includes(pc)) delete G.ui.picked[pc];
@@ -1053,7 +1056,6 @@
   }
   function recordWhereHTML(d) {
     const rows = whereGroups();
-    prunePicks(rows);
     if (!rows.length) return (pcs().length ? '<p class="muted">Every PC is off-screen.</p>' : '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>') + offHTML();
     const f = recFocus();
     return `<ul class="where-rec">${rows.map((g) => whereRowHTML(g, d, rows.length > 1, g.key === f)).join('')}</ul>${offHTML()}`;
